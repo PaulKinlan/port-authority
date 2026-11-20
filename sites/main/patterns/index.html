@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Port patterns | Port Authority</title>
-  <meta name="description" content="Six things you can do with MessageChannel and MessagePort, each running live across real origins.">
+  <meta name="description" content="Eleven things you can do with MessageChannel and MessagePort, each running live across real origins.">
   <link rel="stylesheet" href="/base.css">
   <link rel="stylesheet" href="/patterns/patterns.css">
 </head>
@@ -19,6 +19,11 @@
       <p>Everything else on this site is built from these. Each box below is a real browsing context on its own origin, the cables appear when a port actually lands, and the dots are real messages. Press the buttons.</p>
     </div>
     <main id="patterns"></main>
+    <div class="stack" id="further" style="padding-block:clamp(3rem,8vw,5rem) 2rem; --gap:1.2rem; border-top:2px solid var(--ink)">
+      <h1 style="font-size:var(--step-3)">Further out</h1>
+      <p>What a port can carry, and where it can end up. These lean on newer parts of the platform, so some will say no in some browsers.</p>
+    </div>
+    <div id="more"></div>
     <section class="pattern">
       <h2>Things that will bite you</h2>
       <ul class="stack" style="max-width:62ch; padding-left:1.1rem">
@@ -33,8 +38,8 @@
   </div>
   <script type="module">
     import { demos, mount } from "/patterns/demos.js";
-    const main = document.getElementById("patterns");
-    for (const demo of demos) {
+    import { more } from "/patterns/more.js";
+    for (const [demo, main] of [...demos.map((d) => [d, document.getElementById("patterns")]), ...more.map((d) => [d, document.getElementById("more")])]) {
       const section = document.createElement("section");
       section.className = "pattern";
       section.id = demo.id;
