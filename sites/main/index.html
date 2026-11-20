@@ -147,7 +147,7 @@ await line.call({ bouquet: "ember", recipient: "Ada" });</pre>
         <li>An agent on a website needs a middle. The hub rewrites the session so a site cannot pick the agent's folder or give it servers, and cannot see another site's session.</li>
         <li>A stream that is relayed through an introducer stalls, silently, when the introducer goes. A port does not. Introduce with a port, then send the stream down it.</li>
         <li>A port can survive its page reloading. It cannot be stored, but it can be posted to a SharedWorker made with <code>extendedLifetime</code> as the page unloads and collected on the next load.</li>
-        <li>Picking a tool opens its site in a new window even when you already have that site open in a tab, because two unrelated tabs have no way to pass a port. A WebRTC channel introduced by the server may close that gap.</li>
+        <li>Two unrelated tabs have no way to pass a port. So when you pick a tool whose site is already open in a tab, your hub server introduces the two tabs and they open a WebRTC channel between themselves. That line carries JSON only: ports and streams cannot ride on it.</li>
       </ul>
     </section>
 

@@ -157,12 +157,13 @@ export class Hub {
 
   async load() {
     if (this.data) return this.data;
-    const keys = ["known", "grants", "sessions", "log", "agent", "agentInit", "agentHello"];
+    const keys = ["known", "grants", "sessions", "log", "agent", "agentInit", "agentHello", "lines"];
     const got = await this.storage.get(keys);
     this.data = {
       known: got.get("known") || {}, grants: got.get("grants") || {}, sessions: got.get("sessions") || {},
       log: got.get("log") || [], agent: got.get("agent") || { mode: "builtin", token: null },
       agentInit: got.get("agentInit") || null, agentHello: got.get("agentHello") || null,
+      lines: got.get("lines") || {},
     };
     return this.data;
   }
@@ -294,6 +295,21 @@ export class Hub {
         return reply({ ok: true, token });
       }
       case "intro":
+        // The tool's site is already open in a tab. Introduce the two tabs
+        // so they can open a WebRTC channel between themselves: we carry the
+        // handshake, and after that the calls do not come here.
+        if (msg.rtc) {
+          if (!this.serviceSocket(msg.service)) return reply({ ok: false });
+          const now = Date.now();
+          for (const [id, l] of Object.entries(d.lines)) if (now - l.at > 120000) delete d.lines[id];
+          const line = rand(12);
+          d.lines[line] = { client: msg.client, service: msg.service, tool: String(msg.tool), at: now };
+          this.save("lines");
+          this.serviceSocket(msg.service).send(JSON.stringify({ t: "line", line, tool: String(msg.tool), peer: msg.client }));
+          this.note(hostOf(msg.client) + " was introduced to " + msg.tool + " in the open " + ((d.known[msg.service] || {}).name || hostOf(msg.service)) + " tab");
+          reply({ ok: true, line });
+          return this.broadcast();
+        }
         // The picker made an introduction on the person's machine. The call
         // itself never comes here. We only write down that it happened.
         this.note(hostOf(msg.client) + " was introduced to " + msg.tool + " on " + ((d.known[msg.service] || {}).name || hostOf(msg.service)));
@@ -355,6 +371,16 @@ export class Hub {
     if (msg.t === "result") {
       const done = this.pending.get(msg.id);
       if (done) { this.pending.delete(msg.id); done(msg.result); }
+      return;
+    }
+    if (msg.t === "signal") {
+      // WebRTC handshake for a line the person made in the picker. Only the
+      // two origins on that line can use it, and only to reach each other.
+      const l = d.lines[msg.line];
+      if (!l || Date.now() - l.at > 120000) return;
+      const frame = JSON.stringify({ t: "signal", line: msg.line, data: msg.data });
+      if (meta.origin === l.client) { const to = this.serviceSocket(l.service); if (to) to.send(frame); }
+      else if (meta.origin === l.service) for (const to of this.siteSockets(l.client)) to.send(frame);
       return;
     }
     if (msg.t !== "rpc") return;

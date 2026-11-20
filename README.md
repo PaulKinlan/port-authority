@@ -32,6 +32,8 @@ between sites.
    lists matching tools from the server, so none of those sites need to be open.
    The person picks one, the window opens that site, passes each side one end
    of a `MessageChannel`, and closes. The call is local and works offline.
+   If that site is already open in a tab, no window is opened: the server
+   introduces the two tabs and they open a WebRTC channel between themselves.
 3. `registry()` returns a port that speaks MCP for every site that is open, and
    `agent()` returns a port that speaks ACP. These two are carried by the hub
    server, because an agent runs on a machine and not in a tab.
@@ -71,4 +73,5 @@ For now files are pushed into KV with `scripts/upload.sh`; moving to
 - The hub's owner key lives in the hub origin's localStorage in one browser. Clearing it, or using another browser, gives you a new empty hub.
 - The bridge address contains the only secret between a hub and its agent.
 - The real-agent path is tested with a stand-in ACP agent (`test/fake-agent.mjs`), not yet with Claude Code or Gemini CLI.
-- Picking a tool always opens its site in a new window, even if a tab of it is already open.
+- A line to an already-open tab is a WebRTC data channel, so it carries JSON only. Ports and streams cannot be sent over it. A line to a window the hub opened is a real port and can carry them.
+- The WebRTC handshake passes through the hub server, as all WebRTC signalling does, so the server is trusted to introduce the right two tabs.
