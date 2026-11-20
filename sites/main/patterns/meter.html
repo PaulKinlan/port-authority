@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Meter, torn off</title>
+<link rel="stylesheet" href="/base.css">
+</head>
+<body style="padding:1.2rem">
+  <p class="small muted">Same port, new window.</p>
+  <p id="meter" style="font:800 4.5rem/1 var(--display); margin:.4rem 0 1rem">...</p>
+  <button id="back" class="tiny">Put it back</button>
+  <script>
+    let port = null;
+    addEventListener("message", (event) => {
+      if (event.origin !== location.origin || !event.data || !event.data.feed) return;
+      port = event.data.feed;
+      port.onmessage = (e) => { document.getElementById("meter").textContent = e.data; };
+    });
+    const giveBack = () => {
+      if (!port || !opener) return;
+      port.onmessage = null;
+      opener.postMessage({ back: true }, location.origin, [port]);
+      port = null;
+    };
+    document.getElementById("back").onclick = () => { giveBack(); close(); };
+    addEventListener("pagehide", giveBack);
+    opener ? opener.postMessage("ready", location.origin) : (document.getElementById("meter").textContent = "no feed");
+  </script>
+</body>
+</html>

@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>A page that reloads</title>
+<style>
+  html { color-scheme: light dark; }
+  body { margin: 0; padding: .7rem .8rem; font: 14px/1.4 system-ui, sans-serif; background: light-dark(#fff, #141f47); color: light-dark(#0f1c3f, #e9edfa); }
+  h1 { font: 800 1rem/1.1 "Arial Narrow", system-ui, sans-serif; margin: 0 0 .3rem; }
+  #n { font: 800 2.4rem/1 "Arial Narrow", system-ui, sans-serif; margin: .1rem 0 .3rem; }
+  ul { list-style: none; margin: 0; padding: 0; font: 12px/1.45 ui-monospace, Menlo, monospace; }
+  li { padding: .1rem 0; border-top: 1px solid light-dark(#c9d1e0, #2b3970); }
+</style>
+</head>
+<body>
+<h1>A page that reloads</h1>
+<p id="n">...</p>
+<ul id="log"></ul>
+<script>
+  const key = new URLSearchParams(location.search).get("key");
+  const log = (text) => { const li = document.createElement("li"); li.textContent = text; document.getElementById("log").prepend(li); };
+  const bank = new SharedWorker("/patterns/bank.js", { name: "port-bank", extendedLifetime: true });
+  let port = null, last = 0, gaps = 0;
+  const use = (p, how) => {
+    port = p;
+    log(how);
+    port.onmessage = (e) => {
+      if (last && e.data !== last + 1) gaps++;
+      last = e.data;
+      sessionStorage.setItem("last-" + key, last);
+      document.getElementById("n").textContent = e.data;
+      parent.postMessage({ wire: "tick", n: e.data, gaps }, location.origin);
+    };
+  };
+  last = Number(sessionStorage.getItem("last-" + key) || 0);
+  bank.port.onmessage = ({ data, ports }) => {
+    if (data.found) use(ports[0], `withdrew my port after a reload, last saw ${last}`);
+    else parent.postMessage({ wire: "need-port" }, location.origin);
+  };
+  bank.port.postMessage({ withdraw: key });
+  addEventListener("message", (event) => {
+    if (event.source === parent && event.origin === location.origin && event.data.cmd === "port") use(event.ports[0], "given a fresh port");
+  });
+  // The page is going away. Put the port in the bank.
+  const deposit = () => { if (port) { port.onmessage = null; bank.port.postMessage({ deposit: key }, [port]); port = null; } };
+  addEventListener(new URLSearchParams(location.search).get("on") || "pagehide", deposit);
+</script>
+</body>
+</html>
