@@ -11,6 +11,8 @@
     "html_handling": "none",
     "not_found_handling": "none"
   },
+  // Set both when the main site has its own domain and the demo sites stay on workers.dev.
+  "vars": { "MAIN_HOST": "port-authority.dev", "DEMO_SUFFIX": ".kinlan-test.workers.dev" },
   "durable_objects": { "bindings": [{ "name": "HUB", "class_name": "Hub" }, { "name": "LAB", "class_name": "Lab" }, { "name": "MEET", "class_name": "Meet" }] },
   "migrations": [
     { "tag": "v1", "new_sqlite_classes": ["Relay"] },
