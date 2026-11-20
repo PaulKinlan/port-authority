@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Port patterns | Port Authority</title>
+  <meta name="description" content="Six things you can do with MessageChannel and MessagePort, each running live across real origins.">
+  <link rel="stylesheet" href="/base.css">
+  <link rel="stylesheet" href="/patterns/patterns.css">
+</head>
+<body>
+  <div class="wrap">
+    <header class="site-bar">
+      <a class="wordmark" href="/">Port Authority</a>
+      <nav><a href="/">Experiments</a><a href="/patterns/" aria-current="page">Port patterns</a><a href="/hub/">Your hub</a></nav>
+    </header>
+    <div class="stack" style="padding-block:2.5rem 2rem; --gap:1.2rem">
+      <h1 style="font-size:var(--step-3)">Six moves with a port</h1>
+      <p>Everything else on this site is built from these. Each box below is a real browsing context on its own origin, the cables appear when a port actually lands, and the dots are real messages. Press the buttons.</p>
+    </div>
+    <main id="patterns"></main>
+    <section class="pattern">
+      <h2>Things that will bite you</h2>
+      <ul class="stack" style="max-width:62ch; padding-left:1.1rem">
+        <li>A port you attach with <code>addEventListener</code> stays silent until you call <code>port.start()</code>. Setting <code>onmessage</code> starts it for you.</li>
+        <li>Messages posted before the other side is listening are not lost. They wait in the port. You can send a port and start talking into it straight away.</li>
+        <li>Nothing tells you when the other end has gone. A <code>close</code> event for ports has been specified, but the Chromium this was tested in does not fire it. Between pages on one origin, hold a Web Lock in the page and wait on it from the worker. Across origins, send a ping and treat silence as the answer.</li>
+        <li>A SharedWorker inside a cross-site iframe is partitioned by the top-level site, so a hidden hub iframe is a different hub on every site. A window of its own is first party and reaches the real one. Ports that have already been handed over are not affected.</li>
+        <li>A transferred port is gone from the sender. Post it twice and the second call throws.</li>
+      </ul>
+    </section>
+    <footer class="small muted" style="padding-block:2rem 4rem">A working name and a work in progress.</footer>
+  </div>
+  <script type="module">
+    import { demos, mount } from "/patterns/demos.js";
+    const main = document.getElementById("patterns");
+    for (const demo of demos) {
+      const section = document.createElement("section");
+      section.className = "pattern";
+      section.id = demo.id;
+      section.innerHTML = `<h2>${demo.title}</h2><div class="demo"></div><div class="text"><p>${demo.blurb}</p><pre>${demo.code}</pre></div>`;
+      main.append(section);
+      // Start each demo when it scrolls near, so six sets of frames do not all boot at once.
+      new IntersectionObserver((entries, io) => { if (entries[0].isIntersecting) { io.disconnect(); mount(section.querySelector(".demo"), demo); } }, { rootMargin: "300px" }).observe(section);
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Your hub | Port Authority</title>
+  <link rel="stylesheet" href="/base.css">
+  <link rel="stylesheet" href="/hub/hub.css">
+</head>
+<body>
+  <div class="wrap">
+    <header class="site-bar">
+      <a class="wordmark" href="/">Port Authority</a>
+      <nav><a href="/">About</a><a href="/patterns/">Port patterns</a><a href="/hub/" aria-current="page">Your hub</a></nav>
+    </header>
+    <div class="stack" style="--gap:.8rem; padding-top:2rem">
+      <h1 style="font-size:var(--step-3)">Your hub</h1>
+      <p>Keep this tab open. It holds a line to every site that is offering you tools, and it is where sites come to ask for one. Nothing here leaves your browser unless you connect your own agent.</p>
+    </div>
+    <main class="dash" id="dash"></main>
+  </div>
+  <script type="module">
+    import { switchboard, mountDashboard } from "/hub/ui.js";
+    mountDashboard(document.getElementById("dash"), switchboard("dashboard"));
+  </script>
+</body>
+</html>

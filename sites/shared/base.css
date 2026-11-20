@@ -1,0 +1,108 @@
+@import url("https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Instrument+Sans:wght@400..700&display=swap");
+
+:root {
+  color-scheme: light dark;
+  --paper: light-dark(#edf0f4, #0b1330);
+  --panel: light-dark(#ffffff, #141f47);
+  --ink: light-dark(#0f1c3f, #e9edfa);
+  --muted: light-dark(#56628a, #9aa6cf);
+  --line: light-dark(#c9d1e0, #2b3970);
+  --yellow: #f5b700;
+  --red: #e0364c;
+  --teal: #0e9f8e;
+  --accent: var(--yellow);
+  --on-accent: #0f1c3f;
+  --display: "Bricolage Grotesque", "Arial Narrow", system-ui, sans-serif;
+  --body: "Instrument Sans", system-ui, sans-serif;
+  --mono: ui-monospace, "SF Mono", "Cascadia Code", Menlo, monospace;
+  --step--1: 0.875rem;
+  --step-0: 1.0625rem;
+  --step-1: 1.35rem;
+  --step-2: 1.9rem;
+  --step-3: clamp(2.2rem, 1.4rem + 3vw, 3.4rem);
+  --step-4: clamp(3rem, 1rem + 9vw, 7.5rem);
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font: var(--step-0)/1.55 var(--body);
+}
+h1, h2, h3 { font-family: var(--display); line-height: 1.02; letter-spacing: -0.02em; margin: 0; text-wrap: balance; }
+h1 { font-size: var(--step-4); font-weight: 800; font-stretch: 85%; letter-spacing: -0.045em; line-height: 0.9; }
+h2 { font-size: var(--step-3); font-weight: 750; }
+h3 { font-size: var(--step-1); font-weight: 700; letter-spacing: -0.01em; line-height: 1.15; }
+p { margin: 0; max-width: 62ch; text-wrap: pretty; }
+a { color: inherit; text-decoration-color: var(--accent); text-decoration-thickness: 0.14em; text-underline-offset: 0.18em; }
+a:hover { text-decoration-thickness: 0.24em; }
+code, pre, kbd { font-family: var(--mono); font-size: 0.86em; }
+:not(pre) > code { background: color-mix(in srgb, var(--ink) 9%, transparent); padding: 0.1em 0.35em; border-radius: 4px; }
+pre {
+  margin: 0; padding: 1rem 1.1rem; overflow-x: auto; line-height: 1.5;
+  background: #0f1c3f; color: #e9edfa; border-radius: 10px; tab-size: 2;
+}
+pre .c { color: #8f9bc7; }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
+
+.wrap { width: min(100% - 2rem, 70rem); margin-inline: auto; }
+.stack > * + * { margin-top: var(--gap, 1rem); }
+.muted { color: var(--muted); }
+.small { font-size: var(--step--1); }
+
+/* A button looks like the end of a cable: solid, rounded like a plug. */
+button, .button {
+  font: 600 var(--step-0)/1 var(--body);
+  display: inline-flex; align-items: center; gap: 0.5em;
+  padding: 0.8em 1.15em; border-radius: 999px; cursor: pointer;
+  border: 2px solid var(--ink); background: var(--ink); color: var(--paper);
+  text-decoration: none;
+}
+button:hover, .button:hover { background: color-mix(in srgb, var(--ink) 82%, var(--accent)); }
+button:disabled { opacity: 0.45; cursor: not-allowed; }
+button.quiet, .button.quiet { background: transparent; color: var(--ink); }
+button.quiet:hover, .button.quiet:hover { background: color-mix(in srgb, var(--ink) 10%, transparent); }
+button.accent { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+button.tiny { font-size: var(--step--1); padding: 0.5em 0.8em; border-width: 1.5px; }
+
+input[type="text"], textarea, select {
+  font: inherit; color: inherit; background: var(--panel);
+  border: 2px solid var(--line); border-radius: 10px; padding: 0.65em 0.8em; width: 100%;
+}
+input[type="text"]:focus-visible, textarea:focus-visible { outline-offset: 0; border-color: var(--ink); }
+label { font-weight: 600; display: block; margin-bottom: 0.3rem; }
+
+.panel { background: var(--panel); border-radius: 16px; padding: clamp(1rem, 3vw, 1.6rem); }
+.panel.ruled { border: 2px solid var(--ink); }
+
+/* The jack: a small socket. Filled when something is plugged in. */
+.jack {
+  display: inline-block; width: 0.8em; height: 0.8em; border-radius: 50%;
+  border: 0.18em solid currentColor; vertical-align: -0.05em; margin-right: 0.45em;
+}
+.jack.on { background: var(--accent); border-color: var(--accent); box-shadow: 0 0 0 0.2em color-mix(in srgb, var(--accent) 30%, transparent); }
+
+.log {
+  font: var(--step--1)/1.5 var(--mono); margin: 0; padding: 0; list-style: none;
+  max-height: 14rem; overflow: auto;
+}
+.log li { padding: 0.3rem 0; border-top: 1px solid var(--line); overflow-wrap: anywhere; white-space: pre-wrap; }
+.log li:first-child { border-top: 0; }
+.log .who { font-weight: 700; }
+
+.site-bar {
+  display: flex; gap: 1rem; align-items: center; justify-content: space-between; flex-wrap: wrap;
+  padding: 0.9rem 0; font-weight: 600;
+}
+.site-bar nav { display: flex; gap: 1.1rem; flex-wrap: wrap; font-size: var(--step--1); }
+.wordmark { font: 800 1.25rem/1 var(--display); letter-spacing: -0.03em; text-decoration: none; display: inline-flex; align-items: center; gap: 0.5rem; }
+.wordmark::before {
+  content: ""; width: 1.1em; height: 1.1em; border-radius: 50%;
+  border: 0.3em solid var(--ink); background: var(--accent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}

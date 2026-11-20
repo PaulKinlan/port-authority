@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Port Authority</title>
+  <link rel="stylesheet" href="/base.css">
+  <link rel="stylesheet" href="/hub/hub.css">
+</head>
+<body>
+  <main id="app" class="ask"><p class="muted">Connecting to your hub.</p></main>
+  <script type="module">
+    import { switchboard, mountDashboard, host } from "/hub/ui.js";
+
+    const app = document.getElementById("app");
+    const opener = window.opener;
+    if (!opener) location.replace("/hub/");
+
+    const sb = switchboard("popup");
+    let request = null, client = null, clientPort = null, answered = false;
+    const esc = (t) => String(t ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+    const remembered = (key) => { try { return JSON.parse(localStorage.getItem(key) || "[]"); } catch { return []; } };
+    const remember = (key, value) => localStorage.setItem(key, JSON.stringify([...new Set([...remembered(key), value])]));
+
+    const serviceWaits = new Map(); // window -> resolve
+    addEventListener("message", (event) => {
+      const data = event.data || {};
+      if (serviceWaits.has(event.source) && data.pa === "service-ready") return serviceWaits.get(event.source)(event);
+      if (event.source !== opener) return;
+      if (data.pa === "request" && !request) {
+        request = data; client = event.origin; clientPort = event.ports[0] || null;
+        sb.until(() => true).then(start);
+      } else if (data.pa === "ack") {
+        settle();
+      }
+    });
+    opener?.postMessage({ pa: "ready" }, "*");
+
+    function respond(ok, extra = {}, transfer = []) {
+      if (answered) return;
+      answered = true;
+      opener.postMessage({ pa: "result", ok, ...extra }, client, transfer);
+      if (!ok) setTimeout(() => window.close(), 50);
+    }
+    addEventListener("pagehide", () => { if (request && !answered) opener.postMessage({ pa: "result", ok: false, reason: "The hub window was closed." }, client); });
+
+    // If a hub tab is open, it keeps the switchboard alive and this window can
+    // go. If not, this window is the hub, so it stays and says so.
+    function settle() {
+      if (sb.state.dashboards > 0) return window.close();
+      sb.setKind("dashboard");
+      document.body.innerHTML = `<div class="banner">Done. Keep this window open: it is your hub for now. <a href="/hub/" target="_blank">Open the hub in a tab</a> and you can close this.</div><div class="wrap"><main class="dash" id="dash"></main></div>`;
+      mountDashboard(document.getElementById("dash"), sb);
+    }
+
+    function consent({ title, body, yes, onYes }) {
+      app.innerHTML = `
+        <h1>${title}</h1>
+        <p class="who">${esc(client)}</p>
+        <p>${body}</p>
+        <div class="actions"><button class="accent" id="yes">${yes}</button><button class="quiet" id="no">Not now</button></div>`;
+      app.querySelector("#no").onclick = () => respond(false, { reason: "You said no." });
+      app.querySelector("#yes").onclick = onYes;
+      app.querySelector("#yes").focus();
+    }
+
+    function start() {
+      const kind = request.kind;
+      if (kind === "connect") return startConnect();
+      if (kind === "pick") return startPick();
+      if (kind === "registry") return consent({
+        title: "Let this site use every tool in your hub?",
+        body: "It will be able to see and call all the tools your connected sites offer, for as long as it stays open. You can revoke it from the hub.",
+        yes: "Allow every tool",
+        onYes: async () => { const g = await sb.ask({ t: "grant-registry", client }); respond(true, {}, g.ports); },
+      });
+      if (kind === "agent") return consent({
+        title: "Let this site talk to your agent?",
+        body: sb.state.agent.mode === "relay"
+          ? "It will be able to send prompts to the agent running on your machine. It cannot choose the folder the agent works in."
+          : "You are using the built-in demo agent, which can only call the tools in your hub.",
+        yes: "Connect my agent",
+        onYes: async () => { const g = await sb.ask({ t: "grant-agent", client }); respond(true, {}, g.ports); },
+      });
+      respond(false, { reason: "Unknown request." });
+    }
+
+    function startConnect() {
+      if (!clientPort) return respond(false, { reason: "No port was sent." });
+      const go = async () => {
+        remember("pa-services", client);
+        app.innerHTML = `<p class="muted">Connecting ${esc(host(client))}.</p>`;
+        sb.send({ t: "adopt", origin: client }, [clientPort]);
+        const ok = await sb.until((s) => s.services.some((x) => x.origin === client && x.live), 8000);
+        respond(!!ok, ok ? {} : { reason: "The site did not register in time." });
+      };
+      if (remembered("pa-services").includes(client)) return go();
+      consent({
+        title: `Add ${esc(request.name || "this site")} to your hub?`,
+        body: `${esc(request.description || "It wants to offer tools.")} Other sites and your agent will only reach its tools when you say so.`,
+        yes: "Add to my hub",
+        onYes: go,
+      });
+    }
+
+    const STOP = new Set("a an the to of for and or me my i is it on in at with please can you some any that this want need would like".split(" "));
+    const tokens = (text) => new Set(String(text).toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length > 1 && !STOP.has(w)).map((w) => w.replace(/(ing|s)$/, "")));
+
+    function startPick() {
+      const want = tokens(request.intent || "");
+      const render = (state) => {
+        if (answered) return;
+        const rows = state.services.flatMap((s) => s.tools.map((tool) => {
+          const have = tokens(`${tool.name} ${tool.description} ${s.name}`);
+          let score = 0; for (const w of want) if (have.has(w)) score++;
+          return { s, tool, score };
+        })).sort((a, b) => b.score - a.score || Number(b.s.live) - Number(a.s.live));
+        app.innerHTML = `
+          <h1>Who should handle this?</h1>
+          <p class="who">${esc(host(client))} wants to: <strong>${esc(request.intent || "use a tool")}</strong></p>
+          ${rows.length ? `<ul class="options">${rows.map((r, i) => `
+            <li><button data-i="${i}" class="${r.score ? "match" : ""}">
+              <strong>${esc(r.tool.name)}</strong>
+              <span>${esc(r.tool.description)}</span>
+              <span class="muted small"><span class="jack ${r.s.live ? "on" : ""}"></span>${esc(r.s.name)}, ${esc(host(r.s.origin))}${r.s.live ? "" : ". Not open, choosing it opens it."}</span>
+            </button></li>`).join("")}</ul>`
+            : `<p>No site has offered your hub a tool yet. Open one that does, connect it, and try again.</p>`}
+          <div class="actions"><button class="quiet" id="no">Cancel</button></div>`;
+        app.querySelector("#no").onclick = () => respond(false, { reason: "Nothing was chosen." });
+        app.querySelectorAll("[data-i]").forEach((b) => b.onclick = () => { off(); choose(rows[b.dataset.i]); });
+      };
+      const off = sb.on(render);
+    }
+
+    async function choose({ s, tool }) {
+      app.innerHTML = `<p class="muted">Introducing ${esc(host(client))} to ${esc(s.name)}.</p>`;
+      if (!s.live) {
+        // The site is closed. Open it ourselves, and hand it a port directly.
+        const win = window.open(s.url, "_blank");
+        if (!win) return respond(false, { reason: "The site could not be opened." });
+        const ready = await Promise.race([
+          new Promise((resolve) => serviceWaits.set(win, resolve)),
+          new Promise((resolve) => setTimeout(() => resolve(null), 15000)),
+        ]);
+        serviceWaits.delete(win);
+        if (!ready || ready.origin !== s.origin) return respond(false, { reason: `${s.name} did not answer.` });
+        const channel = new MessageChannel();
+        win.postMessage({ pa: "adopt" }, s.origin, [channel.port1]);
+        sb.send({ t: "adopt", origin: s.origin }, [channel.port2]);
+        if (!(await sb.until((st) => st.services.some((x) => x.origin === s.origin && x.live), 8000))) return respond(false, { reason: `${s.name} did not register.` });
+        window.focus();
+      }
+      const g = await sb.ask({ t: "grant-tool", client, service: s.origin, tool: tool.name });
+      if (!g.ok) return respond(false, { reason: g.reason });
+      respond(true, { tool: g.tool, service: g.service }, g.ports);
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Peer | Port Authority</title>
+<style>
+  html { color-scheme: light dark; }
+  body { margin: 0; padding: .7rem .8rem; font: 14px/1.4 system-ui, sans-serif; background: light-dark(#fff, #141f47); color: light-dark(#0f1c3f, #e9edfa); }
+  h1 { font: 800 1rem/1.1 "Arial Narrow", system-ui, sans-serif; margin: 0 0 .5rem; }
+  button { font: 600 13px system-ui; border-radius: 99px; border: 2px solid currentColor; background: none; color: inherit; padding: .3rem .7rem; cursor: pointer; }
+  ul { list-style: none; margin: .5rem 0 0; padding: 0; font: 12px/1.45 ui-monospace, Menlo, monospace; }
+  li { padding: .15rem 0; border-top: 1px solid light-dark(#c9d1e0, #2b3970); }
+</style>
+</head>
+<body>
+<h1 id="name"></h1>
+<button id="hi">Say hi to everyone</button>
+<ul id="log"></ul>
+<script>
+  const name = new URLSearchParams(location.search).get("name") || "Tab " + Math.random().toString(36).slice(2, 5);
+  document.getElementById("name").textContent = name;
+  const log = (text) => { const li = document.createElement("li"); li.textContent = text; document.getElementById("log").prepend(li); };
+  const tell = (wire, data) => parent !== window && parent.postMessage({ wire, ...data }, location.origin);
+  const direct = new Map();
+  const worker = new SharedWorker("/patterns/exchange.js", { name: "exchange" });
+  worker.port.onmessage = ({ data, ports }) => {
+    if (data.type !== "meet") return;
+    direct.set(data.name, ports[0]);
+    ports[0].onmessage = (e) => log(`${data.name}: ${e.data}`);
+    log(`worker introduced ${data.name}`);
+    tell("met", { peer: data.name });
+  };
+  const lock = "peer-" + crypto.randomUUID();
+  const join = () => worker.port.postMessage({ type: "join", name, lock });
+  navigator.locks ? navigator.locks.request(lock, () => { join(); return new Promise(() => {}); }) : join();
+  let count = 0;
+  document.getElementById("hi").onclick = () => {
+    if (!direct.size) return log("nobody else is here yet");
+    for (const [peer, port] of direct) { port.postMessage(`hi #${++count}`); tell("pulse", { cable: [name, peer].sort().join("~") }); }
+  };
+  tell("ready");
+</script>
+</body>
+</html>

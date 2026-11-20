@@ -1,0 +1,17 @@
+.stage { position: relative; display: flex; flex-wrap: wrap; gap: clamp(2.2rem, 7vw, 5.5rem); padding-bottom: 3.6rem; }
+.stage > svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 2; overflow: visible; color: var(--ink); }
+.stage .cable { fill: none; stroke-width: 5; stroke-linecap: round; }
+.stage .pulse { stroke: var(--paper); stroke-width: 2.5; }
+.box { flex: 1 1 11.5rem; height: 11.5rem; border: 2px solid var(--ink); border-radius: 14px; overflow: hidden; background: var(--panel); position: relative; }
+.box iframe { width: 100%; height: 100%; border: 0; display: block; }
+.box.gone { border-style: dashed; background: transparent; }
+.box.gone::after { content: "gone"; position: absolute; inset: 0; display: grid; place-items: center; font: 700 var(--step-1) var(--display); color: var(--muted); }
+.box .here { padding: 0.7rem 0.8rem; }
+.box .here h4 { font: 800 1rem/1.1 var(--display); margin: 0 0 0.5rem; }
+.box .here .log { font-size: 12px; max-height: none; }
+.box .here .log li { padding: 0.15rem 0; }
+.controls { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin-top: 0.4rem; }
+.controls .reset { margin-left: auto; border-color: transparent; }
+.pattern { display: grid; gap: 1.2rem; padding-block: clamp(2.5rem, 6vw, 4.5rem); border-top: 2px solid var(--ink); }
+.pattern h2 { font-size: var(--step-2); max-width: 22ch; }
+.pattern .text { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr)); align-items: start; }

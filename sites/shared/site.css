@@ -1,0 +1,18 @@
+/* Shared by the three demo sites. Each sets its own --accent. */
+.site-head { padding: 2.5rem 0 1.5rem; display: grid; gap: 1rem; }
+.site-head h1 { font-size: var(--step-3); font-stretch: 100%; letter-spacing: -0.03em; line-height: 1; }
+.demo-note { border-left: 6px solid var(--accent); padding: 0.2rem 0 0.2rem 1rem; }
+.cols { display: grid; gap: 1.2rem; grid-template-columns: repeat(auto-fit, minmax(min(100%, 19rem), 1fr)); align-items: start; padding-bottom: 4rem; }
+.cols h2 { font-size: var(--step-1); letter-spacing: -0.01em; }
+.status { display: flex; align-items: center; gap: 0.8rem; flex-wrap: wrap; }
+.items { list-style: none; padding: 0; margin: 0; display: grid; gap: 0.5rem; }
+.items li { display: flex; justify-content: space-between; gap: 1rem; padding: 0.55rem 0; border-top: 1px solid var(--line); }
+.items li:first-child { border-top: 0; }
+.flash { animation: flash 1.2s ease-out; }
+@keyframes flash { from { background: var(--accent); } to { background: transparent; } }
+.result { background: color-mix(in srgb, var(--accent) 16%, var(--panel)); border-radius: 10px; padding: 0.8rem 1rem; white-space: pre-wrap; overflow-wrap: anywhere; font: var(--step--1)/1.5 var(--mono); }
+.chat { display: grid; gap: 0.6rem; max-height: 22rem; overflow: auto; }
+.chat .me { justify-self: end; background: var(--ink); color: var(--paper); padding: 0.5rem 0.8rem; border-radius: 14px 14px 2px 14px; max-width: 85%; }
+.chat .them { white-space: pre-wrap; max-width: 95%; }
+.chat .tool { font: var(--step--1)/1.4 var(--mono); border-left: 4px solid var(--accent); padding-left: 0.6rem; }
+form.fields { display: grid; gap: 0.7rem; }
