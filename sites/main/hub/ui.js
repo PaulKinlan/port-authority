@@ -1,25 +1,42 @@
 // Shared by the hub tab and the hub popup: the connection to the switchboard
 // worker, and the dashboard that shows what it is holding.
 
-export function switchboard(kind) {
-  const worker = new SharedWorker("/hub/switchboard.js", { name: "port-authority" });
-  const port = worker.port;
+// This browser's hub: an id that says which hub on the server is yours, and
+// a key that proves it. Both are made here the first time and kept in the hub
+// origin's own storage, which is first party because the hub is always a
+// window of its own.
+function identity() {
+  try {
+    const saved = JSON.parse(localStorage.getItem("pa-owner"));
+    if (saved?.id && saved?.key) return saved;
+  } catch {}
+  const made = { id: newSecret(18), key: newSecret(32) };
+  localStorage.setItem("pa-owner", JSON.stringify(made));
+  return made;
+}
+
+function newSecret(bytes) {
+  const raw = crypto.getRandomValues(new Uint8Array(bytes));
+  return btoa(String.fromCharCode(...raw)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+// The hub window's connection to the hub server. The server holds the
+// registry, so this works whether or not any other tab is open.
+export function switchboard() {
+  const me = identity();
   const listeners = new Set();
   const waiting = new Map();
-  let n = 1;
+  const queue = [];
+  let ws = null, n = 1, retry = 0;
   const sb = {
     state: null,
-    kind,
-    send: (msg, transfer = []) => port.postMessage(msg, transfer),
-    ask(msg, transfer = []) {
+    id: me.id,
+    send(msg) { const text = JSON.stringify(msg); ws?.readyState === 1 ? ws.send(text) : queue.push(text); },
+    ask(msg) {
       const reqId = n++;
-      return new Promise((resolve) => {
-        waiting.set(reqId, resolve);
-        port.postMessage({ ...msg, reqId }, transfer);
-      });
+      return new Promise((resolve) => { waiting.set(reqId, resolve); sb.send({ ...msg, reqId }); });
     },
     on(fn) { listeners.add(fn); if (sb.state) fn(sb.state); return () => listeners.delete(fn); },
-    setKind(next) { sb.kind = next; port.postMessage({ t: "hello", kind: next }); },
     // Resolves when the state satisfies the test, or with null after the timeout.
     until(test, ms = 15000) {
       return new Promise((resolve) => {
@@ -28,20 +45,17 @@ export function switchboard(kind) {
       });
     },
   };
-  port.onmessage = (event) => {
-    const msg = event.data;
-    if (msg.t === "state") { sb.state = msg; for (const fn of listeners) fn(msg); }
-    else if (msg.t === "granted") { waiting.get(msg.reqId)?.({ ...msg, ports: event.ports }); waiting.delete(msg.reqId); }
+  const connect = () => {
+    ws = new WebSocket(`${location.origin.replace(/^http/, "ws")}/h/${me.id}?role=owner&token=${me.key}`);
+    ws.onopen = () => { retry = 0; for (const text of queue.splice(0)) ws.send(text); };
+    ws.onmessage = (event) => {
+      const msg = JSON.parse(event.data);
+      if (msg.t === "state") { sb.state = msg; for (const fn of listeners) fn(msg); }
+      else if (msg.t === "granted") { waiting.get(msg.reqId)?.(msg); waiting.delete(msg.reqId); }
+    };
+    ws.onclose = () => setTimeout(connect, Math.min(15000, 500 * 2 ** retry++));
   };
-  // Hold a lock for as long as this window lives. The worker waits on the same
-  // lock, and when it gets it, it knows this window has gone.
-  const lock = `pa-page-${crypto.randomUUID()}`;
-  if (navigator.locks) {
-    navigator.locks.request(lock, () => { port.postMessage({ t: "hello", kind, lock }); return new Promise(() => {}); });
-  } else {
-    port.postMessage({ t: "hello", kind });
-    addEventListener("pagehide", () => port.postMessage({ t: "bye" }));
-  }
+  connect();
   return sb;
 }
 
@@ -51,12 +65,7 @@ const ago = (at) => {
   const s = Math.round((Date.now() - at) / 1000);
   return s < 60 ? "just now" : s < 3600 ? `${Math.floor(s / 60)} min ago` : new Date(at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 };
-const KIND = { tool: "one tool", registry: "every tool", agent: "your agent" };
-
-function newRoom() {
-  const bytes = crypto.getRandomValues(new Uint8Array(24));
-  return btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-}
+const KIND = { registry: "every tool", agent: "your agent" };
 
 export function mountDashboard(root, sb) {
   root.innerHTML = `
@@ -85,12 +94,11 @@ export function mountDashboard(root, sb) {
     if (act === "revoke") sb.send({ t: "revoke", grantId: id });
     if (act === "forget") sb.send({ t: "forget", origin: id });
     if (act === "copy") navigator.clipboard?.writeText(root.querySelector("[data-command]").textContent).then(() => { button.textContent = "Copied"; });
-    if (act === "new-room" && confirm("Make a new relay address? The bridge you are running now will stop working.")) sb.send({ t: "agent-config", mode: "relay", room: newRoom() });
+    if (act === "new-room" && confirm("Make a new address? The bridge you are running now will stop working.")) sb.send({ t: "agent-config", mode: "relay", fresh: true });
   });
   root.addEventListener("change", (event) => {
     if (event.target.name === "agent-mode") {
-      const mode = event.target.value;
-      sb.send({ t: "agent-config", mode, room: mode === "relay" ? sb.state.agent.room || newRoom() : sb.state.agent.room });
+      sb.send({ t: "agent-config", mode: event.target.value });
     }
     if (event.target.name === "agent-example") renderAgent(sb.state, event.target.value);
   });
@@ -99,10 +107,10 @@ export function mountDashboard(root, sb) {
   function renderAgent(state, pick) {
     if (pick) example = pick;
     const a = state.agent;
-    const wss = `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/relay/${a.room}`;
+    const wss = `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/h/${sb.id}?token=${a.room}`;
     const status = a.mode !== "relay" ? ""
       : a.present ? `<p><span class="jack on"></span>Connected: <strong>${esc(a.info?.agentInfo?.title || a.info?.agentInfo?.name || "your agent")}</strong>${a.cwd ? `, working in <code>${esc(a.cwd)}</code>` : ""}.</p>`
-      : `<p><span class="jack"></span>${a.relay === "open" ? "The relay is ready. Waiting for the bridge on your machine." : "Connecting to the relay."}</p>`;
+      : `<p><span class="jack"></span>Waiting for the bridge on your machine.</p>`;
     part("agent").innerHTML = `
       <fieldset class="choice">
         <legend class="muted small">Sites that ask for your agent get this one</legend>
@@ -120,7 +128,7 @@ export function mountDashboard(root, sb) {
               .map(([cmd, label]) => `<option value="${esc(cmd)}" ${cmd === example ? "selected" : ""}>${label}</option>`).join("")}
           </select>
           <pre data-command>curl -fsSLO ${location.origin}/bridge.mjs
-node bridge.mjs ${wss} -- ${esc(example)}</pre>
+node bridge.mjs "${wss}" -- ${esc(example)}</pre>
           <p class="small muted">Run it in the folder you want the agent to work in. The address is a secret: anyone who has it can talk to your agent.</p>
           <p><button class="tiny quiet" data-act="copy">Copy command</button> <button class="tiny quiet" data-act="new-room">Make a new address</button></p>
         </div>` : ""}`;
@@ -132,16 +140,16 @@ node bridge.mjs ${wss} -- ${esc(example)}</pre>
       <article class="service ${s.live ? "live" : ""}">
         <header>
           <h3><span class="jack ${s.live ? "on" : ""}"></span>${esc(s.name)}</h3>
-          <span class="muted small">${esc(host(s.origin))} ${s.live ? "" : `, not open now. <a href="${esc(s.url)}" target="_blank">Open it</a> <button class="tiny quiet" data-act="forget" data-id="${esc(s.origin)}">Forget</button>`}</span>
+          <span class="muted small">${esc(host(s.origin))}${s.live ? ", open now" : `, not open now. <a href="${esc(s.url)}" target="_blank">Open it</a>`} <button class="tiny quiet" data-act="forget" data-id="${esc(s.origin)}">Forget</button></span>
         </header>
         <ul class="tools">${s.tools.map((t) => `<li><code>${esc(t.name)}</code> ${esc(t.description)}</li>`).join("")}</ul>
       </article>`).join("")
-      : `<p class="muted">Nothing yet. Open a site that offers tools and press its connect button. Two to try: the <a data-site="florist" target="_blank">florist</a> and the <a data-site="library" target="_blank">library</a>.</p>`;
+      : `<p class="muted">Nothing yet. Open a site that offers tools and press its button to add it. Two to try: the <a data-site="florist" target="_blank">florist</a> and the <a data-site="library" target="_blank">library</a>.</p>`;
 
     part("grants").innerHTML = state.grants.length ? `<ul class="grants">${state.grants.map((g) => `
-      <li><span><strong>${esc(host(g.client))}</strong> has ${KIND[g.kind]}${g.kind === "tool" ? `: <code>${esc(g.tool)}</code> on ${esc(host(g.service))}` : ""} <span class="muted small">${ago(g.at)}</span></span>
+      <li><span><strong>${esc(host(g.client))}</strong> has ${KIND[g.kind]} <span class="muted small">${ago(g.at)}</span></span>
         <button class="tiny quiet" data-act="revoke" data-id="${g.id}">Revoke</button></li>`).join("")}</ul>`
-      : `<p class="muted">No site is holding a line right now.</p>`;
+      : `<p class="muted">No site has been given the registry or your agent. Direct lines to a single tool are not listed here: they are made on your machine and your hub is not part of them.</p>`;
 
     const agentKey = JSON.stringify(state.agent);
     if (agentKey !== lastAgentKey) { lastAgentKey = agentKey; renderAgent(state); }

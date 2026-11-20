@@ -1,17 +1,16 @@
 #!/usr/bin/env node
 // Port Authority agent bridge. Needs Node 22 or newer, and nothing else.
 //
-//   node bridge.mjs <relay-url> -- <command that starts an ACP agent>
-//   node bridge.mjs wss://hub.example/relay/ROOM -- npx -y @zed-industries/claude-code-acp
+//   node bridge.mjs "<address from your hub>" -- <command that starts an ACP agent>
+//   node bridge.mjs "wss://hub.example/h/ID?token=SECRET" -- npx -y @zed-industries/claude-code-acp
 //
 // It starts your agent, speaks the Agent Client Protocol to it over stdio, and
-// connects outwards to the relay, where your hub (in your browser) is waiting.
+// connects outwards to your hub server.
 // It also runs a small MCP server on localhost that leads back to the hub's
 // tool registry, and tells the agent about it, so your agent can call tools
 // that live inside your open browser tabs.
 //
-// Anything that can reach your relay room can talk to your agent. The room
-// name is the secret. Treat the relay URL like a password.
+// Anyone who has the address can talk to your agent. Treat it like a password.
 
 import { spawn } from "node:child_process";
 import { createServer } from "node:http";
@@ -36,7 +35,7 @@ const split = argv.indexOf("--");
 const relayUrl = argv[0];
 const command = split >= 0 ? argv.slice(split + 1) : [];
 if (!relayUrl || !/^wss?:\/\//.test(relayUrl) || !command.length) {
-  console.error("usage: node bridge.mjs <relay-url> -- <agent command...>");
+  console.error('usage: node bridge.mjs "<address from your hub>" -- <agent command...>');
   process.exit(2);
 }
 const log = (...args) => console.error("[bridge]", ...args);
@@ -96,7 +95,7 @@ function connect() {
   const url = new URL(relayUrl);
   url.searchParams.set("role", "agent");
   ws = new WebSocket(url);
-  ws.onopen = () => { retry = 0; log("connected to the relay, waiting for your hub"); };
+  ws.onopen = () => { retry = 0; log("connected to your hub"); };
   ws.onmessage = (event) => {
     let frame;
     try { frame = JSON.parse(event.data); } catch { return; }
@@ -111,7 +110,7 @@ function connect() {
   };
   ws.onclose = () => {
     const wait = Math.min(30000, 1000 * 2 ** retry++);
-    log(`relay connection closed, retrying in ${wait / 1000}s`);
+    log(`connection to the hub closed, retrying in ${wait / 1000}s`);
     setTimeout(connect, wait);
   };
   ws.onerror = () => {};

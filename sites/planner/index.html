@@ -13,12 +13,12 @@
     <header class="site-head">
       <a class="wordmark" href="/">Weekend Planner</a>
       <h1>This site has no flowers, no books and no agent.</h1>
-      <p class="demo-note">It has never heard of the florist or the library. It asks your hub for what it needs, you choose who answers, and it ends up holding a port. Connect the <a data-site="florist" target="_blank">florist</a> and the <a data-site="library" target="_blank">library</a> to your hub first.</p>
+      <p class="demo-note">It has never heard of the florist or the library. It asks your hub for what it needs, you choose who answers, and it ends up holding a port. Add the <a data-site="florist" target="_blank">florist</a> and the <a data-site="library" target="_blank">library</a> to your hub first. You can close them again afterwards.</p>
     </header>
     <main class="cols">
       <section class="panel stack">
         <h2>Ask for one thing</h2>
-        <p class="small muted">You pick the site. This page gets a direct line to that one tool and the hub steps away.</p>
+        <p class="small muted">You pick the site. It opens in a window, and this page gets a port straight to that one tool. No server is involved in the call.</p>
         <div><label for="intent">I want to</label><input type="text" id="intent" value="send flowers to a friend"></div>
         <p><button id="pick" disabled>Find someone who can</button></p>
         <p class="small">Or as plain links: <a href="intent:find+a+book+about+raising+chickens">find a book about raising chickens</a>, <a href="intent:reserve+a+book">reserve a book</a>.</p>
@@ -26,7 +26,7 @@
       </section>
       <section class="panel stack">
         <h2>Ask for every tool</h2>
-        <p class="small muted">An MCP connection to everything your hub can reach, over one port.</p>
+        <p class="small muted">An MCP connection to the tools of every site you have open, carried by your hub.</p>
         <p><button id="registry" disabled>Connect to the registry</button></p>
         <div id="tools" class="stack"></div>
       </section>
