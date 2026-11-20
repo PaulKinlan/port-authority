@@ -13,7 +13,7 @@
   <div class="wrap">
     <header class="site-bar">
       <a class="wordmark" href="/">Port Authority</a>
-      <nav><a href="/">Experiments</a><a href="#further">Further out</a><a href="#threads-intro">Across threads</a><a href="#census">Census</a><a href="/patterns/" aria-current="page">Port patterns</a><a href="/comlink/">Comlink today</a><a href="/hub/">Your hub</a></nav>
+      <nav><a href="/guide/">The guide</a><a href="/">Experiments</a><a href="#further">Further out</a><a href="#threads-intro">Across threads</a><a href="#origins-intro">Real sites</a><a href="#census">Census</a><a href="/patterns/" aria-current="page">Port patterns</a><a href="/comlink/">Comlink today</a><a href="/hub/">Your hub</a></nav>
     </header>
     <div class="stack" style="padding-block:2.5rem 2rem; --gap:1.2rem">
       <h1 style="font-size:var(--step-3)">Six moves with a port</h1>
@@ -30,6 +30,11 @@
       <p>A port is not tied to a page. It can live in a worker, and what travels over it can be video, or the use of a key. These are about what that makes possible.</p>
     </div>
     <div id="threads"></div>
+    <div class="stack" id="origins-intro" style="padding-block:clamp(3rem,8vw,5rem) 2rem; --gap:1.2rem; border-top:2px solid var(--ink)">
+      <h1 style="font-size:var(--step-3)">Between real sites</h1>
+      <p>Most boxes on this page are sandboxes with no origin of their own. In this part the outer boxes are the florist's and the library's actual sites, embedded here, each with its own address and its own storage. These are about what you hand over, and whether you can get it back.</p>
+    </div>
+    <div id="origins"></div>
     <section class="pattern" id="sync">
       <h2>Block on a port: a synchronous call with no await</h2>
       <div class="text">
@@ -66,10 +71,11 @@
     import { demos, mount } from "/patterns/demos.js";
     import { more } from "/patterns/more.js";
     import { threads } from "/patterns/threads.js";
+    import { origins } from "/patterns/origins.js";
     import { runCensus } from "/patterns/census.js";
     const census = document.querySelector("table.census");
     new IntersectionObserver((entries, io) => { if (entries[0].isIntersecting) { io.disconnect(); runCensus(census); } }, { rootMargin: "200px" }).observe(census);
-    for (const [demo, main] of [...demos.map((d) => [d, document.getElementById("patterns")]), ...more.map((d) => [d, document.getElementById("more")]), ...threads.map((d) => [d, document.getElementById("threads")])]) {
+    for (const [demo, main] of [...demos.map((d) => [d, document.getElementById("patterns")]), ...more.map((d) => [d, document.getElementById("more")]), ...threads.map((d) => [d, document.getElementById("threads")]), ...origins.map((d) => [d, document.getElementById("origins")])]) {
       const section = document.createElement("section");
       section.className = "pattern";
       section.id = demo.id;
