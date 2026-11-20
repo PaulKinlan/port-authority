@@ -307,28 +307,44 @@ export const TOURS = {
   signer: { steps: [["Ask the vault", "The vault makes a key nobody can read, and gives this page a port that signs."], ["Lend the shop", "This page lends the shop a weaker port: orders only, three uses."], ["Shop: sign an order", "The shop asks for a signature. The request passes through this page to the vault, and the result is checked here."], ["Shop: try to sign a payment", "The shop asks to sign a payment. This page refuses, because that port only does orders."], ["Take the port back", "The shop's port is closed."]] },
 };
 
-// Mount one demo into a container: a caption, a stage, a row of buttons.
-// The demo plays itself once when it comes into view, pressing its own
-// buttons and saying what each one does. Any press of yours stops that.
+// Mount one demo into a container: a stage, a step bar, and a row of buttons.
+// Next does the next step for you and says what it did. Back returns to the
+// step before, by starting over and redoing the steps up to it. The buttons
+// underneath are the same actions, for doing it in your own order.
 export function mount(container, demo, tours = TOURS) {
-  container.innerHTML = `<div class="stage-el"></div><p class="caption" aria-live="polite"></p><div class="controls"></div>`;
+  container.innerHTML = `<div class="stage-el"></div><div class="stepper"><p class="caption" aria-live="polite"></p><div class="steps" hidden><button class="tiny quiet back" type="button">‹ Back</button><button class="tiny accent fwd" type="button"></button></div></div><div class="controls"></div>`;
   const stage = new Stage(container.querySelector(".stage-el"));
   const controls = container.querySelector(".controls");
   const caption = container.querySelector(".caption");
+  const back = container.querySelector(".back"), fwd = container.querySelector(".fwd");
   const tour = tours[demo.id] || { steps: [] };
-  let playing = 0;
+  const total = tour.steps.length;
+  let playing = 0;   // changes whenever something new takes over, which stops whatever was running
+  let at = 0;        // how many steps have been done
+  let busy = false;
   const say = (html) => { caption.innerHTML = html; };
   const esc = (t) => String(t).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
   const hints = new Map(tour.steps.map(([label, text]) => [label, text]));
   const hintFor = (label) => { for (const [start, text] of hints) if (label.startsWith(start)) return text; return ""; };
+  const sync = () => {
+    container.querySelector(".steps").hidden = !total;
+    back.disabled = busy || at === 0;
+    fwd.disabled = busy;
+    fwd.textContent = at < total ? `Next: ${tour.steps[at][0]} ›` : "Start again ↺";
+  };
   const ui = {
     button(label, fn, disabled = false, first = false) {
       const b = document.createElement("button");
-      b.className = "tiny" + (first ? " accent" : " quiet");
+      // With a step bar, Next is the one bright button.
+      b.className = "tiny" + (first && !total ? " accent" : " quiet");
       b.textContent = label; b.disabled = disabled;
       b.onclick = (event) => {
         // A real press takes over from the tour, and still says what it did.
-        if (event.isTrusted) { playing++; controls.querySelector(".next")?.classList.remove("next"); const hint = hintFor(b.textContent); if (hint) say(`<strong>${esc(b.textContent)}.</strong> ${esc(hint)}`); }
+        if (event.isTrusted) {
+          playing++; controls.querySelector(".next")?.classList.remove("next");
+          const hint = hintFor(b.textContent); if (hint) say(`<strong>${esc(b.textContent)}.</strong> ${esc(hint)}`);
+          if (at < total && b.textContent.startsWith(tour.steps[at][0])) { at++; sync(); }
+        }
         fn(b);
       };
       first ? controls.prepend(b) : controls.append(b);
@@ -342,46 +358,73 @@ export function mount(container, demo, tours = TOURS) {
   };
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const find = (start) => [...controls.querySelectorAll("button")].find((b) => b.textContent.startsWith(start));
+  // Do step i: wait for its button, show which one it is, press it, say what it did.
+  async function step(i, mine, lead = 450) {
+    const [start, text] = tour.steps[i];
+    let button = null;
+    for (let waited = 0; waited < 10000 && playing === mine; waited += 200) { button = find(start); if (button && !button.disabled) break; await sleep(200); }
+    if (playing !== mine || !button || button.disabled) return false;
+    button.classList.add("next");
+    say(`<span class="step">${i + 1} of ${total}</span> <strong>${esc(button.textContent)}.</strong> ${esc(text)}`);
+    await sleep(lead);
+    button.classList.remove("next");
+    if (playing !== mine) return false;
+    button.click();
+    at = i + 1; sync();
+    return true;
+  }
+  const ending = () => esc(tour.then || "That is all of it. Press any button to do it yourself, or Start again.");
   async function play() {
     const mine = ++playing;
     if (tour.before) { say("Starting in a moment."); await sleep(tour.before); }
-    for (const [i, [start, text, pause = 2400]] of tour.steps.entries()) {
-      let button = null;
-      for (let waited = 0; waited < 6000 && playing === mine; waited += 200) { button = find(start); if (button && !button.disabled) break; await sleep(200); }
-      if (playing !== mine) return;
-      if (!button || button.disabled) break;
-      button.classList.add("next");
-      say(`<span class="step">${i + 1} of ${tour.steps.length}</span> <strong>${esc(button.textContent)}.</strong> ${esc(text)}`);
-      await sleep(1100);
-      if (playing !== mine) return void button.classList.remove("next");
-      button.classList.remove("next");
-      button.click();
-      await sleep(pause);
+    for (let i = at; i < total; i++) {
+      if (!(await step(i, mine, 1100))) return;
+      await sleep(tour.steps[i][2] || 2400);
       if (playing !== mine) return;
     }
-    say(esc(tour.then || "That is all of it. Press any button to do it yourself, or Start again."));
+    say(ending());
   }
   const reset = async (auto) => {
-    playing++;
+    playing++; at = 0;
     stage.reset(); controls.innerHTML = ""; say("");
     await demo.setup(stage, ui);
+    if (total) { const label = document.createElement("span"); label.className = "small muted own"; label.textContent = "Or press them yourself:"; controls.prepend(label); }
     const again = ui.button("Start again", () => reset(false));
     again.classList.add("reset");
-    if (tour.steps.length) { const show = ui.button("Play it for me", () => reset(true)); show.classList.add("reset"); show.style.marginLeft = "0"; }
+    if (total) { const show = ui.button("Play it for me", () => reset(true)); show.classList.add("reset"); show.style.marginLeft = "0"; }
+    sync();
     if (auto) play();
-    else say(tour.steps.length ? `Press <strong>${esc(tour.steps[0][0])}</strong> to begin, or Play it for me.` : esc(tour.then || ""));
+    else say(total ? `<span class="step">${total} steps</span> Press <strong>Next</strong>. Each press does one step for you and says what happened.` : esc(tour.then || ""));
   };
-  // Set up now, and play when most of the demo is on screen.
+  fwd.onclick = async () => {
+    if (at >= total) return reset(false);
+    const mine = ++playing;
+    const i = at;
+    if ((await step(i, mine)) && i + 1 === total) { await sleep(Math.min(tour.steps[i][2] || 2400, 2400)); if (playing === mine && tour.then) say(`${caption.innerHTML} ${ending()}`); }
+  };
+  // There is no undo for a port that has been closed or a frame that has been
+  // destroyed, so going back means starting over and redoing the earlier steps.
+  back.onclick = async () => {
+    const target = Math.max(0, at - 1);
+    busy = true; sync();
+    await reset(false);
+    const mine = playing;
+    busy = true; sync();
+    for (let i = 0; i < target; i++) {
+      if (!(await step(i, mine, 120))) break;
+      const pause = tour.steps[i][2] || 0;
+      await sleep(i === target - 1 ? 0 : pause > 2400 ? pause : 500);
+    }
+    busy = false; sync();
+  };
+  // Set up now. ?play=1 plays it without being asked, when most of it is on screen.
   const ready = reset(false);
-  if (tour.steps.length || tour.then) {
+  if (total && new URLSearchParams(location.search).get("play") === "1") {
     new IntersectionObserver((entries, io) => {
       if (!entries[0].isIntersecting) return;
       io.disconnect();
       const before = playing;
-      // Automated browsers press the buttons themselves. ?play=1 forces a tour, ?play=0 stops them.
-      const wish = new URLSearchParams(location.search).get("play");
-      if (wish === "0" || (navigator.webdriver && wish !== "1")) return;
-      ready.then(() => { if (playing === before) tour.steps.length ? play() : say(esc(tour.then)); });
+      ready.then(() => { if (playing === before) play(); });
     }, { threshold: 0.6 }).observe(container.querySelector(".stage-el"));
   }
 }

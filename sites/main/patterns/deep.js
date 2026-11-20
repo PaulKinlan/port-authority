@@ -1,0 +1,293 @@
+// The longer explanation for each pattern, shown on its own page.
+// how: what is going on underneath. tryIt: things to do with the demo.
+// uses: what you could build. traps: what goes wrong. measured: what this
+// site has seen in a real browser. related: other patterns to read next.
+
+export const deep = {
+  hello: {
+    how: [
+      "<code>new MessageChannel()</code> gives you two ports that are joined to each other and to nothing else. Whatever is posted into one comes out of the other, in order. There is no address, no name and no origin check, because there is nobody else on the wire.",
+      "A port is one of the few things that can be <em>moved</em> with <code>postMessage</code>. Put it in the transfer list and it leaves your context and arrives in the other one, still joined to its twin. That single fact is what every other pattern on this site is built from.",
+      "Compare it with <code>window.postMessage</code>, where every message is shouted at a whole window, every listener in that window hears it, and both sides have to check <code>event.origin</code> and <code>event.source</code> on every message. With a port you check once, when you decide who to hand the port to. After that, holding the port is the proof.",
+    ],
+    tryIt: ["Open the channel, then send several pings quickly. The answers come back in the order you asked.", "Press Start again and send a ping before opening the channel. Nothing happens: there is no wire yet."],
+    uses: ["A private line between a page and one embedded widget, where other scripts in either window cannot listen in.", "The first step of every protocol on this site: one <code>window.postMessage</code> to deliver a port, then ports only."],
+    traps: ["A port you listen to with <code>addEventListener</code> is silent until you call <code>port.start()</code>. Setting <code>onmessage</code> starts it for you.", "Messages posted before the other side is listening are queued in the port, not lost. You can post a port and talk into it straight away.", "A transferred port is gone from the sender. Posting it a second time throws."],
+    related: ["introduce", "reply", "attenuate"],
+  },
+  introduce: {
+    how: [
+      "The introducer knows two parties who do not know each other. It makes a channel and posts one end to each. From that moment the two hold a wire that runs between them directly. The introducer kept neither end, so it cannot read the traffic, and its going away changes nothing.",
+      "This is the move that makes ports different from every hub-and-spoke design. A broker normally stays in the path of every message for ever. Here the broker is in the path of exactly one thing, the introduction, and then it is out.",
+      "It is also how trust is passed on. Neither site has a reference to the other's window, and neither could have reached the other alone. The introducer had both references and chose to connect them. What it decided, and nothing more, is what they can now do.",
+    ],
+    tryIt: ["Introduce them, remove the introducer, then make both sites talk. Count the dots that pass through the middle box: none.", "Press Start again and remove the introducer first. The sites can never meet."],
+    uses: ["A picker or hub that connects a site to a tool the person chose, then closes. This site's hub does that.", "Connecting two widgets from different vendors on one page without either loading the other's code.", "A parent page that wires its iframes together and then stays out of their conversation."],
+    traps: ["The introducer cannot take the introduction back. If it needs to, it should keep a link in the chain and forward, as in the attenuate pattern.", "Nothing tells either side that the other has gone. Send a ping and treat silence as the answer."],
+    measured: "Chromium 157: messages keep flowing between the two frames after the introducing frame is removed from the document.",
+    related: ["hello", "attenuate", "stream-intro", "exchange"],
+  },
+  reply: {
+    how: [
+      "Every question carries a new port, made for that one question. The service answers on it and forgets it. The answer cannot be confused with any other answer, because no other answer was ever given that port.",
+      "This replaces the request id that every <code>postMessage</code> protocol reinvents. There is no table of pending ids, no matching, no stale id from a previous page load. The reply port <em>is</em> the id, and it cannot be guessed or forged.",
+      "It also means the service does not need to know who is asking. It answers whoever holds the other end. A client can even hand its reply port to someone else, and the answer goes there.",
+    ],
+    tryIt: ["Make both clients ask at once. Each gets its own answer on its own cable.", "Ask several times from one client and watch a new cable appear for each question."],
+    uses: ["Any request and response protocol over ports. It is what a remote procedure call library does underneath.", "Streaming answers: keep the reply port open and send progress on it until done.", "Cancelling: the client closes its end of the reply port and the service can stop work."],
+    traps: ["A reply port that is never answered leaks until the page goes. Give requests a timeout.", "One channel per request is cheap, but not free. For thousands of calls a second, batch."],
+    related: ["hello", "functions", "signer"],
+  },
+  attenuate: {
+    how: [
+      "The owner holds something powerful, here a counter it can read and change. It wants to let a guest read it and nothing else. So it makes a new channel, keeps one end, and listens on that end for <code>read</code> only. The other end goes to the guest.",
+      "The limit is not a rule the guest is asked to follow. It lives in the owner's handler on the owner's side of the port. The guest can post any message it likes and the handler simply has no branch for it.",
+      "Because the owner kept its end, it can close it. After that the guest still holds a port, and the port goes nowhere. This is revocation without a list of who was given what: each grant is its own wire, and cutting the wire ends that grant and no other.",
+    ],
+    tryIt: ["Share read-only, read, then try to add from the guest. Then revoke and read again.", "Share twice. The first guest port still works after the second is made: each grant is separate."],
+    uses: ["Third-party embeds that get a narrow view of your app's state.", "Time-limited or use-limited access: count calls in the handler and close the port at the limit.", "Delegation chains. A guest can attenuate again before passing its port on, and can only ever give away less."],
+    traps: ["Attenuation only holds if the guest never also gets the powerful port. Check what else you post to it.", "Closing your end does not notify the guest in most browsers. Their calls go quiet, with no error."],
+    related: ["signer", "halves", "functions", "introduce"],
+  },
+  exchange: {
+    how: [
+      "A SharedWorker is one worker that every tab of an origin can connect to. Each tab gets a port to it. Here the worker never carries a chat message. When a new tab joins, the worker makes a channel for each tab already present and posts one end to each side.",
+      "The result is a full mesh of direct lines between tabs, built by something that is in none of them. It is the introduce pattern with a worker as the introducer, and it scales to as many tabs as you open.",
+      "The worker needs to know when a tab has gone. Ports do not say. Each tab holds a Web Lock named after itself for as long as it lives, and the worker queues for the same lock. When the worker gets it, the tab is gone.",
+    ],
+    tryIt: ["Open another peer in a new tab and watch the introduction count: one new line per peer already there.", "Send from one peer and see that the worker carried none of it."],
+    uses: ["Tab-to-tab sync that does not go through a server.", "One tab as the leader for a background job, chosen and replaced by the worker.", "A presence list of the site's open tabs."],
+    traps: ["Inside a cross-site iframe a SharedWorker is partitioned by the top-level site. A hidden hub iframe is a different hub on every site.", "A SharedWorker dies with its last page unless created with <code>extendedLifetime</code>.", "Safari on iOS only gained SharedWorker in 16, and Chrome on Android later still. Check before relying on it."],
+    related: ["introduce", "socket", "reload"],
+  },
+  stream: {
+    how: [
+      "A <code>ReadableStream</code> can go in the transfer list. The far side receives a stream it can read, and the near side keeps producing into it. Chunks cross as they are made, so the reader starts before the writer has finished.",
+      "What you get over a plain port is back-pressure. The stream asks the source for more only when the reader has room. A slow reader on another origin slows the producer on yours, with no code from you.",
+      "The stream is moved, not copied. After the transfer the original is locked and the sender cannot read from it.",
+    ],
+    tryIt: ["Send a stream and watch chunks arrive one at a time while the page is still producing.", "Start again and send two. Each is independent."],
+    uses: ["Handing a large download or a generated file to a worker or another origin without holding it all in memory.", "Feeding live data, such as model output, to an embedded viewer.", "Progress reporting: the chunks are the progress."],
+    traps: ["If a stream is passed on through a middle context, it keeps flowing through that context. Remove the middle and the reader stalls with no error.", "A write to a transferred <code>WritableStream</code> can resolve before the far side has refused it."],
+    related: ["pipeline", "stream-intro", "halves", "roundtrip"],
+  },
+  canvas: {
+    how: [
+      "<code>canvas.transferControlToOffscreen()</code> splits a canvas in two: the element stays in your page, and its drawing surface becomes an <code>OffscreenCanvas</code> that can be transferred. Whoever receives the surface draws, and the pixels appear in your element.",
+      "Here the surface goes to a frame on another origin. That frame cannot read your page, cannot see the rest of your DOM, and cannot be clickjacked into covering anything, because it owns pixels inside one rectangle you chose and nothing else.",
+      "The drawing does not pass through your main thread. If the receiver is a worker, the canvas keeps animating while your page is busy.",
+    ],
+    tryIt: ["Hand over the canvas, then ask for another colour. The request goes over a port, the pixels come back through the canvas.", "Start again: a canvas can only give up its surface once, so the demo makes a new one."],
+    uses: ["A chart, map or 3D viewer supplied by another origin that renders into your layout without an iframe's box.", "Moving heavy rendering to a worker.", "A plug-in that may draw and may not read."],
+    traps: ["Once control is transferred, the page can no longer draw on that canvas or read it back.", "The receiver decides the bitmap size. Tell it your size and pixel ratio over the port."],
+    related: ["frozen", "filter", "audio"],
+  },
+  functions: {
+    how: [
+      "A function cannot be cloned or transferred. A port can. So a function is passed by keeping it at home and sending a port that calls it: the receiver posts arguments, your side runs the function and posts back the result.",
+      "The function never leaves. It still sees your variables and runs with your origin's authority. The other side has the ability to <em>call</em> it and no ability to read it.",
+      "Close the port and the function is taken back. The other side's next call goes nowhere. A callback you can revoke is something the language itself does not give you.",
+    ],
+    tryIt: ["Lend the function and watch each call from the other origin run here.", "Take it back while the countdown is still running over there. Their calls stop arriving."],
+    uses: ["Callbacks and event listeners across origins.", "Exposing one method of an object rather than the object.", "Libraries in the Comlink family, which wrap exactly this."],
+    traps: ["Every call is asynchronous, even if the function is not.", "Arguments and results are copied. An object passed through is a snapshot, not a reference.", "Nothing collects a port when the far side forgets it. Close proxies you are done with."],
+    related: ["reply", "attenuate", "signer"],
+  },
+  zerocopy: {
+    how: [
+      "An <code>ArrayBuffer</code> in the transfer list changes hands. The bytes stay where they are in memory and ownership moves to the receiver. The sender's buffer becomes zero length in the same instant.",
+      "Without the transfer list the same call copies every byte. For 64 MB that is tens of milliseconds and twice the memory. With it, the time does not depend on the size.",
+      "Because the sender is left with nothing, there is no shared state and nothing to lock. It is the simplest safe way to give a large block of data to another thread or another origin.",
+    ],
+    tryIt: ["Transfer 64 MB and read the time. Then copy 64 MB and compare.", "Watch the byte count held by this page drop to zero while the buffer is away."],
+    uses: ["Passing decoded images, audio or model weights to a worker.", "Returning large results from a sandboxed computation.", "A pool of buffers that travels back and forth between two contexts."],
+    traps: ["Forgetting the transfer list silently copies. Nothing warns you.", "After the transfer, typed arrays on the old buffer have length zero. Code that still holds one reads nothing.", "A <code>SharedArrayBuffer</code> is a different thing: both sides keep it, and it needs a cross-origin isolated page."],
+    measured: "Chromium 157: 64 MB to a sandboxed frame and back in a few milliseconds by transfer.",
+    related: ["stream", "filter", "canvas"],
+  },
+  tearoff: {
+    how: [
+      "A widget in a frame holds a port to the page. The page opens a new window, and the widget's port is posted on to that window. The port does not care which window holds it, so the conversation continues from the new place.",
+      "No state is serialised and nothing reconnects. The same wire that fed the embedded widget now feeds the window. Queued messages are not lost in the move.",
+      "This only works because a port is not tied to the context that made it. It is tied to whoever currently holds it.",
+    ],
+    tryIt: ["Tear the widget off. The count in the new window carries on from where the embedded one stopped.", "Close the new window and start again."],
+    uses: ["Pop-out video, chat or inspector panels.", "Moving a tool from a sidebar into Document Picture-in-Picture.", "Handing a live session from one frame to its replacement during an upgrade."],
+    traps: ["Browsers only open a window in answer to a real press.", "If the page that opened the window reloads, the window's port to it is dead unless it was banked first. See keeping a port across a reload."],
+    related: ["reload", "introduce", "tabserver"],
+  },
+  tabserver: {
+    how: [
+      "A service worker sees every request in its scope and may answer however it likes. Here it answers by asking: it posts the URL down a port to a tab, with a reply port, and builds the response from what comes back.",
+      "The tab is now the origin server for those URLs. Other tabs, frames and even image tags get real responses at real addresses, written by JavaScript in a page you can see.",
+      "Service workers are stopped when idle and lose their variables, the port included. When this one wakes without a port it asks every open page for a new one, and waits briefly.",
+    ],
+    tryIt: ["Edit the HTML on the left and load the served page again.", "Open the served page in a new tab, with any path you like. The tab on the left sees the path and answers."],
+    uses: ["Previewing a site that is being edited in the browser, with working relative links.", "Serving files from the Origin Private File System or from memory.", "Local-first apps where a tab holds the data and others fetch it."],
+    traps: ["No tab, no server. Requests fail once the serving tab closes.", "A sandboxed frame with no origin is not controlled by your service worker.", "What you serve runs as your origin."],
+    related: ["mounted", "exchange", "socket"],
+  },
+  "stream-intro": {
+    how: [
+      "Introduce two parties with a port and you can leave. Do the same with a stream and you cannot. This demo lets you try both ways, one after the other.",
+      "A port passed through a middle context is re-homed: the two ends find each other and the middle drops out. A stream passed through a middle context is piped: every chunk still travels through the middle, which has to stay alive to carry it.",
+      "When the middle goes, the reader of the stream is not told. No error and no end, only a stall. The port carries on as if nothing happened.",
+    ],
+    tryIt: ["Stream through the introducer, then remove the introducer. The reader stalls.", "Start again, introduce first and stream directly, then remove the introducer. The stream carries on.", "Read the stalled reader's log: it never learns why."],
+    uses: ["Knowing which to choose. For a long-lived connection through a broker, send a port and let the far side make its stream over that."],
+    traps: ["It is easy to build a broker that forwards streams and works until the broker tab closes.", "A stalled stream needs a timeout of your own to detect."],
+    measured: "Chromium 157: a forwarded stream stalls with no error when the forwarding frame is removed. A forwarded port is unaffected.",
+    related: ["introduce", "stream", "pipeline"],
+  },
+  pipeline: {
+    how: [
+      "Three origins in a row: a source, a transformer and a reader. The source's stream is transferred to the transformer, which pipes it through a <code>TransformStream</code> and transfers the result to the reader.",
+      "Each stream has a small queue. When the reader stops reading, its queue fills, the transformer's writes stop being accepted, its queue fills, and the source stops being asked for more. Pausing the last stage stops the first, across two origin boundaries, with no message from you.",
+      "Start reading again and demand flows back the other way. The source resumes a few chunks later.",
+    ],
+    tryIt: ["Start the pipe, pause the reader and watch the source's counter stop a few chunks later.", "Resume and watch it pick up."],
+    uses: ["Processing chains where each stage is supplied by a different party: decrypt, then decode, then display.", "Protecting a slow consumer from a fast producer without buffering everything."],
+    traps: ["The queues mean a few chunks are always in flight. Do not assume pause is instant.", "Every stage must stay alive. See why a stream does not survive its introducer."],
+    related: ["stream", "roundtrip", "stream-intro", "filter"],
+  },
+  reload: {
+    how: [
+      "A port dies with the page that holds it, and it cannot be saved: IndexedDB, session storage and history state all refuse it. But it can be transferred, and a SharedWorker outlives a reload.",
+      "In <code>pagehide</code> the page posts its port to a SharedWorker, which holds it. The new page connects to the same worker and asks for the port back. Messages sent in between wait in the port's queue.",
+      "The far side sees nothing. From where it sits, the wire went quiet for a moment and then the same party carried on.",
+    ],
+    tryIt: ["Try to store a port in IndexedDB and read the refusal.", "Reload the frame and check the count: no gaps and no repeats.", "Reload several times in a row."],
+    uses: ["Keeping a granted connection through a navigation in a multi-page site.", "Single-page apps that must survive a hard refresh without re-asking the person for permission.", "Handing a live port from an old version of a page to a new one."],
+    traps: ["The worker must be created with <code>extendedLifetime: true</code> or it dies with its last page, taking the port with it.", "<code>pagehide</code> does not run on a crash or a killed tab. The port is lost then.", "On a different site the worker is partitioned. This is for one origin's own pages."],
+    measured: "Chromium 157: the count from the feed shows no gap across a reload of the receiving frame.",
+    related: ["exchange", "tearoff", "socket"],
+  },
+  frozen: {
+    how: [
+      "Each worker has its own thread and its own event loop. A port given to a worker is serviced by that worker's thread. So two workers that hold the two ends of a channel exchange messages without the page's thread being involved at all.",
+      "The demo proves it by blocking the page in a tight loop for three seconds. The page's own counter stops and its buttons do nothing. The two workers keep counting.",
+      "You can see them count because each paints into a canvas whose surface it was handed. A transferred canvas is presented by the worker, not the page.",
+    ],
+    tryIt: ["Introduce the workers, then freeze the page. Watch the page's tick count against the workers' message count.", "Freeze before introducing: nothing moves anywhere, because nobody has a wire yet."],
+    uses: ["A decoder worker feeding a renderer worker.", "Keeping a pipeline smooth while the page does layout or garbage collection.", "Any worker pool where workers hand work to each other."],
+    traps: ["A worker created from the page still needs the page to exist. Freeze is fine, close is not.", "Workers talking directly are harder to observe. Have them report counts, as these do."],
+    measured: "Chromium 157: during a 3 second main-thread freeze the page ticked 0 times and the workers went on exchanging a message every 100 ms.",
+    related: ["audio", "canvas", "exchange"],
+  },
+  filter: {
+    how: [
+      "A <code>VideoFrame</code> is a handle to decoded pixels, often on the GPU. It is transferable, so one frame can be handed to another context without copying the picture.",
+      "The page makes a frame from its canvas, transfers it to the filter, and is left holding an empty handle. The filter draws the frame through an effect, closes it, makes a new frame from the result and transfers that back.",
+      "One frame is in flight at a time. The next leaves when the last returns, so a slow filter lowers the frame rate and never builds a queue.",
+    ],
+    tryIt: ["Start the video and cycle the effects.", "Remove the filter. The video on the right stops with it, because every frame went through there."],
+    uses: ["Background blur, captions or watermarking supplied as a plug-in that gets pixels and nothing else.", "Moving effects off the main thread.", "Inspecting or recording a stream in a separate context."],
+    traps: ["Every frame must be closed by whoever ends up holding it, or the browser warns and video stalls.", "Measured in Chromium 157: a video frame reaches a worker and a sandboxed frame, and arrives unreadable in a frame on a real second origin, a shared worker and a service worker."],
+    related: ["canvas", "pipeline", "zerocopy", "roundtrip"],
+  },
+  signer: {
+    how: [
+      "WebCrypto can make a key that cannot be exported. Code can use it and no code can read it. The vault frame makes one and never sends it anywhere.",
+      "What the vault gives out is a port. Post bytes in, get a signature back. Whoever holds that port can sign, for as long as the vault keeps listening.",
+      "The page then lends the shop a weaker port of its own: orders only, three uses. The shop's requests pass through the page, which checks them and forwards the allowed ones. Three layers, each handing on less than it holds, and each able to cut off the one below.",
+    ],
+    tryIt: ["Have the shop sign an order, then try a payment. The second is refused by the page, not the vault.", "Use the port three times and try a fourth.", "Take the port back and try again."],
+    uses: ["A wallet or identity frame that signs for sites without ever exposing the key.", "API credentials held by one origin and used by many under limits.", "Spending rules: amount caps, allow-lists and expiry enforced in the forwarding handler."],
+    traps: ["The vault signs whatever it is sent. The rules live in the layer that forwards, so that layer must be one you trust.", "Compare with sending the key itself, which cannot be undone."],
+    related: ["keycopy", "attenuate", "functions"],
+  },
+  keycopy: {
+    how: [
+      "A <code>CryptoKey</code> can be cloned by <code>postMessage</code>, including to another origin, and including when it is marked non-extractable. The receiver gets a working key.",
+      "Non-extractable means nobody can read the bytes. It does not mean nobody else can have the key. The florist cannot export it, and it does not need to: it stores the key object in its own IndexedDB and still has it after a reload.",
+      "So a posted key is a gift. This page can destroy its own copy and the florist keeps signing as this page for ever. There is no call that takes it back. That is the contrast with the signer pattern, where only a port travelled and closing it ended the access.",
+    ],
+    tryIt: ["Send the key, have the florist sign, and see the signature verify here.", "Destroy this page's copy and reload the florist. It still signs."],
+    uses: ["Provisioning: an origin you trust completely is given a key to keep.", "Moving a key from a setup page to a worker on the same origin.", "A warning, mostly. If you want to be able to change your mind, send a port."],
+    traps: ["There is no revocation. Rotation of the key pair is the only way out.", "The receiver's storage is its own. Clearing your site data does not clear theirs."],
+    measured: "Chromium 157: a non-extractable ECDSA key posted to a frame on a real second origin signs there, is stored in that origin's IndexedDB, and survives a reload of that frame.",
+    related: ["signer", "attenuate", "halves"],
+  },
+  halves: {
+    how: [
+      "A readable stream can only be read and a writable stream can only be written. Each is transferable by itself. So handing someone one of them is handing them one direction of a conversation and not the other.",
+      "The library gets a readable. It has no method that writes. The florist gets a writable. It has no method that reads, so it can drop notes into a box whose other contents it cannot see.",
+      "The owner made both streams and kept their controllers. Closing the feed ends the listener's stream cleanly. Erroring the box makes the writer's next write fail. The halves are also switches.",
+    ],
+    tryIt: ["Give out both halves, drop a note, then close the feed and shut the box.", "After shutting the box, drop another note and read the florist's log."],
+    uses: ["A log or metrics feed that a third party may watch and not influence.", "A submission box that accepts input from many parties who cannot see each other's.", "Read-only and write-only views of the same resource for different roles."],
+    traps: ["A write can resolve before the far side refuses it. Do not treat a resolved write as delivered.", "Erroring a stream is final. Make a new one to reopen."],
+    related: ["attenuate", "stream", "lend", "roundtrip"],
+  },
+  roundtrip: {
+    how: [
+      "A <code>TransformStream</code> has a writable end and a readable end, and both are transferable. The library makes one that redacts text and gives this page both ends.",
+      "From here it is an ordinary <code>pipeThrough</code>. Lines written here cross to the library's origin, are changed by code this page never loads, and come back through the readable end.",
+      "The transform runs with the library's origin, storage and code. This page sees only what goes in and what comes out. Back-pressure crosses both ways, so the library cannot be flooded.",
+    ],
+    tryIt: ["Ask for the transform and send lines through it. Compare what went in with what came back.", "Send the line with nothing secret in it. It returns unchanged."],
+    uses: ["Translation, redaction, compression or encryption offered by another origin as a pipe.", "A paid service whose code and keys stay on its own origin.", "Chaining several origins' transforms with repeated <code>pipeThrough</code>."],
+    traps: ["You are trusting the other origin with the data that goes in. The pattern hides their code from you, not your data from them.", "If their frame goes away the pipe stalls with no error."],
+    related: ["pipeline", "filter", "halves", "lend"],
+  },
+  lend: {
+    how: [
+      "A WebSocket seen as streams is a readable for what the server says and a writable for what you say. <code>WebSocketStream</code> gives exactly that pair, and both can be transferred.",
+      "The widget's content security policy forbids all network access. It is handed the two streams and is now in conversation with the server. It never learns the address and cannot open a second connection.",
+      "The page kept the socket object. Closing it ends the widget's access at once. Hand over only the readable and the widget can listen and not speak.",
+    ],
+    tryIt: ["Have the widget try to connect by itself first, and see it blocked.", "Lend the connection, have it say hello, then close the socket."],
+    uses: ["Sandboxed plug-ins that need one specific connection and no general network.", "A page that authenticates and then delegates the open session to a worker.", "Read-only taps for logging or debugging."],
+    traps: ["Where <code>WebSocketStream</code> is missing the demo wraps a WebSocket in streams, and then every message passes through the page.", "The same idea should hold for WebTransport streams. This site has not measured that yet."],
+    measured: "Chromium 157: a frame with <code>default-src 'none'</code> exchanges messages with the server over streams it was handed.",
+    related: ["halves", "socket", "roundtrip", "attenuate"],
+  },
+  far: {
+    how: [
+      "Two devices cannot pass a port, because neither has a reference to the other. A server can introduce them. Each opens a WebSocket to a meeting place named by a short code, and the server relays the few messages WebRTC needs to set up a direct data channel.",
+      "Each side then makes a local <code>MessageChannel</code>, joins one end to the data channel, and hands out the other. Code that holds that port cannot tell it from any other port.",
+      "This page gives its port to a sandboxed counter. The phone ends up talking to a frame that was given a port and nothing else, through a page that keeps no reference to either.",
+    ],
+    tryIt: ["Open a line, then open the link on a phone and press its buttons.", "No phone to hand: use the stand-in, which is a second page playing the part.", "Hang up and press the far side's button again."],
+    uses: ["A phone as a remote control or second screen for a page on a laptop.", "Approving an action on one device that was started on another.", "Pairing an agent on one machine with tools in a browser on another."],
+    traps: ["Only data crosses. A port, a stream or a buffer cannot be sent to another machine through this bridge.", "There is no relay. Two networks that cannot reach each other directly will not connect.", "The pairing code is the only secret. Anyone who has it while the line is open can join."],
+    measured: "Chromium 157, between two pages on one computer. Not yet tested between two networks.",
+    related: ["introduce", "socket", "lend"],
+  },
+  mounted: {
+    how: [
+      "The tab-as-server pattern answered requests from a tab of the same origin. The port can just as well end on another origin. This page makes a channel, gives one end to the florist's embedded page and the other to its own service worker.",
+      "Requests under one path now go down that port. The florist answers with a status, headers and a body. When the body is a <code>ReadableStream</code> it is transferred, and the service worker hands it straight to the browser as the response while the florist is still writing it.",
+      "The florist's server is never contacted. Its page, sitting in a frame, is the server. And the content it supplies is served from this origin's address.",
+    ],
+    tryIt: ["Mount, then open the catalogue. Watch the stock lines arrive with their times.", "Open the mounted catalogue in a new tab and try a path that does not exist. The 404 is the florist's.", "Unmount and reload it."],
+    uses: ["Embedding a partner's app under your own URL without a reverse proxy.", "Plug-ins that contribute pages and assets to a host app.", "Serving a person's files from a storage provider's origin into an editor's preview."],
+    traps: ["What is mounted runs as your origin, with your cookies and storage. Mount only what you would let act as you.", "The other site's frame has to stay open.", "A stopped service worker forgets its port and must be introduced again."],
+    measured: "Chromium 157: a stream made in a frame on a second origin is accepted by the service worker as a response body, and its three lines arrive about 0.45 s apart.",
+    related: ["tabserver", "introduce", "stream"],
+  },
+  socket: {
+    how: [
+      "Each tab connects to one SharedWorker and gets a port. The worker opens a single WebSocket and keeps it. Tabs post to their port, and the worker sends on the socket.",
+      "The worker remembers which port asked. When the server answers, the answer goes down that port and no other. It is the reply pattern with a socket in the middle.",
+      "Tabs hold a Web Lock for as long as they live. The worker waits on each lock, so it knows when a tab has gone, and it hangs up when the last one leaves.",
+    ],
+    tryIt: ["Have both tabs say hello and check the worker's socket count.", "Open a third tab for real from the link.", "Close tab one and carry on from tab two."],
+    uses: ["Staying under a server's per-user connection limit.", "One subscription feeding every open tab.", "A single place to handle reconnection and backoff."],
+    traps: ["No SharedWorker, no pattern. Fall back to a socket per tab.", "The worker is partitioned inside cross-site iframes.", "Matching answers to askers by order only works if the server answers in order. Use ids otherwise."],
+    measured: "Chromium 157: three tabs, one socket opened, each answer delivered only to the tab that asked.",
+    related: ["exchange", "reply", "lend", "reload"],
+  },
+  audio: {
+    how: [
+      "An <code>AudioWorkletProcessor</code> runs on the audio rendering thread. It has no DOM, no timers and no network. It does have a <code>MessagePort</code> to its node, and it accepts further ports posted through that.",
+      "The page makes a channel and gives one end to a worker and the other to the processor. The worker sends a note every 230 ms. The processor plays it and reports back on the same wire.",
+      "The page is not in that path, so freezing it changes nothing you can hear. The worker even shows its own state, by painting into a canvas it was handed.",
+    ],
+    tryIt: ["Start the music, then freeze the page and listen.", "Read the note count after the freeze: about thirteen in three seconds, none lost."],
+    uses: ["Sequencers and synths whose timing must not depend on the page.", "A decoder worker feeding samples straight to output.", "Meters and analysers that report from the audio thread to a worker."],
+    traps: ["Browsers only start sound after a real press.", "The audio thread must never wait. Keep its handler tiny.", "Measured in Chromium 157: the audio thread accepts ports, buffers and streams, and little else."],
+    measured: "Chromium 157: 13 notes played during a 3 second main-thread freeze.",
+    related: ["frozen", "canvas", "filter"],
+  },
+};

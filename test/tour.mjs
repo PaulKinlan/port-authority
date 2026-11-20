@@ -47,6 +47,32 @@ await go("socket");
 check("socket: the tour runs to the end on one socket", (await finished("socket", 40000)) && /says hello 2/.test(await frameText("#socket", "tab2")), (await caption("socket")).slice(0, 80));
 if (shots) await page.locator("#socket").screenshot({ path: shots + "/tour-socket.png" });
 
+// Without ?play=1 nothing moves until Next is pressed. Next does one step, Back undoes one.
+const steps = await (await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })).newPage();
+steps.on("pageerror", (e) => errors.push(e.message));
+await steps.goto(root + "/");
+await steps.waitForSelector("#hero-demo .steps .fwd");
+const hero = (name) => steps.locator(`#hero-demo .box[data-name="${name}"] iframe`).contentFrame().locator("body").innerText();
+const cap = () => steps.locator("#hero-demo .caption").innerText();
+const fwd = steps.locator("#hero-demo .fwd"), prev = steps.locator("#hero-demo .back");
+await steps.waitForTimeout(2500);
+check("steps: the homepage demo waits, and says to press Next", /5 steps.*Press Next/s.test(await cap()) && /Next: Introduce them/.test(await fwd.innerText()) && (await prev.isDisabled()), (await cap()).slice(0, 70));
+await fwd.click(); await steps.waitForTimeout(1500);
+check("steps: Next does step one and names step two", /1 of 5.*Introduce them\./s.test(await cap()) && /Next: Site A says hello/.test(await fwd.innerText()) && /introduced to Site A/.test(await hero("right")), (await cap()).slice(0, 70));
+await fwd.click(); await steps.waitForTimeout(1500);
+check("steps: Next again does step two", /2 of 5/.test(await cap()) && /Site A says hello 1/.test(await hero("right")));
+await prev.click();
+await steps.waitForFunction(() => !document.querySelector("#hero-demo .fwd").disabled && /1 of 5/.test(document.querySelector("#hero-demo .caption").textContent), null, { timeout: 15000 }).catch(() => {});
+await steps.waitForTimeout(600);
+check("steps: Back returns to step one, with step two undone", /1 of 5/.test(await cap()) && /Next: Site A says hello/.test(await fwd.innerText()) && /introduced to Site A/.test(await hero("right")) && !/says hello/.test(await hero("right")), (await hero("right")).replace(/\n/g, " | ").slice(0, 100));
+for (let i = 0; i < 4; i++) { await fwd.click(); await steps.waitForTimeout(1500); }
+check("steps: Next reaches the end, and the sites outlived the introducer", /5 of 5/.test(await cap()) && /Start again/.test(await fwd.innerText()) && /Site A says hello 2/.test(await hero("right")), (await cap()).slice(0, 60));
+if (shots) await steps.locator(".hero-demo").screenshot({ path: shots + "/steps-hero.png" });
+await prev.click(); await steps.waitForTimeout(400); await prev.click();
+await steps.waitForFunction(() => !document.querySelector("#hero-demo .fwd").disabled, null, { timeout: 20000 }).catch(() => {});
+await steps.waitForTimeout(800);
+check("steps: Back twice in a row lands on a real step", /[1-4] of 5/.test(await cap()), (await cap()).slice(0, 40));
+
 check("no page errors", errors.length === 0, errors.join(" | "));
 await browser.close();
 process.exit(failed ? 1 : 0);
