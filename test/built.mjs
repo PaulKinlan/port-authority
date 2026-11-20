@@ -152,13 +152,111 @@ await open("reply", "built-rpc");
 await click('"add", 2, 3'); await click('"divide", 1, 0'); await click("Three calls at once");
 check("rpc: calls resolve, reject, and come back to the right caller", !!(await until(async () => /all three back: "first asked, last back", 42, "third asked"/.test(await boxText("page")))) && /resolved with 5/.test(await boxText("page")) && /rejected: cannot divide by zero/.test(await boxText("page")), flat(await boxText("page")));
 
+await open("hello", "built-private");
+await click("post the token to the window"); await wait(600);
+const heardShout = /overheard token-1/.test(await boxText("snoop"));
+await click("Open a private line"); await click("post the token down the line"); await wait(1000);
+check("private: the window is overheard and the port is not", heardShout && /received token-2 on my port/.test(await boxText("page")) && !/overheard token-2/.test(await boxText("snoop")) && /heard nothing that time/.test(await boxText("snoop")), flat(await boxText("snoop")));
+
+await open("attenuate", "built-narrow");
+await click("Give the embed"); await click("Switch the theme"); await click("Add to the basket"); await click("Change the email"); await wait(500); await click("Embed: ask for the email"); await wait(800);
+const emb = await frameText("embed");
+check("narrow: the embed sees theme and basket, never the email", /dark theme, 1 in the basket/.test(emb) && /refused: email is not on this port/.test(emb) && !/example\.com/.test(emb) && /email changed: not in the view/.test(await boxText("page")), flat(emb));
+
+await open("exchange", "built-sync");
+const tab = (name) => page.locator(`${at} .box[data-name="${name}"] iframe`).contentFrame();
+await click("Tab one: add"); await click("Tab one: add"); await wait(800);
+const both = (await tab("tab-one").locator("li").count()) === 2 && (await tab("tab-two").locator("li").count()) === 2;
+await click("Tab two: tick"); await wait(800);
+check("sync: an item added in one tab appears in the other, and a tick comes back", both && (await tab("tab-one").locator("li.done").count()) === 1, `${await tab("tab-two").locator("li").count()} items`);
+await tab("tab-one").locator("li:nth-child(2) input").check(); await wait(600);
+check("sync: the checkboxes inside a tab work too", (await tab("tab-two").locator("li.done").count()) === 2);
+
+await open("canvas", "built-render");
+const said = (name) => page.locator(`${at} .box[data-name="${name}"] [data-said]`).innerText();
+await click("Draw on the page"); await until(async () => /frames, and you saw one/.test(await said("page")), 8000);
+await click("Draw in the worker"); await until(async () => /each shown as it was finished/.test(await said("worker")), 8000);
+const pageTicks = Number((await said("page")).match(/ticked (\d+) times/)?.[1]), workerTicks = Number((await said("worker")).match(/ticked (\d+) times/)?.[1]);
+check("render: the page stalls drawing it itself and keeps ticking when a worker draws", pageTicks <= 2 && workerTicks >= 10, `${pageTicks} against ${workerTicks}`);
+
+await open("zerocopy", "built-result");
+await click("send a copy"); await until(async () => /copied: 16 MB arrived/.test(await boxText("page")), 15000);
+await click("move it");
+check("result: 16 MB comes back from the sandbox, and moving leaves it with none", !!(await until(async () => /moved: 16 MB arrived\. 1,077,871 primes/.test(await boxText("page")), 15000)) && /moved it in [\d.]+ ms\. I still hold 0 MB/.test(await frameText("sandbox")) && /copied it in [\d.]+ ms\. I still hold 16 MB/.test(await frameText("sandbox")), flat(await frameText("sandbox")));
+
+await open("pipeline", "built-stages");
+await click("Ask each party"); await until(async () => !(await page.locator(`${at} .controls button`, { hasText: "Pour a zipped" }).isDisabled()));
+await click("Pour a zipped");
+const poured = await until(async () => /Order 1182/.test(await boxText("page")));
+const shownText = await boxText("page");
+check("stages: a zipped order passes through three origins and comes out readable with the card hidden", !!poured && /•••• •••• •••• 9012/.test(shownText) && !/4929/.test(shownText) && /bytes in/.test(await frameText("unzip")) && /text in/.test(await frameText("redact")), flat(shownText));
+
+await open("frozen", "built-relay");
+await click("Connect the decoder"); await wait(1200);
+await click("Freeze this page");
+const relay = await until(async () => (await boxText("page")).match(/I ticked (\d+) times, the renderer painted (\d+) frames/), 12000);
+check("relay: frames go from worker to worker while the page is frozen", !!relay && Number(relay[1]) <= 2 && Number(relay[2]) >= 40, relay ? relay[0] : "");
+
+await open("halves", "built-roles");
+await click("Give out the two ends"); await click("Sensor: report"); await click("Sensor: try to read"); await click("Dashboard: try to write"); await wait(900);
+check("roles: the sensor writes and cannot read, the dashboard reads and cannot write", /reading 1: \d+\.\d°/.test(await frameText("dashboard")) && /I cannot write/.test(await frameText("dashboard")) && /I cannot read/.test(await frameText("sensor")) && /WritableStream/.test(await frameText("sensor")), flat(await frameText("dashboard")));
+
+await open("lend", "built-delegate");
+await click("Sign in"); await until(async () => !(await page.locator(`${at} .controls button`, { hasText: "Hand the session" }).isDisabled()));
+await click("Hand the session"); await click("Page: try to use"); 
+check("delegate: the worker uses the session and the page's port has gone", !!(await until(async () => /balance is 2\d\d, fetched without the page/.test(await boxText("worker")))) && !!(await until(async () => /heard nothing\. It moved/.test(await boxText("page")))), flat(await boxText("worker")));
+
+await open("signer", "built-quota");
+await click("Give each app"); await click("Weather app"); await wait(500); await click("Garden app"); await wait(500); await click("Garden app"); await wait(500); await click("Weather app"); await wait(800);
+const keeper = await frameText("keeper");
+check("quota: each app has its own allowance on its own port", /garden: refused, allowance used/.test(keeper) && /weather: signed "GET \/forecast\?n=2", 1 left/.test(keeper) && /refused: allowance used/.test(await frameText("garden")) && /signed: [0-9a-f]{12}/.test(await frameText("weather")), flat(keeper));
+
+await open("tearoff", "built-pip");
+await click("Float the meter"); await wait(900);
+const pipSaid = await boxText("page");
+check("pip: the meter floats, or the page says plainly why not", /The port did not move|has no Document Picture-in-Picture|would not open it/.test(pipSaid), flat(pipSaid));
+
+await open("tearoff", "built-upgrade");
+await click("Connect version 1"); await wait(1500); await click("Load version 2");
+const v2 = await until(async () => { const t = await frameText("v2").catch(() => ""); return /message \d+\. Missed so far: 0/.test(t) && /took over a live port/.test(t) && t; });
+await wait(1000);
+check("upgrade: version 2 carries on from version 1's port with nothing missed", !!v2 && !/Missed so far: [1-9]/.test(await frameText("v2")) && (await page.locator(`${at} .box[data-name="v1"] iframe`).count()) === 0, flat(v2 || ""));
+
+await open("reload", "built-shop");
+const site = () => page.locator(`${at} .box[data-name="site"] iframe`).contentFrame();
+await until(async () => Number(await site().locator("#n").innerText()) >= 2);
+await click("Go to the next page"); await until(async () => (await site().locator("#title").innerText()) === "Basket"); await wait(900);
+await click("Go to the next page"); await until(async () => (await site().locator("#title").innerText()) === "Account"); await wait(1200);
+check("shop: the port survives two real navigations with no update missed", (await site().locator("#title").innerText()) === "Account" && (await site().locator("#gaps").innerText()) === "0" && Number(await site().locator("#n").innerText()) >= 6 && /collected the port/.test(await site().locator("#log").innerText()) && /2 page changes\. On Account/.test(await boxText("bank")), flat(await boxText("bank")));
+
+await open("tabserver", "built-files");
+await click("Write three files"); await until(async () => !(await page.locator(`${at} .controls button`, { hasText: "Load the site" }).isDisabled()));
+await click("Load the site");
+const filesFrame = () => page.locator(`${at} .box[data-name="served"] iframe`).contentFrame();
+const servedOk = await until(async () => /Served from a file system/.test(await filesFrame().locator("body").innerText()) && /served flower\.svg/.test(await boxText("page")) && /served style\.css/.test(await boxText("page")));
+const bg1 = await filesFrame().locator("body").evaluate((b) => getComputedStyle(b).backgroundColor);
+await click("Rewrite the stylesheet"); await wait(1500);
+const bg2 = await filesFrame().locator("body").evaluate((b) => getComputedStyle(b).backgroundColor);
+check("files: a page, stylesheet and picture are served from the private file system, and a rewrite shows", !!servedOk && bg1 !== bg2, `${bg1} then ${bg2}`);
+
+await open("tabserver", "built-notes");
+await click("Open a reader");
+const notesFrame = () => page.locator(`${at} .box[data-name="served"] iframe`).contentFrame();
+const firstFetch = await until(async () => /fetch 1: 200, 1 notes/.test(await notesFrame().locator("body").innerText()));
+await click("Add a note"); await click("Reader: fetch again");
+check("notes: another page fetches JSON that only this tab holds", !!firstFetch && !!(await until(async () => /fetch 2: 200, 2 notes/.test(await notesFrame().locator("body").innerText()))) && /Order brown paper/.test(await notesFrame().locator("body").innerText()), flat(await boxText("page")));
+
+await open("filter", "built-recorder");
+await click("Attach the kitchen"); await click("Send an order"); await click("Send an order"); await wait(600); await click("Recorder: say"); await wait(600);
+check("recorder: both branches carry every order", /cook: 1 peony wreath/.test(await frameText("kitchen")) && /I hold 2 orders, \d+ bytes/.test(await frameText("recorder")), flat(await frameText("recorder")));
+
 // The guide carries the same demos, running inside each section.
 await page.goto(root + "/guide/");
 const cards = await page.locator(".live").count();
 at = "#live-built-cap";
 await page.locator(at).scrollIntoViewIfNeeded(); await page.waitForSelector(`${at} .fwd`, { timeout: 15000 }); await page.locator(`${at} .stage-el`).scrollIntoViewIfNeeded(); await wait(800);
 for (let i = 0; i < 4; i++) { await page.locator(`${at} .fwd`).click(); await wait(1300); }
-check("guide: every section has running demos, and they step with Next", cards >= 34 && /4 of 4/.test(await page.locator(`${at} .caption`).innerText()) && /refused: over the limit/.test(await frameText("shop")), `${cards} demos`);
+check("guide: every section has running demos, and they step with Next", cards >= 50 && /4 of 4/.test(await page.locator(`${at} .caption`).innerText()) && /refused: over the limit/.test(await frameText("shop")), `${cards} demos`);
 const sections = await page.evaluate(() => [...document.querySelectorAll("main section")].filter((s) => !s.querySelector(".live")).map((s) => s.id));
 check("guide: only the list of open questions has no demo", sections.join() === "open", sections.join());
 

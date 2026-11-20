@@ -63,7 +63,7 @@
           <li>So holding a port is the permission to use it, and passing a port on is how permission is given.</li>
         </ol>
         <p class="see">Running: <a href="/patterns/hello/">a channel is two ends of one wire</a>, <a href="/patterns/introduce/">introduce two strangers, then leave</a>.</p>
-        <div class="live-set" data-demos="hello introduce built-wire built-rpc"><h3>See it run</h3></div>
+        <div class="live-set" data-demos="hello built-private introduce built-wire built-rpc"><h3>See it run</h3></div>
       </section>
 
       <section id="where">
@@ -88,7 +88,7 @@
         </ul>
         <p>Outside the browser's own pages, the same idea appears as real ports between an Android app and its WebView, between an extension's content script and the page it runs in, and between Electron's processes. This site has not tested those.</p>
         <p class="see">Running: <a href="/lab/">the lab</a> sends to thirteen of these places. <a href="/patterns/exchange/">A SharedWorker as the exchange</a>. <a href="/patterns/tabserver/">A tab that is a web server for other tabs</a>. <a href="/patterns/socket/">A shared worker holding the only socket</a>. <a href="/patterns/audio/">A worker sending notes to the audio thread</a>.</p>
-        <div class="live-set" data-demos="exchange built-leader socket tabserver"><h3>See it run</h3></div>
+        <div class="live-set" data-demos="exchange built-sync built-leader socket tabserver built-notes built-files"><h3>See it run</h3></div>
       </section>
 
       <section id="what">
@@ -115,7 +115,7 @@
           </tbody>
         </table></div>
         <p class="measured">The full table has 45 kinds against 13 destinations, and each test uses the thing where it lands, because arriving is not the same as working. <a href="/lab/">Run it in your browser</a> or <a href="/lab/results/">see what others reported</a>.</p>
-        <div class="live-set" data-demos="zerocopy built-pool built-chart"><h3>See it run</h3></div>
+        <div class="live-set" data-demos="zerocopy built-result built-pool built-chart built-render"><h3>See it run</h3></div>
       </section>
 
       <section id="authority">
@@ -130,7 +130,7 @@
           <li><strong>Delegate along a chain</strong>: each holder passes on a narrower port of its own. <a href="/patterns/signer/">A signing port narrowed to three orders.</a></li>
         </ul>
         <p>There are no accounts, tokens or lists of who is allowed in any of these. What you hold is what you may do.</p>
-        <div class="live-set" data-demos="attenuate built-expiry built-chain built-cap built-method built-sealed built-listener signer"><h3>Working examples</h3></div>
+        <div class="live-set" data-demos="attenuate built-narrow built-expiry built-chain built-cap built-quota built-method built-sealed built-roles built-listener signer"><h3>Working examples</h3></div>
       </section>
 
       <section id="streams">
@@ -143,7 +143,7 @@
           <li>A network connection is two streams. Hand them to a context that has no network access and it can talk on that one connection and no other, until you close it. <a href="/patterns/lend/">Running.</a></li>
           <li>A stream does not survive the context it was passed through. If a middle party forwards a stream and then goes away, the reader stalls with no error. Send streams down a direct port. <a href="/patterns/stream-intro/">Running.</a></li>
         </ul>
-        <div class="live-set" data-demos="built-typing built-bigfile pipeline roundtrip built-cipher built-tap"><h3>Working examples</h3></div>
+        <div class="live-set" data-demos="built-typing built-bigfile pipeline built-stages roundtrip built-cipher built-tap built-recorder built-delegate"><h3>Working examples</h3></div>
       </section>
 
       <section id="threads">
@@ -157,7 +157,7 @@
           <li>The audio thread accepts a port. Give a worker the other end and it drives sound with no help from the page. Measured: 13 notes in a 3 second freeze, at one every 230 ms, so none were lost. <a href="/patterns/audio/">Running.</a></li>
           <li>A shared worker can hold the one connection a site needs, with a port to each tab. An answer goes back down the port of the tab that asked. <a href="/patterns/socket/">Running.</a></li>
         </ul>
-        <div class="live-set" data-demos="frozen built-watermark audio mounted"><h3>Working examples</h3></div>
+        <div class="live-set" data-demos="frozen built-relay built-watermark audio mounted"><h3>Working examples</h3></div>
       </section>
 
       <section id="keys">
@@ -178,7 +178,7 @@
           <li>A port survives its page being torn off into a new window, if it is handed to that window. <a href="/patterns/tearoff/">Running.</a></li>
           <li>For anything that must outlive every tab, a port is the wrong tool. Keep the durable part on a server and make fresh ports when a page opens. This site's <a href="/hub/">hub</a> keeps its registry on a server for that reason.</li>
         </ul>
-        <div class="live-set" data-demos="reload tearoff"><h3>Working examples</h3></div>
+        <div class="live-set" data-demos="reload built-shop tearoff built-upgrade"><h3>Working examples</h3></div>
       </section>
 
       <section id="far">

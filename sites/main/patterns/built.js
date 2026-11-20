@@ -10,6 +10,33 @@ const logBox = (stage, name, title, extra = "") => {
   return { say, node: box.node, box };
 };
 
+// A tab that answers requests for the service worker, for the paths under one prefix.
+// Adds a box for the service worker to the stage. Returns null where there is no service worker.
+const serveFrom = async (stage, prefix) => {
+  const sw = logBox(stage, "sw", "Service Worker");
+  if (!("serviceWorker" in navigator)) { sw.say("no Service Worker support here"); return null; }
+  let handler = () => ({ status: 503, body: "not ready", headers: {} });
+  const offer = (worker) => {
+    const channel = new MessageChannel();
+    channel.port1.onmessage = async (event) => {
+      if (!sw.node.isConnected) return channel.port1.close();
+      sw.say(`asked the tab for ${new URL(event.data.url).pathname.replace(prefix, "") || "/"}`);
+      stage.pulse("up", "sw");
+      event.ports[0].postMessage(await handler(event.data.url));
+    };
+    worker.postMessage({ serve: true, prefix }, [channel.port2]);
+  };
+  const registration = await navigator.serviceWorker.register("/patterns/tabserver-sw.js", { scope: "/patterns/served/" });
+  const worker = registration.active || registration.waiting || registration.installing;
+  if (worker.state !== "activated") await new Promise((resolve) => worker.addEventListener("statechange", () => worker.state === "activated" && resolve()));
+  offer(registration.active);
+  // A service worker that was stopped has forgotten the port, and asks for another.
+  navigator.serviceWorker.addEventListener("message", (event) => { if (event.data === "need-port" && registration.active && sw.node.isConnected) offer(registration.active); });
+  sw.say("holding a port to this tab");
+  stage.cable("up", "page", "sw", "yellow");
+  return { handle: (fn) => (handler = fn) };
+};
+
 export const built = [
   {
     pattern: "canvas", use: [0], id: "built-chart",
@@ -944,6 +971,735 @@ await call("add", 2, 3);       <span class="c">// 5, computed on another origin<
       });
     },
   },
+  {
+    pattern: "hello", use: [0], id: "built-private",
+    title: "A private line that other scripts on the page cannot hear",
+    blurb: "A sign-in widget from another origin has a token to hand to this page. If it posts the token to the window, every script in the page hears it, including an advert's. If the page first gives the widget one end of a channel, the token arrives on the page's own port, and there is nothing for the advert's script to listen to.",
+    code: `<span class="c">// heard by every "message" listener in the page</span>
+parent.postMessage({ token }, "*");
+
+<span class="c">// heard only by whoever holds the other end</span>
+port.postMessage({ token });`,
+    tour: { steps: [["Widget: post the token to the window", "The page gets the token. So does the advert's script, which only had to listen."], ["Open a private line", "This page makes a channel, keeps one end and gives the widget the other."], ["Widget: post the token down the line", "The token arrives on the page's port. The advert's script hears nothing."]] },
+    async setup(stage, ui) {
+      const me = logBox(stage, "page", "This page's own code");
+      await stage.frame("widget", {
+        title: "Sign-in widget, another origin", color: "teal",
+        script: () => {
+          let port = null, n = 0;
+          on("port", (_, [p]) => { port = p; log("given a private line"); });
+          on("shout", () => { const token = "token-" + ++n; log(`posted ${token} to the window`); parent.postMessage({ wire: "shout", token }, "*"); });
+          on("whisper", () => { if (!port) return log("I have no line"); const token = "token-" + ++n; log(`posted ${token} down the line`); send(port, "line", { token }); });
+        },
+      });
+      const snoop = logBox(stage, "snoop", "An advert's script, in this same page");
+      let overheard = 0;
+      // Any script in a page can do this. It needs no permission.
+      const listen = (event) => { if (!snoop.node.isConnected) return removeEventListener("message", listen); if (event.data && event.data.token) { overheard++; snoop.say("overheard " + event.data.token); } };
+      addEventListener("message", listen);
+      snoop.say("listening for messages to this window");
+      stage.on((name, data) => { if (name === "widget" && data.wire === "shout") me.say(`received ${data.token} from the window`); });
+      ui.button("Widget: post the token to the window", () => stage.post("widget", { cmd: "shout" }), false, true);
+      const whisper = ui.button("Widget: post the token down the line", () => {
+        const before = overheard;
+        stage.post("widget", { cmd: "whisper" });
+        setTimeout(() => { if (overheard === before && snoop.node.isConnected) snoop.say("heard nothing that time"); }, 600);
+      }, true);
+      ui.button("Open a private line", (btn) => {
+        const { port1, port2 } = new MessageChannel();
+        port1.onmessage = ({ data }) => me.say(`received ${data.token} on my port`);
+        stage.post("widget", { cmd: "port" }, [port2]);
+        stage.cable("line", "page", "widget", "teal");
+        me.say("kept one end, gave the widget the other");
+        btn.disabled = true; whisper.disabled = false;
+      });
+    },
+  },
+  {
+    pattern: "attenuate", use: [0], id: "built-narrow",
+    title: "An embed that is shown two fields of your app's state, and no others",
+    blurb: "This page's state has a name, an email address, a theme and a basket. A reviews embed from another origin needs to match the theme and show how many things are in the basket. It is given a port that carries those two fields, each time they change. A change to the email address sends nothing, and asking for it is refused.",
+    code: `const view = ({ theme, basket }) => ({ theme, basket });     <span class="c">// the whole of what the embed may know</span>
+const { port1, port2 } = new MessageChannel();
+onStateChange((state, changed) => {
+  if (changed in view(state)) port1.postMessage(view(state));
+});
+embed.postMessage({ cmd: "port" }, "*", [port2]);`,
+    tour: { steps: [["Give the embed a narrow view", "The embed gets a port, and the two fields it may see."], ["Switch the theme", "The theme is in the view, so the embed hears of it."], ["Add to the basket", "So is the basket."], ["Change the email address", "The email address is not in the view. Nothing is sent."], ["Embed: ask for the email address", "The embed asks anyway, and is refused."]] },
+    async setup(stage, ui) {
+      const me = logBox(stage, "page", "This page's state", `<p class="small" data-state style="margin:0 0 .4rem;font-family:ui-monospace,Menlo,monospace"></p>`);
+      await stage.frame("embed", {
+        title: "Reviews embed, another origin", color: "teal",
+        script: () => {
+          let port = null;
+          const seen = document.createElement("p");
+          seen.style.cssText = "font:700 .95rem/1.3 system-ui;margin:0 0 .4rem;padding:.35rem .5rem;border-radius:6px;border:1.5px solid currentColor";
+          seen.textContent = "I know nothing about this app";
+          document.getElementById("log").before(seen);
+          on("port", (_, [p]) => {
+            port = p;
+            port.onmessage = ({ data }) => {
+              if (data.refused) return log("refused: " + data.refused);
+              seen.textContent = `${data.theme} theme, ${data.basket} in the basket`;
+              seen.style.background = data.theme === "dark" ? "#0f1c3f" : "#fff"; seen.style.color = data.theme === "dark" ? "#fff" : "#0f1c3f";
+              log("all I was told: " + JSON.stringify(data));
+            };
+          });
+          on("ask", (data) => { if (!port) return log("I have no port"); log("asking for " + data.field); send(port, "view", { want: data.field }); });
+        },
+      });
+      const state = { name: "Ada", email: "ada@example.com", theme: "light", basket: 0 };
+      const view = () => ({ theme: state.theme, basket: state.basket });
+      const stateEl = me.node.querySelector("[data-state]");
+      let port = null, emails = 0;
+      const change = (field, value) => {
+        state[field] = value;
+        stateEl.textContent = JSON.stringify(state).replace(/,/g, ", ");
+        if (!port) return;
+        if (field in view()) { port.postMessage(view()); stage.pulse("view", "page"); me.say(`${field} changed: sent the view`); }
+        else me.say(`${field} changed: not in the view, sent nothing`);
+      };
+      change("theme", "light");
+      const theme = ui.button("Switch the theme", () => change("theme", state.theme === "light" ? "dark" : "light"), true);
+      const basket = ui.button("Add to the basket", () => change("basket", state.basket + 1), true);
+      const email = ui.button("Change the email address", () => change("email", `ada${++emails}@example.com`), true);
+      const ask = ui.button("Embed: ask for the email address", () => stage.post("embed", { cmd: "ask", field: "email" }), true);
+      ui.button("Give the embed a narrow view", (btn) => {
+        const channel = new MessageChannel();
+        port = channel.port1;
+        port.onmessage = ({ data }) => { me.say(`refused a request for ${data.want}`); port.postMessage({ refused: `${data.want} is not on this port` }); stage.pulse("view", "page"); };
+        stage.post("embed", { cmd: "port" }, [channel.port2]);
+        stage.cable("view", "page", "embed", "teal");
+        port.postMessage(view());
+        btn.disabled = true; theme.disabled = basket.disabled = email.disabled = ask.disabled = false;
+      }, false, true);
+    },
+  },
+  {
+    pattern: "exchange", use: [0], id: "built-sync",
+    title: "A list that stays the same in every tab, with no server",
+    blurb: "The two boxes are two tabs of this site, each showing a shopping list. Add an item in one and it appears in the other. Tick it in the other and it is ticked in the first. The list lives in a shared worker that holds a port to every tab. Nothing is sent to a server, and nothing is written to storage. The checkboxes in the boxes work too, and the link opens a third tab for real.",
+    code: `<span class="c">// every tab</span>
+const port = new SharedWorker("/sync-worker.js").port;
+port.onmessage = ({ data }) => render(data.list);
+addButton.onclick = () => port.postMessage({ add: true });
+
+<span class="c">// the worker</span>
+onconnect = ({ ports: [port] }) => {
+  ports.add(port);
+  port.onmessage = ({ data }) => { change(list, data); for (const p of ports) p.postMessage({ list }); };
+};`,
+    tour: { steps: [["Tab one: add an item", "Tab one tells the worker. The worker tells every tab."], ["Tab one: add an item", "A second item, in both tabs."], ["Tab two: tick the first item", "Tab two ticks it, and it is ticked in tab one."]] },
+    async setup(stage, ui) {
+      const one = stage.box("tab-one", { src: "/patterns/sync.html" });
+      const two = stage.box("tab-two", { src: "/patterns/sync.html" });
+      if (!("SharedWorker" in self)) return;
+      await Promise.all([one.whenReady, two.whenReady]);
+      stage.post("tab-one", { cmd: "clear" });
+      ui.button("Tab one: add an item", () => stage.post("tab-one", { cmd: "add" }), false, true);
+      ui.button("Tab two: tick the first item", () => stage.post("tab-two", { cmd: "tick" }));
+      ui.link("Open a third tab for real", "/patterns/sync.html");
+    },
+  },
+  {
+    pattern: "canvas", use: [1], id: "built-render",
+    title: "The same heavy drawing, on the page's thread and then on a worker's",
+    blurb: "Both canvases get the same job: two seconds of zooming into the Mandelbrot set, frame after frame. Drawn by the page, the page can do nothing else: its counter stops, and you see only the last frame. Drawn by a worker that was handed the canvas, every frame appears as it is finished, and the page's counter never misses a beat.",
+    code: `const surface = canvas.transferControlToOffscreen();
+worker.postMessage({ surface }, [surface]);
+
+<span class="c">// the worker: draw as hard as you like, the page is not waiting for you</span>
+onmessage = ({ data }) => { const ctx = data.surface.getContext("2d"); for (;;) drawNextFrame(ctx); };`,
+    tour: { steps: [["Draw on the page's thread", "The page draws for two seconds. Watch its counter: it stops.", 3200], ["Draw in the worker", "The worker draws the same frames into a canvas it was handed. The counter keeps going.", 3200]] },
+    async setup(stage, ui) {
+      const me = stage.box("page", { html: `<div class="here" style="display:flex;flex-direction:column;height:100%;box-sizing:border-box"><h4>Drawn by this page</h4><p class="small" style="margin:0 0 .3rem">Page ticks: <strong data-ticks>0</strong></p><canvas width="240" height="135" style="width:100%;flex:1;min-height:0;display:block;object-fit:contain;background:#000" aria-label="Drawn on the page's own thread"></canvas><p class="small" data-said style="margin:.3rem 0 0;min-height:2.6em"></p></div>` });
+      const wb = stage.box("worker", { html: `<div class="here" style="display:flex;flex-direction:column;height:100%;box-sizing:border-box"><h4>Drawn by a worker</h4><p class="small" style="margin:0 0 .3rem">The canvas below was handed over.</p><canvas width="240" height="135" style="width:100%;flex:1;min-height:0;display:block;object-fit:contain;background:#000" aria-label="Drawn by a worker"></canvas><p class="small" data-said style="margin:.3rem 0 0;min-height:2.6em"></p></div>` });
+      const ticksEl = me.node.querySelector("[data-ticks]");
+      const said = (box, text) => (box.node.querySelector("[data-said]").textContent = text);
+      let ticks = 0;
+      const beat = setInterval(() => { if (!ticksEl.isConnected) return clearInterval(beat); ticksEl.textContent = ++ticks; }, 100);
+      const frame = function (ctx, k) {
+        const w = ctx.canvas.width, h = ctx.canvas.height, img = ctx.createImageData(w, h), d = img.data;
+        const scale = 3 / (w * Math.pow(1.045, k)), cx = -0.7435, cy = 0.1314;
+        for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+          const a = cx + (x - w / 2) * scale, b = cy + (y - h / 2) * scale;
+          let zr = 0, zi = 0, i = 0;
+          while (i < 220 && zr * zr + zi * zi < 4) { const t = zr * zr - zi * zi + a; zi = 2 * zr * zi + b; zr = t; i++; }
+          const o = (y * w + x) * 4, c = i === 220 ? 0 : i * 9;
+          d[o] = c % 256; d[o + 1] = (c * 2) % 256; d[o + 2] = 120 + (c % 136); d[o + 3] = 255;
+        }
+        ctx.putImageData(img, 0, 0);
+      };
+      const ctx = me.node.querySelector("canvas").getContext("2d");
+      const worker = new Worker(URL.createObjectURL(new Blob([`const frame = ${frame}; let ctx = null;
+        onmessage = async ({ data }) => {
+          if (data.surface) { ctx = data.surface.getContext("2d"); return; }
+          const until = performance.now() + 2000; let k = 0;
+          while (performance.now() < until) { frame(ctx, k++); await new Promise((r) => setTimeout(r, 0)); }
+          postMessage({ frames: k });
+        };`], { type: "text/javascript" })));
+      const surface = wb.node.querySelector("canvas").transferControlToOffscreen();
+      worker.postMessage({ surface }, [surface]);
+      stage.cable("canvas", "page", "worker", "teal");
+      let before = 0;
+      worker.onmessage = ({ data }) => { if (!wb.node.isConnected) return worker.terminate(); said(wb, `${data.frames} frames, each shown as it was finished. The page ticked ${ticks - before} times meanwhile.`); onWorker.disabled = false; };
+      ui.button("Draw on the page's thread", async (btn) => {
+        btn.disabled = true; said(me, "drawing…");
+        await new Promise((r) => requestAnimationFrame(() => setTimeout(r, 30)));
+        const start = ticks, until = performance.now() + 2000; let k = 0;
+        while (performance.now() < until) frame(ctx, k++);
+        said(me, `${k} frames, and you saw one. The page ticked ${ticks - start} times meanwhile.`);
+        btn.disabled = false;
+      }, false, true);
+      const onWorker = ui.button("Draw in the worker", (btn) => { btn.disabled = true; before = ticks; said(wb, "drawing…"); worker.postMessage({ go: true }); stage.pulse("canvas", "page"); });
+    },
+  },
+  {
+    pattern: "zerocopy", use: [1], id: "built-result",
+    title: "A sandboxed calculation that hands back 16 MB without copying it",
+    blurb: "The frame is sandboxed and on another origin, which is where you want code you did not write. It marks every prime below 16.7 million in a 16 MB buffer. Posting that back the ordinary way makes a second 16 MB and takes time that grows with the size. Posting it with the buffer in the transfer list moves the memory itself. The frame measures how long each call took, and how much it has left afterwards.",
+    code: `<span class="c">// in the sandbox</span>
+const sieve = findPrimes(16 * 1024 * 1024);                <span class="c">// a 16 MB Uint8Array</span>
+port.postMessage({ sieve }, [sieve.buffer]);               <span class="c">// moved</span>
+sieve.byteLength;                                          <span class="c">// 0: it is the page's now</span>`,
+    tour: { steps: [["Sandbox: work it out and send a copy", "The frame computes, then posts the result the ordinary way. It keeps its 16 MB, and the page gets another.", 2600], ["Sandbox: work it out and move it", "The same work, and this time the buffer is in the transfer list.", 2600]] },
+    async setup(stage, ui) {
+      const me = logBox(stage, "page", "This page wants the answer");
+      await stage.frame("sandbox", {
+        title: "Sandboxed calculation, another origin", color: "yellow",
+        script: () => on("port", (_, [port]) => {
+          log("ready to work");
+          port.onmessage = ({ data }) => {
+            const N = 16 * 1024 * 1024, sieve = new Uint8Array(N).fill(1);
+            sieve[0] = sieve[1] = 0;
+            for (let i = 2; i * i < N; i++) if (sieve[i]) for (let j = i * i; j < N; j += i) sieve[j] = 0;
+            const start = performance.now();
+            if (data.move) port.postMessage({ sieve, moved: true }, [sieve.buffer]); else port.postMessage({ sieve, moved: false });
+            const ms = performance.now() - start;
+            tell("pulse", { cable: "result" });
+            log(`${data.move ? "moved" : "copied"} it in ${ms.toFixed(1)} ms. I still hold ${sieve.byteLength / 1048576} MB.`);
+          };
+        }),
+      });
+      const channel = new MessageChannel();
+      channel.port1.onmessage = ({ data }) => {
+        let count = 0; const s = data.sieve;
+        for (let i = 0; i < s.length; i++) count += s[i];
+        me.say(`${data.moved ? "moved" : "copied"}: ${s.byteLength / 1048576} MB arrived. ${count.toLocaleString("en")} primes below ${s.length.toLocaleString("en")}.`);
+      };
+      stage.post("sandbox", { cmd: "port" }, [channel.port2]);
+      stage.cable("result", "page", "sandbox", "yellow");
+      const ask = (move) => { channel.port1.postMessage({ move }); stage.pulse("result", "page"); };
+      ui.button("Sandbox: work it out and send a copy", () => ask(false), false, true);
+      ui.button("Sandbox: work it out and move it", () => ask(true));
+    },
+  },
+  {
+    pattern: "pipeline", use: [0], id: "built-stages",
+    title: "Three parties each supply one stage, and none of them sees the others",
+    blurb: "A zipped order needs unzipping, turning from bytes into text, and its card number hiding before it is shown. Each of those is a stream stage supplied by a different origin. This page asks each for a stage, joins the three end to end, and pours the file in. Each party sees only what flows through its own stage, and none of them needs to know the others exist.",
+    code: `<span class="c">// each party</span>
+const stage = new TransformStream({ transform(chunk, out) { out.enqueue(work(chunk)); } });
+parent.postMessage({ stage }, "*", [stage.readable, stage.writable]);
+
+<span class="c">// this page</span>
+zippedFile.pipeThrough(unzip).pipeThrough(decode).pipeThrough(redact).pipeTo(screen);`,
+    tour: { steps: [["Ask each party for a stage", "Three origins each hand over both ends of one transform."], ["Pour a zipped order through all three", "Bytes go in at one end. Readable text with the card number hidden comes out of the other.", 2600]] },
+    async setup(stage, ui) {
+      // One script for all three. Each frame works out which stage it is from its own title.
+      const script = () => on("offer", () => {
+        const title = document.querySelector("h1").textContent;
+        const kind = title.startsWith("Unzip") ? "unzip" : title.startsWith("Bytes") ? "decode" : "redact";
+        const seen = new TransformStream({ transform(chunk, out) { log(kind === "redact" ? `text in: ${chunk.length} characters` : `bytes in: ${chunk.byteLength}`); tell("pulse", { cable: kind }); out.enqueue(chunk); } });
+        const work = kind === "unzip" ? new DecompressionStream("gzip") : kind === "decode" ? new TextDecoderStream() : new TransformStream({ transform(text, out) { out.enqueue(text.replace(/\b\d{4} \d{4} \d{4} (\d{4})\b/g, "•••• •••• •••• $1")); } });
+        const readable = seen.readable.pipeThrough(work);
+        log("made a stage and handed over both its ends");
+        parent.postMessage({ wire: "stage", kind, readable, writable: seen.writable }, "*", [readable, seen.writable]);
+      });
+      await stage.frame("unzip", { title: "Unzip, origin one", color: "red", script });
+      await stage.frame("decode", { title: "Bytes to text, origin two", color: "yellow", script });
+      await stage.frame("redact", { title: "Hide card numbers, origin three", color: "teal", script });
+      const out = logBox(stage, "page", "This page joins them, and shows the result");
+      const order = "Order 1182\nTwo dozen tulips, one roll of brown paper\nCard 4929 1234 5678 9012\nDeliver Thursday before noon\n";
+      let stages = {};
+      stage.on((name, data, ports) => {
+        if (data.wire !== "stage") return;
+        stages[data.kind] = { readable: data.readable, writable: data.writable };
+        if (Object.keys(stages).length < 3) return;
+        stage.cable("unzip", "unzip", "decode", "red"); stage.cable("decode", "decode", "redact", "yellow"); stage.cable("redact", "redact", "page", "teal");
+        out.say("holding three stages from three origins");
+        pour.disabled = false;
+      });
+      const pour = ui.button("Pour a zipped order through all three", async (btn) => {
+        btn.disabled = true;
+        const zipped = new Blob([order]).stream().pipeThrough(new CompressionStream("gzip"));
+        const { unzip, decode, redact } = stages; stages = {};
+        let text = "";
+        await zipped.pipeThrough(unzip).pipeThrough(decode).pipeThrough(redact).pipeTo(new WritableStream({ write(chunk) { text += chunk; } }));
+        for (const line of text.trim().split("\n").reverse()) out.say(line);
+        ask.disabled = false;
+      }, true);
+      const ask = ui.button("Ask each party for a stage", (btn) => { for (const name of ["unzip", "decode", "redact"]) stage.post(name, { cmd: "offer" }); btn.disabled = true; }, false, true);
+    },
+  },
+  {
+    pattern: "frozen", use: [0, 1], id: "built-relay",
+    title: "A decoder worker feeding a renderer worker, while the page is busy",
+    blurb: "One worker makes video frames. Another paints them into a canvas it was handed. This page introduces the two with a channel and steps away, so frames go from one worker straight to the other and never touch the page's thread. Freeze the page for three seconds, as a long layout or a garbage collection would, and the picture keeps moving.",
+    code: `const { port1, port2 } = new MessageChannel();
+decoder.postMessage({ out: port1 }, [port1]);
+renderer.postMessage({ in: port2, surface }, [port2, surface]);
+
+<span class="c">// the decoder: each frame's memory is moved to the renderer</span>
+out.postMessage({ pixels }, [pixels.buffer]);`,
+    tour: { steps: [["Connect the decoder to the renderer", "Each worker gets one end of a channel. Frames start to flow between them."], ["Freeze this page for 3 seconds", "The page's counter stops. The picture does not.", 4200]] },
+    async setup(stage, ui) {
+      const me = logBox(stage, "page", "This page", `<p class="small" style="margin:0 0 .4rem">Page ticks: <strong data-ticks>0</strong></p>`);
+      const dec = logBox(stage, "decoder", "Decoder worker");
+      const screen = stage.box("renderer", { html: `<canvas width="160" height="90" style="width:100%;height:100%;display:block;background:#000" aria-label="Painted by the renderer worker"></canvas>` });
+      const ticksEl = me.node.querySelector("[data-ticks]");
+      let ticks = 0;
+      const beat = setInterval(() => { if (!ticksEl.isConnected) { decoder.terminate(); renderer.terminate(); return clearInterval(beat); } ticksEl.textContent = ++ticks; }, 100);
+      const work = (source) => new Worker(URL.createObjectURL(new Blob([source], { type: "text/javascript" })));
+      const decoder = work(`onmessage = ({ data }) => {
+        const out = data.out, W = 160, H = 90; let n = 0;
+        setInterval(() => {
+          const pixels = new Uint8ClampedArray(W * H * 4), t = n / 12;
+          for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+            const v = Math.sin(x / 14 + t) + Math.sin(y / 9 - t * 1.3) + Math.sin((x + y) / 18 + t / 2), o = (y * W + x) * 4;
+            pixels[o] = 128 + 127 * Math.sin(v * 2); pixels[o + 1] = 128 + 127 * Math.sin(v * 2 + 2); pixels[o + 2] = 128 + 127 * Math.sin(v * 2 + 4); pixels[o + 3] = 255;
+          }
+          out.postMessage({ pixels, n: ++n }, [pixels.buffer]);
+          if (n % 60 === 0) postMessage({ made: n });
+        }, 33);
+      };`);
+      const renderer = work(`let painted = 0; onmessage = ({ data }) => {
+        if (data.count) return postMessage({ painted });
+        const ctx = data.surface.getContext("2d");
+        data.in.onmessage = ({ data: frame }) => {
+          ctx.putImageData(new ImageData(frame.pixels, 160, 90), 0, 0);
+          ctx.fillStyle = "#000"; ctx.fillRect(0, 0, 62, 15); ctx.fillStyle = "#fff"; ctx.font = "11px monospace"; ctx.fillText("frame " + frame.n, 3, 11);
+          painted++;
+        };
+      };`);
+      decoder.onmessage = ({ data }) => dec.say(`made ${data.made} frames, kept none`);
+      const count = () => new Promise((resolve) => { renderer.onmessage = ({ data }) => resolve(data.painted); renderer.postMessage({ count: true }); });
+      const freeze = ui.button("Freeze this page for 3 seconds", async () => {
+        const before = await count(), mine = ticks;
+        me.say("frozen");
+        await new Promise((r) => requestAnimationFrame(() => setTimeout(r, 30)));
+        const until = performance.now() + 3000;
+        while (performance.now() < until) { /* the main thread is stuck here */ }
+        me.say(`3 s frozen: I ticked ${ticks - mine} times, the renderer painted ${(await count()) - before} frames`);
+      }, true);
+      ui.button("Connect the decoder to the renderer", (btn) => {
+        const { port1, port2 } = new MessageChannel();
+        const surface = screen.node.querySelector("canvas").transferControlToOffscreen();
+        renderer.postMessage({ in: port2, surface }, [port2, surface]);
+        decoder.postMessage({ out: port1 }, [port1]);
+        stage.cable("frames", "decoder", "renderer", "teal");
+        me.say("introduced them, and kept no port");
+        btn.disabled = true; freeze.disabled = false;
+      }, false, true);
+    },
+  },
+  {
+    pattern: "halves", use: [2], id: "built-roles",
+    title: "One feed, with a writing role and a reading role",
+    blurb: "A greenhouse sensor should be able to report and never read. A dashboard should be able to read and never report. This page makes one stream and gives the writing end to the sensor and the reading end to the dashboard. The roles are not a rule that somebody checks. The sensor holds an object with no way to read, and the dashboard holds one with no way to write.",
+    code: `const { readable, writable } = new TransformStream();
+sensor.postMessage({ feed: writable }, "*", [writable]);       <span class="c">// can write, cannot read</span>
+dashboard.postMessage({ feed: readable }, "*", [readable]);    <span class="c">// can read, cannot write</span>`,
+    tour: { steps: [["Give out the two ends", "The sensor gets the writing end and the dashboard the reading end. This page keeps neither."], ["Sensor: report a reading", "A reading goes from the sensor to the dashboard."], ["Sensor: try to read the feed", "The sensor's end has nothing to read with."], ["Dashboard: try to write a reading", "The dashboard's end has nothing to write with."]] },
+    async setup(stage, ui) {
+      await stage.frame("sensor", {
+        title: "Greenhouse sensor", color: "red",
+        script: () => {
+          let writer = null, feed = null, n = 0;
+          on("feed", (data) => { feed = data.feed; writer = feed.getWriter(); log("given an end of the feed: " + feed.constructor.name); });
+          on("report", () => { if (!writer) return log("I have no feed"); const reading = { n: ++n, temp: (18 + Math.random() * 6).toFixed(1) }; writer.write(reading); tell("pulse", { cable: "feed" }); log(`reported ${reading.temp}°`); });
+          on("read", () => log(feed && "getReader" in feed ? "I can read" : "I cannot read: a WritableStream has no getReader"));
+        },
+      });
+      const me = logBox(stage, "page", "This page made the feed");
+      await stage.frame("dashboard", {
+        title: "Dashboard", color: "teal",
+        script: () => {
+          let feed = null;
+          on("feed", async (data) => {
+            feed = data.feed; log("given an end of the feed: " + feed.constructor.name);
+            const reader = feed.getReader();
+            for (;;) { const { value, done } = await reader.read(); if (done) break; log(`reading ${value.n}: ${value.temp}°`); }
+          });
+          on("write", () => log(feed && "getWriter" in feed ? "I can write" : "I cannot write: a ReadableStream has no getWriter"));
+        },
+      });
+      const report = ui.button("Sensor: report a reading", () => stage.post("sensor", { cmd: "report" }), true);
+      const read = ui.button("Sensor: try to read the feed", () => stage.post("sensor", { cmd: "read" }), true);
+      const write = ui.button("Dashboard: try to write a reading", () => stage.post("dashboard", { cmd: "write" }), true);
+      ui.button("Give out the two ends", (btn) => {
+        const { readable, writable } = new TransformStream();
+        stage.post("sensor", { cmd: "feed", feed: writable }, [writable]);
+        stage.post("dashboard", { cmd: "feed", feed: readable }, [readable]);
+        stage.cable("feed", "sensor", "dashboard", "teal");
+        me.say("gave away both ends. I can neither read nor write it now.");
+        btn.disabled = true; report.disabled = read.disabled = write.disabled = false;
+      }, false, true);
+    },
+  },
+  {
+    pattern: "lend", use: [1], id: "built-delegate",
+    title: "Sign in on the page, then hand the open session to a worker",
+    blurb: "The page signs in to an account service on another origin and gets back a port: the open session. The page does not need it. Its worker does, to keep the balance fresh in the background. So the page posts the port to the worker. The session is not copied and nobody signs in twice. The worker now holds it, and the page's own variable points at nothing.",
+    code: `const session = await signIn(password);         <span class="c">// a port to the account service</span>
+worker.postMessage({ session }, [session]);     <span class="c">// the worker has it now</span>
+session.postMessage({ ask: "balance" });        <span class="c">// goes nowhere: this end has left</span>`,
+    tour: { steps: [["Sign in", "The page sends a password and gets a session back, as a port."], ["Hand the session to my worker", "The port moves to the worker, which starts asking for the balance."], ["Page: try to use the session", "The page still has its variable. The port behind it has gone.", 1600]] },
+    async setup(stage, ui) {
+      const me = logBox(stage, "page", "This page signs in");
+      const wbox = logBox(stage, "worker", "This page's worker");
+      await stage.frame("account", {
+        title: "Account service, another origin", color: "yellow",
+        script: () => {
+          let balance = 240, asked = 0;
+          on("login", (data) => {
+            if (data.password !== "tulips") return log("wrong password");
+            const { port1, port2 } = new MessageChannel();
+            port1.onmessage = ({ data }) => { if (data.ask !== "balance") return; balance += 5; log(`balance asked for (${++asked})`); send(port1, "session", { balance }); };
+            log("signed in. Here is a session.");
+            parent.postMessage({ wire: "session" }, "*", [port2]);
+          });
+        },
+      });
+      const worker = new Worker(URL.createObjectURL(new Blob([`onmessage = ({ data }) => {
+        const session = data.session;
+        session.onmessage = ({ data }) => postMessage({ balance: data.balance });
+        const ask = () => { session.postMessage({ ask: "balance" }); postMessage({ asked: true }); };
+        ask(); setInterval(ask, 1500);
+      };`], { type: "text/javascript" })));
+      let session = null;
+      worker.onmessage = ({ data }) => {
+        if (!me.node.isConnected) return worker.terminate();
+        if (data.asked) return stage.pulse("session", "worker");
+        wbox.say(`balance is ${data.balance}, fetched without the page`);
+      };
+      stage.on((name, data, ports) => {
+        if (name !== "account" || data.wire !== "session") return;
+        session = ports[0];
+        stage.cable("session", "page", "account", "yellow");
+        me.say("signed in. I hold the session.");
+        hand.disabled = false;
+      });
+      const hand = ui.button("Hand the session to my worker", (btn) => {
+        worker.postMessage({ session }, [session]);
+        stage.cable("session", "worker", "account", "yellow");
+        me.say("posted the session to my worker");
+        wbox.say("given an open session. I never saw a password.");
+        btn.disabled = true; mine.disabled = false;
+      }, true);
+      const mine = ui.button("Page: try to use the session", () => {
+        let heard = false;
+        session.onmessage = () => (heard = true);
+        try { session.postMessage({ ask: "balance" }); } catch { /* a moved port may refuse outright */ }
+        setTimeout(() => { if (!heard && me.node.isConnected) me.say("asked on my old port, and heard nothing. It moved."); }, 700);
+      }, true);
+      ui.button("Sign in", (btn) => { stage.post("account", { cmd: "login", password: "tulips" }); btn.disabled = true; }, false, true);
+    },
+  },
+  {
+    pattern: "signer", use: [1], id: "built-quota",
+    title: "One API key, used by two apps, each under its own limit",
+    blurb: "The key holder has a key that cannot be read, and signs requests with it. Two apps from other origins need signed requests. Neither is given the key. Each is given its own port to the key holder, and each port has its own allowance: three requests for the weather app, one for the garden app. The key holder counts per port, so it knows who is asking without anyone having to say.",
+    code: `<span class="c">// the key holder, once per app</span>
+const { port1, port2 } = new MessageChannel();
+let left = allowance;
+port1.onmessage = async ({ data }) => {
+  if (left-- <= 0) return port1.postMessage({ refused: "allowance used" });
+  port1.postMessage({ signed: await crypto.subtle.sign("HMAC", key, encode(data.request)) });
+};
+give(app, port2);`,
+    tour: { steps: [["Give each app a line to the key holder", "Two ports, two allowances. The key stays where it is."], ["Weather app: sign a request", "The key holder signs it. One of three used."], ["Garden app: sign a request", "The garden app's one request."], ["Garden app: sign a request", "Its allowance is used. The weather app's is untouched."]] },
+    async setup(stage, ui) {
+      await stage.frame("weather", {
+        title: "Weather app, allowed 3", color: "teal",
+        script: () => {
+          let port = null, n = 0;
+          on("port", (_, [p]) => { port = p; log("given a line to a key holder"); port.onmessage = ({ data }) => log(data.refused ? "refused: " + data.refused : `signed: ${data.signature}…`); });
+          on("ask", () => { if (!port) return log("I have no line"); send(port, "weather", { request: "GET /forecast?n=" + ++n }); });
+        },
+      });
+      await stage.frame("keeper", {
+        title: "Key holder, another origin", color: "yellow",
+        script: () => {
+          const key = crypto.subtle.generateKey({ name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+          key.then(() => log("made a key nobody can read"), (err) => log("no WebCrypto here: " + err.message));
+          on("client", (data, [port]) => {
+            let left = data.allowance;
+            log(`${data.name}: a line, allowed ${left}`);
+            port.onmessage = async ({ data: ask }) => {
+              if (left <= 0) { log(`${data.name}: refused, allowance used`); return send(port, data.name, { refused: "allowance used" }); }
+              left--;
+              const bytes = new Uint8Array(await crypto.subtle.sign("HMAC", await key, new TextEncoder().encode(ask.request)));
+              log(`${data.name}: signed "${ask.request}", ${left} left`);
+              send(port, data.name, { signature: [...bytes.slice(0, 6)].map((b) => b.toString(16).padStart(2, "0")).join("") });
+            };
+          });
+        },
+      });
+      await stage.frame("garden", {
+        title: "Garden app, allowed 1", color: "red",
+        script: () => {
+          let port = null, n = 0;
+          on("port", (_, [p]) => { port = p; log("given a line to a key holder"); port.onmessage = ({ data }) => log(data.refused ? "refused: " + data.refused : `signed: ${data.signature}…`); });
+          on("ask", () => { if (!port) return log("I have no line"); send(port, "garden", { request: "GET /frost?n=" + ++n }); });
+        },
+      });
+      const w = ui.button("Weather app: sign a request", () => stage.post("weather", { cmd: "ask" }), true);
+      const g = ui.button("Garden app: sign a request", () => stage.post("garden", { cmd: "ask" }), true);
+      ui.button("Give each app a line to the key holder", (btn) => {
+        for (const [name, allowance, color] of [["weather", 3, "teal"], ["garden", 1, "red"]]) {
+          const { port1, port2 } = new MessageChannel();
+          stage.post("keeper", { cmd: "client", name, allowance }, [port1]);
+          stage.post(name, { cmd: "port" }, [port2]);
+          stage.cable(name, name, "keeper", color);
+        }
+        btn.disabled = true; w.disabled = g.disabled = false;
+      }, false, true);
+    },
+  },
+  {
+    pattern: "tearoff", use: [1], id: "built-pip",
+    title: "Float a tool above every other window, without moving its port",
+    blurb: "Document Picture-in-Picture gives a page a small window that stays on top of everything. It differs from tearing off into a popup in one useful way: the new window has no script of its own. This page's script keeps running it. So the meter's element moves into the floating window and the port stays exactly where it was. Close the floating window and the element comes home. This needs Chrome or Edge on a desktop, and a real press of the button.",
+    code: `const pip = await documentPictureInPicture.requestWindow({ width: 260, height: 150 });
+pip.document.body.append(meter);          <span class="c">// the element moves</span>
+port.onmessage = ({ data }) => { meter.textContent = data; };   <span class="c">// the port and its listener do not</span>
+pip.addEventListener("pagehide", () => sidebar.append(meter));`,
+    async setup(stage, ui) {
+      const me = logBox(stage, "page", "This page's sidebar", `<div data-slot><p data-tool style="font:800 2.4rem/1 var(--display);margin:.1rem 0 .4rem">0</p></div>`);
+      await stage.frame("feed", {
+        title: "Feed on another origin", color: "teal",
+        script: () => on("port", (_, [port]) => { let n = 0; log("ticking into one port"); setInterval(() => send(port, "line", ++n), 900); }),
+      });
+      const slot = me.node.querySelector("[data-slot]"), tool = me.node.querySelector("[data-tool]");
+      const channel = new MessageChannel();
+      channel.port1.onmessage = ({ data }) => { tool.textContent = data; };
+      stage.post("feed", { cmd: "port" }, [channel.port2]);
+      stage.cable("line", "page", "feed", "teal");
+      let pip = null;
+      const back = ui.button("Bring it back", () => pip?.close(), true);
+      ui.button("Float the meter above other windows", async (btn) => {
+        if (!("documentPictureInPicture" in self)) return me.say("This browser has no Document Picture-in-Picture. Chrome and Edge on a desktop do.");
+        try { pip = await documentPictureInPicture.requestWindow({ width: 260, height: 150 }); }
+        catch (err) { return me.say("the browser would not open it: " + err.message); }
+        pip.document.body.style.cssText = "margin:0;display:grid;place-items:center;height:100vh;font-family:system-ui;background:#0f1c3f;color:#fff";
+        pip.document.body.append(tool);
+        me.say("the element moved to the floating window. The port did not move.");
+        btn.disabled = true; back.disabled = false;
+        pip.addEventListener("pagehide", () => { slot.append(tool); if (me.node.isConnected) me.say("the window closed and the meter came home"); btn.disabled = false; back.disabled = true; pip = null; });
+      }, false, true);
+    },
+  },
+  {
+    pattern: "tearoff", use: [2], id: "built-upgrade",
+    title: "Replace a running widget with its next version, and keep its connection",
+    blurb: "Version 1 of a chat widget is holding a port to a service that sends it numbered messages. Version 2 is ready. Loading it the usual way would mean dropping the connection and making another, and losing whatever arrived in between. Here version 1 stops listening, hands its port to version 2, and is removed. Messages that arrive during the swap wait in the port. The service is never told that anything changed.",
+    code: `<span class="c">// version 1, when asked to step aside</span>
+port.onmessage = null;                                       <span class="c">// stop reading: what arrives now will wait</span>
+parent.postMessage({ handover: true, last }, "*", [port]);
+
+<span class="c">// version 2</span>
+port.onmessage = ({ data }) => { /* carries on from last + 1 */ };`,
+    tour: { steps: [["Connect version 1 to the service", "The service starts sending numbered messages down a port."], ["Load version 2 and hand over", "Version 1 gives up its port and is removed. Version 2 picks up at the next message.", 2400]] },
+    async setup(stage, ui) {
+      const widget = () => {
+        let port = null, last = 0, missed = 0;
+        const listen = () => { port.onmessage = ({ data }) => { if (last && data !== last + 1) missed += data - last - 1; last = data; log(`message ${data}. Missed so far: ${missed}`); tell("at", { last, missed }); }; };
+        on("port", (data, [p]) => { port = p; if (data.last) { last = data.last; log(`took over a live port. The last version saw message ${last}.`); } else log("connected"); listen(); });
+        on("handover", () => { if (!port) return; port.onmessage = null; log("stopped listening and gave my port away"); parent.postMessage({ wire: "handover", last }, "*", [port]); port = null; });
+      };
+      await stage.frame("service", {
+        title: "Chat service, another origin", color: "teal",
+        script: () => on("port", (_, [port]) => { let n = 0; log("sending to one port. I do not know who holds it."); setInterval(() => { send(port, "line", ++n); if (n % 5 === 0) log(`sent ${n} messages`); }, 400); }),
+      });
+      await stage.frame("v1", { title: "Chat widget, version 1", color: "red", script: widget });
+      const me = logBox(stage, "page", "This page swaps the versions");
+      let current = "v1";
+      stage.on(async (name, data, ports) => {
+        if (name !== "v1" || data.wire !== "handover") return;
+        stage.post("v2", { cmd: "port", last: data.last }, [ports[0]]);
+        stage.remove("v1"); current = "v2";
+        stage.cable("line", "service", "v2", "teal");
+        me.say(`moved the port from version 1 to version 2 at message ${data.last}`);
+      });
+      const upgrade = ui.button("Load version 2 and hand over", async (btn) => {
+        btn.disabled = true;
+        await stage.frame("v2", { title: "Chat widget, version 2", color: "yellow", script: widget });
+        me.say("version 2 has loaded. Asking version 1 to step aside.");
+        stage.post("v1", { cmd: "handover" });
+      }, true);
+      ui.button("Connect version 1 to the service", (btn) => {
+        const { port1, port2 } = new MessageChannel();
+        stage.post("service", { cmd: "port" }, [port1]);
+        stage.post("v1", { cmd: "port" }, [port2]);
+        stage.cable("line", "service", "v1", "teal");
+        btn.disabled = true; upgrade.disabled = false;
+      }, false, true);
+    },
+  },
+  {
+    pattern: "reload", use: [0], id: "built-shop",
+    title: "A connection granted once, kept across every page of a site",
+    blurb: "The box on the right is a small site with three pages, and each link is a real navigation that throws the old page away. On the first page it was granted a port to an order feed on another origin. On the way out of each page it leaves that port with a shared worker, and on the way in it collects it. The feed keeps sending throughout. Updates sent while no page existed wait in the port, so none are missed.",
+    code: `<span class="c">// on every page of the site</span>
+const bank = new SharedWorker("/bank.js", { extendedLifetime: true });
+bank.port.postMessage({ withdraw: "orders" });                 <span class="c">// is one waiting for me?</span>
+bank.port.onmessage = ({ ports }) => ports[0] ? resume(ports[0]) : askToBeGranted();
+addEventListener("pagehide", () => bank.port.postMessage({ deposit: "orders" }, [port]));`,
+    tour: { steps: [["Go to the next page", "A real navigation, from Shop to Basket. The new page collects the port.", 2200], ["Go to the next page", "And again, to Account. The count has no gaps.", 2200]] },
+    async setup(stage, ui) {
+      const key = "s" + Math.random().toString(36).slice(2, 8);
+      await stage.frame("feed", {
+        title: "Order feed, another origin", color: "teal",
+        script: () => on("port", (_, [port]) => { let n = 0; log("granted this site one port"); setInterval(() => send(port, "line", ++n), 400); }),
+      });
+      const note = logBox(stage, "bank", "Port bank, a SharedWorker");
+      const site = stage.box("site", { src: `/patterns/shop.html?key=${key}` });
+      let moves = 0, page = "Shop", grants = 0;
+      stage.on((name, data) => {
+        if (name !== "site") return;
+        if (data.wire === "need-port") {
+          const channel = new MessageChannel();
+          stage.post("feed", { cmd: "port" }, [channel.port1]);
+          site.frame.contentWindow.postMessage({ cmd: "port" }, location.origin, [channel.port2]);
+          stage.cable("line", "feed", "site", "teal");
+          if (++grants > 1) note.say("The bank did not keep the port. This browser may not support extendedLifetime.");
+        }
+        if (data.wire === "tick" && data.page !== page) { page = data.page; note.say(`${moves} page change${moves === 1 ? "" : "s"}. On ${page} at update ${data.n}, ${data.gaps} missed`); }
+      });
+      ui.button("Go to the next page", () => { moves++; note.say("holding the port while there is no page"); site.frame.contentWindow.postMessage({ cmd: "go" }, location.origin); }, false, true);
+    },
+  },
+  {
+    pattern: "tabserver", use: [1], id: "built-files",
+    title: "A website served out of this origin's private file system",
+    blurb: "This tab writes three files into the Origin Private File System: a page, a stylesheet and a picture. Then it serves them. The box on the right is a real navigation to a real URL. The service worker passes each request up a port to this tab, the tab opens the file, and the <code>File</code> itself goes back down the port as the response. No server has these files. Rewrite the stylesheet and reload, and the site changes.",
+    code: `<span class="c">// this tab, for each request the service worker passes up</span>
+port.onmessage = async ({ data, ports: [reply] }) => {
+  const name = new URL(data.url).pathname.split("/").pop() || "index.html";
+  const file = await (await root.getFileHandle(name)).getFile();
+  reply.postMessage({ body: file, headers: { "content-type": typeFor(name) } });
+};`,
+    tour: { steps: [["Write three files to the private file system", "A page, a stylesheet and a picture, written by this tab into storage only this origin can see."], ["Load the site from them", "Three requests reach the service worker. Each is answered by this tab, from a file.", 2200], ["Rewrite the stylesheet and reload", "This tab overwrites one file. The site is loaded again and looks different.", 2200]] },
+    async setup(stage, ui) {
+      const me = logBox(stage, "page", "This tab has the files");
+      const server = await serveFrom(stage, "/patterns/served/files/");
+      const served = stage.box("served", { html: `<div class="here"><h4>/patterns/served/files/</h4><p class="small muted">Nothing loaded yet.</p></div>` });
+      if (!server) return;
+      if (!navigator.storage?.getDirectory) return me.say("This browser has no Origin Private File System.");
+      const types = { html: "text/html; charset=utf-8", css: "text/css", svg: "image/svg+xml" };
+      let root = null, dark = false;
+      const write = async (name, text) => { const w = await (await root.getFileHandle(name, { create: true })).createWritable(); await w.write(text); await w.close(); };
+      const css = () => `body{font:15px system-ui;margin:.8rem;background:${dark ? "#0f1c3f" : "#fff8e1"};color:${dark ? "#fff" : "#0f1c3f"}}h1{font-size:1.15rem;margin:0 0 .3rem}img{width:54px;float:right}`;
+      server.handle(async (url) => {
+        const name = new URL(url).pathname.split("/").pop() || "index.html";
+        try {
+          const file = await (await root.getFileHandle(name)).getFile();
+          me.say(`served ${name} from the file system, ${file.size} bytes`);
+          return { body: file, headers: { "content-type": types[name.split(".").pop()] || "application/octet-stream", "cache-control": "no-store" } };
+        } catch { me.say(`no file called ${name}`); return { status: 404, body: "no such file", headers: { "content-type": "text/plain" } }; }
+      });
+      const show = () => { served.node.innerHTML = `<iframe title="A site served from this tab's files" src="/patterns/served/files/index.html?${Date.now()}"></iframe>`; stage.cable("down", "sw", "served", "teal"); };
+      const load = ui.button("Load the site from them", show, true);
+      const restyle = ui.button("Rewrite the stylesheet and reload", async () => { dark = !dark; await write("style.css", css()); me.say("overwrote style.css"); show(); }, true);
+      ui.button("Write three files to the private file system", async (btn) => {
+        btn.disabled = true;
+        try {
+          root = await (await navigator.storage.getDirectory()).getDirectoryHandle("pa-served", { create: true });
+          await write("index.html", `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width"><link rel="stylesheet" href="style.css"><img src="flower.svg" alt="A flower"><h1>Served from a file system</h1><p>This page, its stylesheet and its picture are three files in a browser tab.</p>`);
+          await write("style.css", css());
+          await write("flower.svg", `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40"><g fill="#e0364c"><circle cx="20" cy="9" r="7"/><circle cx="31" cy="20" r="7"/><circle cx="20" cy="31" r="7"/><circle cx="9" cy="20" r="7"/></g><circle cx="20" cy="20" r="6" fill="#f5b700"/></svg>`);
+        } catch (err) { return me.say("could not write: " + err.message); }
+        me.say("wrote index.html, style.css and flower.svg");
+        load.disabled = restyle.disabled = false;
+      }, false, true);
+      ui.link("Open the site in a new tab", "/patterns/served/files/index.html");
+    },
+  },
+  {
+    pattern: "tabserver", use: [2], id: "built-notes",
+    title: "One tab holds the data, and the others fetch it with fetch()",
+    blurb: "The notes exist in one place: an array in this tab's memory. The reader on the right is an ordinary page that calls <code>fetch(\"notes.json\")</code>, as it would against any server. The request goes to the service worker, up a port to this tab, and the answer comes back as JSON. The reader does not know its server is a tab. Add a note here, fetch again there, and it has arrived.",
+    code: `<span class="c">// the reader: nothing unusual</span>
+const notes = await (await fetch("notes.json")).json();
+
+<span class="c">// this tab, which is the server</span>
+port.onmessage = ({ data, ports: [reply] }) =>
+  reply.postMessage({ body: JSON.stringify(notes), headers: { "content-type": "application/json" } });`,
+    tour: { steps: [["Open a reader", "A real page loads, and fetches the notes. This tab answers.", 2000], ["Add a note in this tab", "The note is added to an array in this tab, and nowhere else."], ["Reader: fetch again", "The reader asks again and gets the new note.", 1600]] },
+    async setup(stage, ui) {
+      const me = logBox(stage, "page", "This tab holds the notes", `<p class="small" style="margin:0 0 .4rem">Notes in memory: <strong data-n>1</strong></p>`);
+      const server = await serveFrom(stage, "/patterns/served/notes/");
+      const served = stage.box("served", { html: `<div class="here"><h4>A reader, in another page</h4><p class="small muted">Not open yet.</p></div>` });
+      if (!server) return;
+      const notes = ["Water the ferns"], more = ["Order brown paper", "Ring the tulip grower", "Sweep the shop floor"];
+      const reader = `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width"><style>body{font:14px system-ui;margin:.7rem;color-scheme:light dark}h1{font-size:1rem;margin:0 0 .3rem}ul{margin:0 0 .4rem;padding-left:1.1rem}p{font:12px ui-monospace,monospace;margin:0}</style><h1>Reader</h1><ul id="list"></ul><p id="said"></p><script>
+        let fetches = 0;
+        const load = async () => { const response = await fetch("notes.json"); const notes = await response.json(); document.getElementById("list").replaceChildren(...notes.map((n) => Object.assign(document.createElement("li"), { textContent: n }))); document.getElementById("said").textContent = "fetch " + (++fetches) + ": " + response.status + ", " + notes.length + " notes"; };
+        load(); addEventListener("message", (e) => { if (e.data === "again") load(); });
+      <\/script>`;
+      server.handle((url) => {
+        if (new URL(url).pathname.endsWith("notes.json")) { me.say(`answered a fetch with ${notes.length} notes`); return { body: JSON.stringify(notes), headers: { "content-type": "application/json", "cache-control": "no-store" } }; }
+        me.say("served the reader's own page");
+        return { body: reader, headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } };
+      });
+      const again = ui.button("Reader: fetch again", () => served.node.querySelector("iframe")?.contentWindow.postMessage("again", location.origin), true);
+      ui.button("Add a note in this tab", () => { notes.push(more[(notes.length - 1) % more.length]); me.node.querySelector("[data-n]").textContent = notes.length; me.say(`added "${notes.at(-1)}"`); });
+      ui.button("Open a reader", (btn) => {
+        served.node.innerHTML = `<iframe title="A reader that fetches from this tab" src="/patterns/served/notes/?${Date.now()}"></iframe>`;
+        stage.cable("down", "sw", "served", "teal");
+        btn.disabled = true; again.disabled = false;
+      }, false, true);
+      ui.link("Open a reader in a new tab", "/patterns/served/notes/");
+    },
+  },
+  {
+    pattern: "filter", use: [2], id: "built-recorder",
+    title: "A recorder that gets its own copy of a stream, and cannot touch the original",
+    blurb: "Orders flow from this page to a kitchen display on another origin. An auditor wants a record of every one. The page splits the stream in two with <code>tee()</code> and gives the second branch to a recorder on a third origin. The recorder sees every order and keeps them. It has no way to change, delay or drop what the kitchen receives, because it holds a different stream.",
+    code: `const [forKitchen, forRecorder] = orders.tee();
+kitchen.postMessage({ orders: forKitchen }, "*", [forKitchen]);
+recorder.postMessage({ orders: forRecorder }, "*", [forRecorder]);`,
+    tour: { steps: [["Attach the kitchen and a recorder", "The order stream is split, and each origin is handed one branch."], ["Send an order", "One order is written once. Both branches carry it."], ["Send an order", "And another."], ["Recorder: say what you hold", "The recorder reports what it kept."]] },
+    async setup(stage, ui) {
+      await stage.frame("kitchen", {
+        title: "Kitchen display, origin one", color: "red",
+        script: () => on("orders", async (data) => { log("given the order stream"); const reader = data.orders.getReader(); for (;;) { const { value, done } = await reader.read(); if (done) break; log("cook: " + value.text); } }),
+      });
+      const me = logBox(stage, "page", "This page takes the orders");
+      await stage.frame("recorder", {
+        title: "Recorder, origin two", color: "yellow",
+        script: () => {
+          const kept = [];
+          on("orders", async (data) => { log("given a branch of a stream"); const reader = data.orders.getReader(); for (;;) { const { value, done } = await reader.read(); if (done) break; kept.push(value); log(`recorded order ${value.n}`); } });
+          on("report", () => log(`I hold ${kept.length} orders, ${JSON.stringify(kept).length} bytes. The last: ${kept.at(-1)?.text || "none"}`));
+        },
+      });
+      const menu = ["2 tulip bunches for table 4", "1 peony wreath, to collect", "3 rose buttonholes for Friday"];
+      let controller = null, n = 0;
+      const order = ui.button("Send an order", () => { const text = menu[n % menu.length]; controller.enqueue({ n: ++n, text }); stage.pulse("kitchen", "page"); stage.pulse("recorder", "page"); me.say(`order ${n} written once`); }, true);
+      const report = ui.button("Recorder: say what you hold", () => stage.post("recorder", { cmd: "report" }), true);
+      ui.button("Attach the kitchen and a recorder", (btn) => {
+        const orders = new ReadableStream({ start(c) { controller = c; } });
+        const [forKitchen, forRecorder] = orders.tee();
+        stage.post("kitchen", { cmd: "orders", orders: forKitchen }, [forKitchen]);
+        stage.post("recorder", { cmd: "orders", orders: forRecorder }, [forRecorder]);
+        stage.cable("kitchen", "page", "kitchen", "red"); stage.cable("recorder", "page", "recorder", "yellow");
+        me.say("split the stream and gave away both branches");
+        btn.disabled = true; order.disabled = report.disabled = false;
+      }, false, true);
+    },
+  },
 ];
 
 // Ideas that are already what a demo on the site does. key: "pattern:index".
@@ -965,5 +1721,8 @@ export const shown = {
   "far:0": ["#demo", "the demo at the top of this page"],
   "mounted:0": ["#demo", "the demo at the top of this page"],
   "socket:0": ["#demo", "the demo at the top of this page"],
+  "roundtrip:2": ["/patterns/pipeline/#built-stages", "three parties each supplying a stage"],
+  "frozen:2": ["/patterns/frozen/#built-relay", "a decoder worker handing frames to a renderer worker"],
+  "reload:2": ["/patterns/tearoff/#built-upgrade", "version 1 of a widget handing its port to version 2"],
   "filter:1": ["/patterns/frozen/", "two workers that keep going while the page is frozen"],
 };
