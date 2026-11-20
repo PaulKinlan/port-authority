@@ -207,7 +207,7 @@ return new Response(answer.body, answer);`,
       ui.button("Mount the florist's site here", async (btn) => {
         btn.disabled = true;
         try {
-          registration = await navigator.serviceWorker.register("/patterns/mount-sw.js", { scope: "/patterns/mounted/" });
+          registration = await navigator.serviceWorker.register("/patterns/mount-sw.js", { scope: "/patterns/mounted/florist/" });
           const worker = registration.active || registration.waiting || registration.installing;
           if (worker.state !== "activated") await new Promise((resolve) => worker.addEventListener("statechange", () => worker.state === "activated" && resolve()));
         } catch (err) { return sw.say("could not start: " + err.message); }

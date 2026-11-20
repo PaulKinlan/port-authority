@@ -51,6 +51,8 @@ async function serve(env, site, pathname) {
   if (path.endsWith("/")) path += "index.html";
   const candidates = [site + path, "shared" + path];
   if (!/\.[a-z0-9]+$/i.test(path)) candidates.push(site + path + "/index.html");
+  // Each pattern has a page of its own, all drawn by one file.
+  if (site === "main" && /^\/patterns\/[a-z0-9-]+\/index\.html$/.test(path) && !path.startsWith("/patterns/served/")) candidates.push("main/patterns/_page.html");
   // The lab also runs inside the isolated room, from the same files.
   if (path.startsWith("/isolated/lab/")) candidates.push(site + path.slice(9), "shared" + path.slice(9));
   for (const key of candidates) {

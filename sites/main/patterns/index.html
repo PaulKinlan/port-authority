@@ -19,6 +19,7 @@
       <h1 style="font-size:var(--step-3)">Six moves with a port</h1>
       <p>Everything else on this site is built from these. Each box below is a real browsing context on its own origin, the cables appear when a port actually lands, and the dots are real messages. Press the buttons.</p>
     </div>
+    <nav class="contents" id="contents" aria-label="All the patterns" style="padding-bottom:2rem"></nav>
     <main id="patterns"></main>
     <div class="stack" id="further" style="padding-block:clamp(3rem,8vw,5rem) 2rem; --gap:1.2rem; border-top:2px solid var(--ink)">
       <h1 style="font-size:var(--step-3)">Further out</h1>
@@ -78,6 +79,9 @@
     import { threads } from "/patterns/threads.js";
     import { origins } from "/patterns/origins.js";
     import { places } from "/patterns/places.js";
+    import { groups } from "/patterns/all.js";
+    // Each pattern is shown briefly on this page and has a full page of its own.
+    document.getElementById("contents").innerHTML = groups.map((group) => `<div><h3>${group.title}</h3><ol>${group.demos.map((d) => `<li><a href="/patterns/${d.id}/">${d.title}</a></li>`).join("")}</ol></div>`).join("");
     import { runCensus } from "/patterns/census.js";
     const census = document.querySelector("table.census");
     new IntersectionObserver((entries, io) => { if (entries[0].isIntersecting) { io.disconnect(); runCensus(census); } }, { rootMargin: "200px" }).observe(census);
@@ -85,7 +89,7 @@
       const section = document.createElement("section");
       section.className = "pattern";
       section.id = demo.id;
-      section.innerHTML = `<h2>${demo.title}</h2><div class="demo"></div><div class="text"><p>${demo.blurb}</p><pre>${demo.code}</pre></div>`;
+      section.innerHTML = `<h2><a href="/patterns/${demo.id}/">${demo.title}</a></h2><div class="demo"></div><div class="text"><p>${demo.blurb}</p><pre>${demo.code}</pre><p class="more"><a class="button quiet" href="/patterns/${demo.id}/">The full page on this: how it works, what to build, what bites \u203a</a></p></div>`;
       main.append(section);
       // Start each demo when it scrolls near, so six sets of frames do not all boot at once.
       new IntersectionObserver((entries, io) => { if (entries[0].isIntersecting) { io.disconnect(); mount(section.querySelector(".demo"), demo); } }, { rootMargin: "300px" }).observe(section);
