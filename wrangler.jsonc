@@ -11,9 +11,10 @@
     "html_handling": "none",
     "not_found_handling": "none"
   },
-  "durable_objects": { "bindings": [{ "name": "HUB", "class_name": "Hub" }] },
+  "durable_objects": { "bindings": [{ "name": "HUB", "class_name": "Hub" }, { "name": "LAB", "class_name": "Lab" }] },
   "migrations": [
     { "tag": "v1", "new_sqlite_classes": ["Relay"] },
-    { "tag": "v2", "new_sqlite_classes": ["Hub"], "deleted_classes": ["Relay"] }
+    { "tag": "v2", "new_sqlite_classes": ["Hub"], "deleted_classes": ["Relay"] },
+    { "tag": "v3", "new_sqlite_classes": ["Lab"] }
   ]
 }

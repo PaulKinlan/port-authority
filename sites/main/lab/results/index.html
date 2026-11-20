@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lab results | Port Authority</title>
+  <meta name="description" content="What every browser that has run the lab reported: which objects can be sent where, and where browsers disagree.">
+  <link rel="stylesheet" href="/base.css">
+  <link rel="stylesheet" href="/lab/lab.css">
+  <script src="/errors.js"></script>
+</head>
+<body>
+  <div class="wrap">
+    <header class="site-bar">
+      <a class="wordmark" href="/">Port Authority</a>
+      <nav><a href="/">Experiments</a><a href="/patterns/">Port patterns</a><a href="/lab/">The lab</a><a href="/lab/results/" aria-current="page">Results</a><a href="/hub/">Your hub</a></nav>
+    </header>
+    <div class="stack" style="padding-block:2.5rem 1.5rem; --gap:1.1rem">
+      <h1 style="font-size:var(--step-3)">What browsers reported</h1>
+      <p>Every browser that runs <a href="/lab/">the lab</a> sends back what it saw. This page adds those reports up by browser and version, and points at the tests where they disagree. The data is public as JSON: <a href="/lab/data/summary"><code>/lab/data/summary</code></a>, <a href="/lab/data/reports"><code>/lab/data/reports</code></a>, <a href="/lab/data/errors"><code>/lab/data/errors</code></a>.</p>
+    </div>
+    <main class="stack" style="--gap:1.6rem; padding-bottom:3rem">
+      <section class="stack" aria-labelledby="h-browsers">
+        <h2 id="h-browsers" style="font-size:var(--step-2)">Browsers seen</h2>
+        <p class="pick" id="groups"><span class="muted">Loading.</span></p>
+        <p class="small muted">Pick one to see its table. Pick a second to compare: tests where the two differ get a red outline.</p>
+      </section>
+      <section class="stack" aria-labelledby="h-table">
+        <h2 id="h-table" style="font-size:var(--step-2)">The table</h2>
+        <ul class="legend" id="legend"></ul>
+        <div class="matrix-wrap"><table class="matrix" id="matrix"></table></div>
+        <p class="detail panel" id="detail" aria-live="polite">Press any mark to see the counts behind it.</p>
+      </section>
+      <section class="stack" aria-labelledby="h-differ">
+        <h2 id="h-differ" style="font-size:var(--step-2)">Where browsers disagree</h2>
+        <ul class="log" id="differ" style="max-height:24rem"><li class="muted">Loading.</li></ul>
+      </section>
+      <section class="stack" aria-labelledby="h-reports">
+        <h2 id="h-reports" style="font-size:var(--step-2)">Recent reports</h2>
+        <ul class="log" id="reports" style="max-height:18rem"><li class="muted">Loading.</li></ul>
+      </section>
+      <section class="stack" aria-labelledby="h-errors">
+        <h2 id="h-errors" style="font-size:var(--step-2)">Errors seen on this site</h2>
+        <p class="small muted">Any page here that throws an error tells the server, with the browser's name. This is how a browser where an experiment does not work shows up.</p>
+        <ul class="log" id="errors" style="max-height:18rem"><li class="muted">Loading.</li></ul>
+      </section>
+    </main>
+  </div>
+  <script src="/lab/kinds.js"></script>
+  <script type="module">
+    import { OUTCOMES, PLACES } from "/lab/names.js";
+    const $ = (id) => document.getElementById(id);
+    const esc = (t) => String(t ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+    const when = (at) => new Date(at).toLocaleString([], { dateStyle: "medium", timeStyle: "short" });
+    const get = (path) => fetch(path).then((r) => r.json());
+    const KINDS = globalThis.LAB_KINDS;
+    const [summary, reports, errors] = await Promise.all([get("/lab/data/summary"), get("/lab/data/reports"), get("/lab/data/errors")]);
+    const name = (g) => `${g.browser} ${g.major}, ${g.platform || "unknown system"}${g.isolated ? ", isolated" : ""}`;
+    // What most reports in a group saw for one test, and whether they all agreed.
+    const verdict = (g, kind, dest) => {
+      const counts = g?.cells[kind]?.[dest];
+      if (!counts) return null;
+      const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+      return { outcome: sorted[0][0], mixed: sorted.length > 1, counts };
+    };
+    $("legend").innerHTML = Object.values(OUTCOMES).filter((o) => o.mark.trim()).map((o) => `<li><b>${o.mark}</b>${o.label}</li>`).join("") + `<li><b style="background:color-mix(in srgb, var(--yellow) 22%, transparent)">&nbsp;&nbsp;</b>reports of this browser disagree</li>`;
+
+    let chosen = [];
+    function drawGroups() {
+      $("groups").innerHTML = summary.groups.length ? summary.groups.map((g, i) => `<button class="tiny quiet" data-i="${i}" aria-pressed="${chosen.includes(i)}">${esc(name(g))} <span class="muted">(${g.reports})</span></button>`).join("") : `<span class="muted">No browser has reported yet. <a href="/lab/">Run the lab</a> to be the first.</span>`;
+    }
+    $("groups").onclick = (event) => {
+      const b = event.target.closest("button[data-i]"); if (!b) return;
+      const i = Number(b.dataset.i);
+      chosen = chosen.includes(i) ? chosen.filter((x) => x !== i) : [...chosen, i].slice(-2);
+      if (!chosen.length) chosen = [i];
+      drawGroups(); drawMatrix();
+    };
+    function drawMatrix() {
+      const [a, b] = chosen.map((i) => summary.groups[i]);
+      if (!a) return void ($("matrix").innerHTML = "");
+      const dests = Object.values(PLACES).filter((p) => KINDS.some((k) => a.cells[k.name]?.[p.id]));
+      const groups = [];
+      for (const d of dests) { const last = groups.at(-1); last && last.name === d.group ? last.n++ : groups.push({ name: d.group, n: 1 }); }
+      let band = "";
+      $("matrix").innerHTML = `
+        <caption class="small muted" style="caption-side:top;padding:.5rem;text-align:left">${esc(name(a))}: ${a.reports} report${a.reports === 1 ? "" : "s"}${b ? `, compared with ${esc(name(b))}` : ""}</caption>
+        <thead>
+          <tr class="group"><td></td>${groups.map((g) => `<th colspan="${g.n}" scope="colgroup">${esc(g.name)}</th>`).join("")}</tr>
+          <tr class="dest"><td></td>${dests.map((d) => `<th scope="col">${esc(d.label)}</th>`).join("")}</tr>
+        </thead>
+        <tbody>${KINDS.map((k) => `${k.group !== band ? `<tr class="band"><th colspan="${dests.length + 1}">${esc(band = k.group)}</th></tr>` : ""}
+          <tr><th scope="row">${esc(k.name)}</th>${dests.map((d) => {
+            const v = verdict(a, k.name, d.id), w = b && verdict(b, k.name, d.id);
+            if (!v) return `<td data-o="pending"><button aria-label="no data">·</button></td>`;
+            const differs = w && w.outcome !== v.outcome;
+            return `<td data-o="${v.outcome}" data-k="${esc(k.name)}" data-d="${d.id}" class="${v.mixed ? "mixed" : ""} ${differs ? "differs" : ""}"><button aria-label="${esc(k.name)} to ${esc(d.label)}: ${OUTCOMES[v.outcome].label}${differs ? ", differs" : ""}">${OUTCOMES[v.outcome].mark}</button></td>`;
+          }).join("")}</tr>`).join("")}
+        </tbody>`;
+    }
+    $("matrix").addEventListener("click", (event) => {
+      const td = event.target.closest("td[data-k]"); if (!td) return;
+      const line = (g) => { const v = verdict(g, td.dataset.k, td.dataset.d); return v ? `${esc(name(g))}: ${Object.entries(v.counts).map(([o, n]) => `${OUTCOMES[o].label.toLowerCase()} in ${n}`).join(", ")}` : `${esc(name(g))}: no data`; };
+      $("detail").innerHTML = `<strong>${esc(td.dataset.k)}</strong> to <strong>${esc(PLACES[td.dataset.d].label)}</strong>. ${chosen.map((i) => line(summary.groups[i])).join(". ")}.`;
+    });
+
+    // Tests where at least two browsers settled on different outcomes.
+    const rows = [];
+    const plain = summary.groups.filter((g) => !g.isolated);
+    for (const k of KINDS) for (const p of Object.values(PLACES)) {
+      const seen = plain.map((g) => [g, verdict(g, k.name, p.id)]).filter(([, v]) => v && v.outcome !== "no-destination");
+      if (new Set(seen.map(([, v]) => v.outcome)).size > 1) rows.push(`<li><span class="who">${esc(k.name)}</span> to ${esc(p.label)}: ${seen.map(([g, v]) => `${esc(g.browser)} ${esc(g.major)} ${OUTCOMES[v.outcome].label.toLowerCase()}`).join("; ")}</li>`);
+    }
+    $("differ").innerHTML = rows.join("") || `<li class="muted">${plain.length < 2 ? "Only one browser has reported so far, so there is nothing to compare yet." : "Every browser that has reported agrees on every test."}</li>`;
+
+    $("reports").innerHTML = reports.map((r) => `<li id="${esc(r.id)}"><span class="muted">${when(r.at)}</span> <span class="who">${esc(r.browser)} ${esc(r.version)}</span> on ${esc(r.platform || "unknown")}${r.isolated ? ", isolated" : ""}${r.errors ? `, ${r.errors} error${r.errors === 1 ? "" : "s"}` : ""}${r.died ? `, the run before it stopped while sending ${esc(r.died.kind)} to ${esc(r.died.dest)}` : ""} <a href="/lab/data/report/${esc(r.id)}">${esc(r.id)}</a></li>`).join("") || `<li class="muted">None yet.</li>`;
+    $("errors").innerHTML = errors.map((e) => `<li><span class="muted">${when(e.at)}</span> <span class="who">${esc(e.browser || "Unknown")} ${esc(e.version)}</span> on <code>${esc(e.page)}</code> (${esc(e.place)}): ${esc(e.message)}<br><span class="muted">${esc(e.ua)}</span></li>`).join("") || `<li class="muted">None reported.</li>`;
+
+    chosen = summary.groups.length ? [0] : [];
+    drawGroups(); drawMatrix();
+    document.documentElement.dataset.done = "true";
+    if (location.hash) document.getElementById(location.hash.slice(1))?.scrollIntoView();
+  </script>
+</body>
+</html>

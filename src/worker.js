@@ -51,6 +51,8 @@ async function serve(env, site, pathname) {
   if (path.endsWith("/")) path += "index.html";
   const candidates = [site + path, "shared" + path];
   if (!/\.[a-z0-9]+$/i.test(path)) candidates.push(site + path + "/index.html");
+  // The lab also runs inside the isolated room, from the same files.
+  if (path.startsWith("/isolated/lab/")) candidates.push(site + path.slice(9), "shared" + path.slice(9));
   for (const key of candidates) {
     const body = await readAsset(env, key);
     if (body) {
@@ -66,6 +68,7 @@ async function serve(env, site, pathname) {
       if (path.startsWith("/isolated/")) {
         headers["cross-origin-opener-policy"] = "same-origin";
         headers["cross-origin-embedder-policy"] = "credentialless";
+        headers["cross-origin-resource-policy"] = "cross-origin";
       }
       return new Response(body, { headers });
     }
@@ -84,6 +87,12 @@ export default {
       if (!/^[A-Za-z0-9_-]{16,64}$/.test(id)) return new Response("bad hub id", { status: 400 });
       if (request.headers.get("upgrade") !== "websocket") return new Response("expected websocket", { status: 426 });
       return env.HUB.get(env.HUB.idFromName(id)).fetch(request);
+    }
+
+    // The lab's results: every browser that runs the lab reports what it saw.
+    if (url.pathname === "/lab/report" || url.pathname === "/lab/error" || url.pathname.startsWith("/lab/data/")) {
+      if (!env.LAB) return new Response("the lab store is off", { status: 404 });
+      return env.LAB.get(env.LAB.idFromName("lab")).fetch(request);
     }
 
     if (url.pathname === "/_sites.js") {
@@ -565,5 +574,95 @@ export class Hub {
     update({ sessionUpdate: "tool_call_update", toolCallId, status: result.isError ? "failed" : "completed", content: [{ type: "content", content: { type: "text", text: out } }] });
     say(result.isError ? "It failed: " + out : "Done. " + best.service.name + " answered:\n" + out);
     return done();
+  }
+}
+
+// ------------------------------------------------------------------ the lab
+
+const OUTCOMES = ["works", "arrives-broken", "unreadable", "refused", "no-answer", "cannot-make", "no-destination"];
+const str = (value, max) => String(value === undefined || value === null ? "" : value).slice(0, max);
+const json = (value, status = 200) => new Response(JSON.stringify(value), { status, headers: { "content-type": TYPES.json, "cache-control": "no-store", "access-control-allow-origin": "*" } });
+
+// One store for every report. A report is what one browser saw when it ran
+// the lab: its name and version, the outcome of every test, and any errors.
+// No address and no identifier is kept.
+export class Lab {
+  constructor(state) {
+    this.sql = state.storage.sql;
+    this.sql.exec("CREATE TABLE IF NOT EXISTS errors (at INTEGER, page TEXT, place TEXT, message TEXT, browser TEXT, version TEXT, ua TEXT)");
+    this.sql.exec("CREATE TABLE IF NOT EXISTS reports (id TEXT PRIMARY KEY, at INTEGER, browser TEXT, version TEXT, major TEXT, platform TEXT, mobile INTEGER, isolated INTEGER, ua TEXT, lab INTEGER, errors TEXT, died TEXT, cells TEXT)");
+  }
+
+  async fetch(request) {
+    const url = new URL(request.url);
+    if (url.pathname === "/lab/report" && request.method === "POST") return this.add(request);
+    if (url.pathname === "/lab/error" && request.method === "POST") {
+      const text = await request.text();
+      if (text.length > 4000) return json({ error: "too large" }, 413);
+      let e; try { e = JSON.parse(text); } catch { return json({ error: "not JSON" }, 400); }
+      this.sql.exec("INSERT INTO errors (at, page, place, message, browser, version, ua) VALUES (?, ?, ?, ?, ?, ?, ?)", Date.now(), str(e.page, 120), str(e.where, 60), str(e.message, 300), str(e.browser, 40), str(e.version, 40), str(e.ua, 300));
+      this.sql.exec("DELETE FROM errors WHERE at NOT IN (SELECT at FROM errors ORDER BY at DESC LIMIT 1000)");
+      return json({ ok: true });
+    }
+    if (request.method !== "GET") return json({ error: "method not allowed" }, 405);
+    if (url.pathname === "/lab/data/errors") return json(this.sql.exec("SELECT at, page, place, message, browser, version, ua FROM errors ORDER BY at DESC LIMIT 200").toArray());
+    if (url.pathname === "/lab/data/summary") return json(this.summary());
+    if (url.pathname === "/lab/data/reports") {
+      const rows = this.sql.exec("SELECT id, at, browser, version, platform, mobile, isolated, lab, errors, died FROM reports ORDER BY at DESC LIMIT 200").toArray();
+      return json(rows.map((r) => ({ ...r, errors: JSON.parse(r.errors).length, died: JSON.parse(r.died) })));
+    }
+    if (url.pathname.startsWith("/lab/data/report/")) {
+      const row = this.sql.exec("SELECT * FROM reports WHERE id = ?", url.pathname.slice(17)).toArray()[0];
+      if (!row) return json({ error: "no such report" }, 404);
+      return json({ ...row, errors: JSON.parse(row.errors), died: JSON.parse(row.died), cells: JSON.parse(row.cells) });
+    }
+    return json({ error: "not found" }, 404);
+  }
+
+  async add(request) {
+    const text = await request.text();
+    if (text.length > 400000) return json({ error: "too large" }, 413);
+    let body;
+    try { body = JSON.parse(text); } catch { return json({ error: "not JSON" }, 400); }
+    const env = body.env || {};
+    if (!Array.isArray(body.cells) || body.cells.length > 4000) return json({ error: "bad cells" }, 400);
+    const cells = [];
+    for (const cell of body.cells) {
+      if (!Array.isArray(cell) || !OUTCOMES.includes(cell[2])) return json({ error: "bad cell" }, 400);
+      cells.push([str(cell[0], 60), str(cell[1], 40), cell[2], str(cell[3], 160)]);
+    }
+    const errors = (Array.isArray(body.errors) ? body.errors : []).slice(0, 40).map((e) => ({ where: str(e && e.where, 40), message: str(e && e.message, 300) }));
+    const died = body.died && typeof body.died === "object" ? { kind: str(body.died.kind, 60), dest: str(body.died.dest, 40) } : null;
+    const id = rand(9);
+    const version = str(env.version, 40);
+    this.sql.exec(
+      "INSERT INTO reports (id, at, browser, version, major, platform, mobile, isolated, ua, lab, errors, died, cells) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      id, Date.now(), str(env.browser, 40) || "Unknown", version, version.split(".")[0], str(env.platform, 40), env.mobile ? 1 : 0, env.isolated ? 1 : 0,
+      str(env.ua, 300), Number(env.lab) || 0, JSON.stringify(errors), JSON.stringify(died), JSON.stringify(cells)
+    );
+    // Keep the newest two thousand.
+    this.sql.exec("DELETE FROM reports WHERE id NOT IN (SELECT id FROM reports ORDER BY at DESC LIMIT 2000)");
+    return json({ id });
+  }
+
+  // For each browser and major version: how many reports, and for every test,
+  // how many of them saw each outcome.
+  summary() {
+    const groups = new Map();
+    const rows = this.sql.exec("SELECT at, browser, major, platform, isolated, errors, died, cells FROM reports ORDER BY at DESC LIMIT 600").toArray();
+    for (const row of rows) {
+      const key = [row.browser, row.major, row.platform, row.isolated ? "isolated" : "plain"].join("|");
+      let g = groups.get(key);
+      if (!g) groups.set(key, g = { key, browser: row.browser, major: row.major, platform: row.platform, isolated: !!row.isolated, reports: 0, last: row.at, errors: 0, died: 0, cells: {} });
+      g.reports++;
+      g.errors += JSON.parse(row.errors).length;
+      if (JSON.parse(row.died)) g.died++;
+      for (const [kind, dest, outcome] of JSON.parse(row.cells)) {
+        const k = g.cells[kind] || (g.cells[kind] = {});
+        const d = k[dest] || (k[dest] = {});
+        d[outcome] = (d[outcome] || 0) + 1;
+      }
+    }
+    return { total: rows.length, groups: [...groups.values()].sort((a, b) => b.last - a.last) };
   }
 }

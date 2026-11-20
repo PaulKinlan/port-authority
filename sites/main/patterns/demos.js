@@ -278,17 +278,51 @@ export async function introduce(stage, ui) {
   ui.button("Introduce them", (btn) => { stage.post("intro", { cmd: "introduce" }); btn.disabled = true; }, false, true);
 }
 
-// Mount one demo into a container: a stage, a row of buttons, a reset.
-export function mount(container, demo) {
-  container.innerHTML = `<div class="stage-el"></div><div class="controls"></div>`;
+// What each demo does when it plays itself: which button, and what to watch.
+// A step is [start of the button's label, what happens, pause after in ms].
+export const TOURS = {
+  hello: { steps: [["Open a channel", "A channel is made. One end stays in this page and the other is posted to the frame."], ["Send a ping", "A message goes down the wire, and the frame answers on the same wire."]] },
+  introduce: { steps: [["Introduce them", "The introducer makes a channel and gives one end to each site."], ["Site A says hello", "A talks to B directly, on the yellow cable. Nothing passes through the introducer."], ["Site B says hello", "B answers the same way."], ["Remove the introducer", "The introducer is destroyed."], ["Site A says hello", "The two sites still talk. The line was never the introducer's."]] },
+  reply: { steps: [["Client one asks", "Client one sends a question, and with it a fresh port to answer on."], ["Client two asks", "Client two does the same. Each answer returns on its own port, so they cannot be mixed up."]] },
+  attenuate: { steps: [["Share read-only", "The owner gives the guest a port that can read the counter and do nothing else."], ["Guest reads", "The guest reads the counter through its port."], ["Guest tries to add", "The guest asks to change it and is denied. Its port does not do that."], ["Owner adds one", "The owner still can."], ["Revoke", "The owner closes its end of the guest's port."], ["Guest reads", "The guest asks again and hears nothing. Its port goes nowhere now."]] },
+  stream: { steps: [["Send a stream", "A stream is transferred. The frame reads it chunk by chunk while this page is still producing it."]] },
+  canvas: { steps: [["Hand over the canvas", "The drawing surface of the canvas on the left moves to another origin, which starts painting into this page."], ["Ask for another colour", "This page asks for a new colour over the port."]] },
+  functions: { steps: [["Lend onTick", "A port standing in for a function goes to the other origin. It calls the function once a tick, and each call runs here.", 3600], ["Take the function back", "The port is closed. The countdown carries on over there, and its calls no longer arrive."]] },
+  zerocopy: { steps: [["Transfer 64 MB", "64 MB goes to another origin and back without being copied. While it is away, this page holds zero bytes."]], then: "Now press Copy 64 MB to compare the time." },
+  tearoff: { steps: [], then: "Press Tear it off. The widget moves to a window of its own and keeps its live port. This one needs your click, because browsers only open a window for a person." },
+  tabserver: { steps: [["Load the served page", "The box on the right asks for a real URL. The service worker passes the request up a port to this tab, and this tab writes the response."]], then: "Edit the HTML on the left and press the button again." },
+  "stream-intro": { steps: [["Stream through the introducer", "The stream is passed on by the introducer, so every chunk flows through it.", 3200], ["Remove the introducer", "The introducer is destroyed, and the reader stalls. No error, no end."]], then: "Press Start again, then try Introduce, then stream directly." },
+  pipeline: { steps: [["Start the pipe", "Chunks flow from this page, through the transformer, to the reader.", 3600], ["Pause the reader", "The reader stops. A few chunks later the source stops being asked for more.", 3600], ["Let the reader continue", "The reader resumes, and so does the source."]] },
+  reload: { before: 2500, steps: [["Reload the frame", "The frame reloads. Its port waits in the bank and is collected afterwards, and the count has no gaps."]] },
+  frozen: { steps: [["Introduce the two workers", "Each worker is given one end of a channel. This page keeps neither."]], then: "Now press Freeze this page. Everything here stops for 3 seconds except the two workers." },
+  filter: { steps: [["Start the video", "Frames leave this page one at a time, pass through the filter on another origin, and come back changed.", 3200], ["Ask for another effect", "This page asks the filter to do something different."]] },
+  signer: { steps: [["Ask the vault", "The vault makes a key nobody can read, and gives this page a port that signs."], ["Lend the shop", "This page lends the shop a weaker port: orders only, three uses."], ["Shop: sign an order", "The shop asks for a signature. The request passes through this page to the vault, and the result is checked here."], ["Shop: try to sign a payment", "The shop asks to sign a payment. This page refuses, because that port only does orders."], ["Take the port back", "The shop's port is closed."]] },
+};
+
+// Mount one demo into a container: a caption, a stage, a row of buttons.
+// The demo plays itself once when it comes into view, pressing its own
+// buttons and saying what each one does. Any press of yours stops that.
+export function mount(container, demo, tours = TOURS) {
+  container.innerHTML = `<div class="stage-el"></div><p class="caption" aria-live="polite"></p><div class="controls"></div>`;
   const stage = new Stage(container.querySelector(".stage-el"));
   const controls = container.querySelector(".controls");
+  const caption = container.querySelector(".caption");
+  const tour = tours[demo.id] || { steps: [] };
+  let playing = 0;
+  const say = (html) => { caption.innerHTML = html; };
+  const esc = (t) => String(t).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+  const hints = new Map(tour.steps.map(([label, text]) => [label, text]));
+  const hintFor = (label) => { for (const [start, text] of hints) if (label.startsWith(start)) return text; return ""; };
   const ui = {
     button(label, fn, disabled = false, first = false) {
       const b = document.createElement("button");
       b.className = "tiny" + (first ? " accent" : " quiet");
       b.textContent = label; b.disabled = disabled;
-      b.onclick = () => fn(b);
+      b.onclick = (event) => {
+        // A real press takes over from the tour, and still says what it did.
+        if (event.isTrusted) { playing++; controls.querySelector(".next")?.classList.remove("next"); const hint = hintFor(b.textContent); if (hint) say(`<strong>${esc(b.textContent)}.</strong> ${esc(hint)}`); }
+        fn(b);
+      };
       first ? controls.prepend(b) : controls.append(b);
       return b;
     },
@@ -298,11 +332,48 @@ export function mount(container, demo) {
       controls.append(a);
     },
   };
-  const run = async () => {
-    stage.reset(); controls.innerHTML = "";
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const find = (start) => [...controls.querySelectorAll("button")].find((b) => b.textContent.startsWith(start));
+  async function play() {
+    const mine = ++playing;
+    if (tour.before) { say("Starting in a moment."); await sleep(tour.before); }
+    for (const [i, [start, text, pause = 2400]] of tour.steps.entries()) {
+      let button = null;
+      for (let waited = 0; waited < 6000 && playing === mine; waited += 200) { button = find(start); if (button && !button.disabled) break; await sleep(200); }
+      if (playing !== mine) return;
+      if (!button || button.disabled) break;
+      button.classList.add("next");
+      say(`<span class="step">${i + 1} of ${tour.steps.length}</span> <strong>${esc(button.textContent)}.</strong> ${esc(text)}`);
+      await sleep(1100);
+      if (playing !== mine) return void button.classList.remove("next");
+      button.classList.remove("next");
+      button.click();
+      await sleep(pause);
+      if (playing !== mine) return;
+    }
+    say(esc(tour.then || "That is all of it. Press any button to do it yourself, or Start again."));
+  }
+  const reset = async (auto) => {
+    playing++;
+    stage.reset(); controls.innerHTML = ""; say("");
     await demo.setup(stage, ui);
-    const reset = ui.button("Start again", run);
-    reset.classList.add("reset");
+    const again = ui.button("Start again", () => reset(false));
+    again.classList.add("reset");
+    if (tour.steps.length) { const show = ui.button("Play it for me", () => reset(true)); show.classList.add("reset"); show.style.marginLeft = "0"; }
+    if (auto) play();
+    else say(tour.steps.length ? `Press <strong>${esc(tour.steps[0][0])}</strong> to begin, or Play it for me.` : esc(tour.then || ""));
   };
-  run();
+  // Set up now, and play when most of the demo is on screen.
+  const ready = reset(false);
+  if (tour.steps.length || tour.then) {
+    new IntersectionObserver((entries, io) => {
+      if (!entries[0].isIntersecting) return;
+      io.disconnect();
+      const before = playing;
+      // Automated browsers press the buttons themselves. ?play=1 forces a tour, ?play=0 stops them.
+      const wish = new URLSearchParams(location.search).get("play");
+      if (wish === "0" || (navigator.webdriver && wish !== "1")) return;
+      ready.then(() => { if (playing === before) tour.steps.length ? play() : say(esc(tour.then)); });
+    }, { threshold: 0.6 }).observe(container.querySelector(".stage-el"));
+  }
 }

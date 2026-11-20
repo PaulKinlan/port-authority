@@ -26,6 +26,9 @@ function runtime() {
     if (event.source !== parent || !event.data || !event.data.cmd) return;
     handlers[event.data.cmd]?.(event.data, event.ports);
   });
+  // A frame that breaks says so, on its own face and to the page.
+  addEventListener("error", (event) => { log("error: " + event.message); tell("error", { message: String(event.message) }); });
+  addEventListener("unhandledrejection", (event) => { const m = String(event.reason && event.reason.message || event.reason); log("error: " + m); tell("error", { message: m }); });
   tell("ready");
 }
 
@@ -58,6 +61,7 @@ export class Stage {
       if (!box) return;
       if (data.wire === "ready") box.ready();
       if (data.wire === "pulse") this.pulse(data.cable, box.name);
+      if (data.wire === "error") dispatchEvent(new CustomEvent("pa-error", { detail: { where: "frame " + box.name, message: data.message } }));
       for (const fn of this.listeners) fn(box.name, data, event.ports);
     };
     addEventListener("message", this.onMessage);
@@ -154,7 +158,9 @@ export class Stage {
 
   pulse(id, from) {
     const cable = this.cables.get(id);
-    if (!cable || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    if (!cable) return;
+    // With reduced motion there is no travelling dot: the cable blinks instead.
+    if (matchMedia("(prefers-reduced-motion: reduce)").matches) return void cable.path.animate({ opacity: [0.25, 1] }, { duration: 450 });
     const dot = document.createElementNS("http://www.w3.org/2000/svg", "circle");
     dot.setAttribute("r", 7);
     dot.setAttribute("fill", COLORS[cable.color] || cable.color);

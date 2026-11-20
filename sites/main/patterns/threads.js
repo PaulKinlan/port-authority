@@ -161,10 +161,14 @@ port.onmessage = ({ data }) => {
       channel.port1.onmessage = ({ data }) => {
         octx.drawImage(data.frame, 0, 0); data.frame.close();
         waiting = false;
+        if (removing) { removing = false; setTimeout(remove); }
         note.textContent = `${++shown} frames back from the filter${closedHere ? ". Each one left this page empty-handed." : "."}`;
       };
       const next = ui.button("Ask for another effect", () => channel.port1.postMessage({ next: true }), true);
-      const kill = ui.button("Remove the filter", () => { alive = false; stage.remove("filter"); note.textContent += " The filter is gone and the video stops with it."; }, true);
+      // Stop sending first, and let the frame that is out there come home, so none is lost inside a dead context.
+      let removing = false;
+      const remove = () => { stage.remove("filter"); note.textContent += " The filter is gone and the video stops with it."; };
+      const kill = ui.button("Remove the filter", (btn) => { alive = false; btn.disabled = true; waiting ? (removing = true) : remove(); }, true);
       ui.button("Start the video", (btn) => { running = true; btn.disabled = true; next.disabled = kill.disabled = false; }, false, true);
     },
   },

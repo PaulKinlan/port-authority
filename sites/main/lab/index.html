@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>The lab | Port Authority</title>
+  <meta name="description" content="A live test of what can be sent with postMessage: every kind of object, to every kind of destination, in your browser.">
+  <link rel="stylesheet" href="/base.css">
+  <link rel="stylesheet" href="/lab/lab.css">
+  <script src="/errors.js"></script>
+</head>
+<body>
+  <div class="wrap">
+    <header class="site-bar">
+      <a class="wordmark" href="/">Port Authority</a>
+      <nav><a href="/">Experiments</a><a href="/patterns/">Port patterns</a><a href="/lab/" aria-current="page">The lab</a><a href="/lab/results/">Results</a><a href="/hub/">Your hub</a></nav>
+    </header>
+    <div class="stack" style="padding-block:2.5rem 1.5rem; --gap:1.1rem">
+      <h1 style="font-size:var(--step-3)">The lab</h1>
+      <p>Every kind of object that might go through <code>postMessage</code>, sent for real to every place a message can go, in the browser you are using now. Each test also uses the thing where it lands, because arriving is not the same as working.</p>
+      <p class="small muted" id="mode"></p>
+    </div>
+    <main class="stack" style="--gap:1.2rem; padding-bottom:3rem">
+      <div class="facts" id="facts"></div>
+      <ul class="legend" id="legend"></ul>
+      <div class="matrix-wrap"><table class="matrix" id="matrix"><caption class="small muted" style="caption-side:bottom;padding:.5rem;text-align:left">Press any mark to see what happened in that test.</caption></table></div>
+      <p class="detail panel" id="detail" aria-live="polite">Running.</p>
+      <p class="pick">
+        <button class="tiny quiet" id="again">Run it again</button>
+        <button class="tiny quiet" id="popup">Also test a popup on another origin</button>
+        <a class="button tiny quiet" id="other-mode" style="font-size:var(--step--1);padding:.5em .8em;border-width:1.5px"></a>
+      </p>
+      <p class="small muted" id="sent">Your results are sent to this site when the run ends: the browser's name, version and operating system, the table above, and any errors. No address and no identifier is kept. <a href="/lab/results/">See what every browser has reported.</a></p>
+    </main>
+  </div>
+  <script type="module">
+    import { KINDS, DESTINATIONS, POPUP, OUTCOMES, ISOLATED, run, report, environment, diedLastTime } from "/lab/lab.js";
+
+    const $ = (id) => document.getElementById(id);
+    const esc = (t) => String(t ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+    $("mode").textContent = ISOLATED
+      ? "This is the cross-origin isolated copy of the lab, so shared memory exists here. A popup on another origin cannot be reached from an isolated page."
+      : "This page is not cross-origin isolated, so shared memory cannot be made here. The isolated copy tests that.";
+    $("other-mode").textContent = ISOLATED ? "Run the ordinary lab" : "Run the isolated lab";
+    $("other-mode").href = ISOLATED ? "/lab/" : "/isolated/lab/";
+    $("legend").innerHTML = Object.entries(OUTCOMES).filter(([k]) => k !== "no-destination").map(([, o]) => `<li><b>${o.mark}</b>${o.label}</li>`).join("");
+
+    let destinations = [...DESTINATIONS];
+    let results = {};
+    function draw() {
+      const groups = [];
+      for (const d of destinations) { const last = groups.at(-1); last && last.name === d.group ? last.n++ : groups.push({ name: d.group, n: 1 }); }
+      let band = "";
+      $("matrix").tHead?.remove(); [...$("matrix").tBodies].forEach((b) => b.remove());
+      $("matrix").insertAdjacentHTML("beforeend", `
+        <thead>
+          <tr class="group"><td></td>${groups.map((g) => `<th colspan="${g.n}" scope="colgroup">${esc(g.name)}</th>`).join("")}</tr>
+          <tr class="dest"><td></td>${destinations.map((d) => `<th scope="col">${esc(d.label)}</th>`).join("")}</tr>
+        </thead>
+        <tbody>${KINDS.map((k) => `${k.group !== band ? `<tr class="band"><th colspan="${destinations.length + 1}">${esc(band = k.group)}</th></tr>` : ""}
+          <tr><th scope="row">${esc(k.name)}</th>${destinations.map((d) => `<td data-o="pending" data-k="${esc(k.name)}" data-d="${d.id}"><button aria-label="${esc(k.name)} to ${esc(d.label)}: not run yet">·</button></td>`).join("")}</tr>`).join("")}
+        </tbody>`);
+    }
+    const cellFor = (dest, kind) => $("matrix").querySelector(`td[data-d="${dest.id}"][data-k="${CSS.escape(kind.name)}"]`);
+    function paint(dest, kind, result) {
+      const td = cellFor(dest, kind);
+      if (!td) return;
+      td.dataset.o = result.outcome;
+      td.firstChild.textContent = OUTCOMES[result.outcome].mark;
+      td.firstChild.setAttribute("aria-label", `${kind.name} to ${dest.label}: ${OUTCOMES[result.outcome].label}`);
+      td.title = `${OUTCOMES[result.outcome].label}${result.note ? ": " + result.note : ""}`;
+    }
+    $("matrix").addEventListener("click", (event) => {
+      const td = event.target.closest("td[data-k]");
+      if (!td) return;
+      const dest = destinations.find((d) => d.id === td.dataset.d), r = results[dest.id]?.[td.dataset.k];
+      if (!r) return void ($("detail").textContent = "That test has not run yet.");
+      const kind = KINDS.find((k) => k.name === td.dataset.k);
+      $("detail").innerHTML = `<strong>${esc(kind.name)}</strong> ${kind.how === "move" ? "moved" : "copied"} to <strong>${esc(dest.label)}</strong>: ${esc(OUTCOMES[r.outcome].text)} ${r.note ? `<span class="muted">${esc(r.note)}</span>` : ""}`;
+    });
+
+    function facts(env, ms) {
+      const all = Object.values(results).flatMap((row) => Object.values(row));
+      const count = (o) => all.filter((r) => r.outcome === o).length;
+      $("facts").innerHTML = `
+        <div><strong>${esc(env.browser)} ${esc(env.version.split(".")[0])}</strong><span class="small muted">${esc(env.platform)}${env.isolated ? ", isolated" : ""}</span></div>
+        <div><strong>${all.length}</strong><span class="small muted">tests${ms ? ` in ${(ms / 1000).toFixed(1)} s` : ""}</span></div>
+        <div><strong>${count("works")}</strong><span class="small muted">arrived and worked</span></div>
+        <div><strong>${count("arrives-broken") + count("unreadable") + count("no-answer")}</strong><span class="small muted">sent, then went wrong</span></div>`;
+    }
+
+    async function go(only) {
+      const list = only || destinations;
+      if (!only) { results = {}; draw(); }
+      $("again").disabled = $("popup").disabled = true;
+      $("detail").textContent = "Running.";
+      const env = await environment();
+      const start = performance.now();
+      Object.assign(results, await run(list, (dest, kind, result) => { (results[dest.id] ||= {})[kind.name] = result; paint(dest, kind, result); }));
+      const ms = performance.now() - start;
+      facts(env, ms);
+      document.documentElement.dataset.done = "true";
+      $("detail").textContent = "Done. Press any mark to see what happened in that test.";
+      $("again").disabled = false; $("popup").disabled = ISOLATED;
+      if (new URLSearchParams(location.search).has("private")) return void ($("sent").textContent = "Nothing was sent: this run is private.");
+      try {
+        const subset = Object.fromEntries(list.map((d) => [d.id, results[d.id]]));
+        const { id } = await report(subset, { ms: Math.round(ms) });
+        $("sent").innerHTML = `Sent as report <a href="/lab/results/#${id}"><code>${id}</code></a>: the browser's name, version and operating system, the table above, and any errors. No address and no identifier is kept. <a href="/lab/results/">See what every browser has reported.</a>`;
+        document.documentElement.dataset.report = id;
+      } catch (err) { $("sent").textContent = `The results could not be sent (${err.message}).`; }
+    }
+    $("again").onclick = () => { document.documentElement.dataset.done = ""; go(); };
+    $("popup").onclick = () => { if (!destinations.includes(POPUP)) { destinations.push(POPUP); const keep = results; draw(); results = keep; for (const d of destinations) for (const k of KINDS) if (results[d.id]?.[k.name]) paint(d, k, results[d.id][k.name]); } go([POPUP]); };
+    if (diedLastTime) $("mode").textContent += ` Last time this page stopped part-way, while sending ${diedLastTime.kind} to ${diedLastTime.dest}. That is included in the report.`;
+    go();
+  </script>
+</body>
+</html>
