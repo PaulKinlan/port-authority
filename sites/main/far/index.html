@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>The far end | Port Authority</title>
+  <meta name="description" content="The other end of a MessagePort that crosses devices.">
+  <link rel="stylesheet" href="/base.css">
+  <script src="/errors.js"></script>
+  <style>
+    body.embed { background: var(--panel); }
+    body.embed .wrap { padding: .7rem .8rem; max-width: none; }
+    body.embed .site-bar, body.embed .intro, body.embed footer { display: none; }
+    body.embed h2 { font: 800 1rem/1.1 var(--display); margin: 0 0 .3rem; }
+    .panel { border: 2px solid var(--ink); border-radius: 14px; padding: 1rem; max-width: 26rem; }
+    body.embed .panel { border: 0; padding: 0; }
+    .count { font: 800 clamp(2.2rem, 12vw, 4rem)/1 var(--display); display: flex; align-items: center; gap: .6rem; margin: .3rem 0 .6rem; }
+    body.embed .count { font-size: 1.8rem; margin: .1rem 0 .4rem; }
+    .swatch { width: .6em; height: .6em; border-radius: 50%; border: 2px solid var(--ink); background: transparent; }
+    .row { display: flex; flex-wrap: wrap; gap: .5rem; }
+    #state { margin: 0 0 .3rem; }
+    form { display: flex; gap: .5rem; flex-wrap: wrap; margin-top: .6rem; }
+    form input { flex: 1 1 8rem; font: inherit; padding: .5rem .6rem; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header class="site-bar">
+      <a class="wordmark" href="/">Port Authority</a>
+      <nav><a href="/guide/">The guide</a><a href="/patterns/#far">The experiment</a></nav>
+    </header>
+    <div class="stack intro" style="padding-block:2rem 1.2rem; --gap:1rem">
+      <h1 style="font-size:var(--step-3)">The far end</h1>
+      <p>This page holds one end of a <code>MessagePort</code>. The other end is in a frame on another device. The code below is all that joins them.</p>
+    </div>
+    <main class="panel">
+      <h2 id="title">Another device</h2>
+      <p class="small muted" id="state">No code yet.</p>
+      <div id="live" hidden>
+        <p class="count"><span class="swatch" id="swatch"></span><span id="count">0</span></p>
+        <div class="row"><button class="tiny accent" id="add">Add one</button><button class="tiny quiet" id="colour">Change the colour</button></div>
+      </div>
+      <form id="join" hidden><input id="code" aria-label="Pairing code" placeholder="Pairing code" autocomplete="off" autocapitalize="none" spellcheck="false"><button class="tiny accent">Join</button></form>
+    </main>
+    <footer class="small muted" style="padding-block:2rem 4rem">A working name and a work in progress.</footer>
+  </div>
+  <script type="module">
+    import { far } from "/farport.js";
+    const $ = (id) => document.getElementById(id);
+    const params = new URLSearchParams(location.search);
+    const embedded = params.has("embed") && parent !== self;
+    if (embedded) document.body.classList.add("embed");
+    const tell = (wire, data = {}) => embedded && parent.postMessage({ wire, ...data }, "*");
+    const WORDS = { waiting: "Waiting for the other device.", found: "Found it. Connecting directly.", direct: "Connected directly. This is a port.", gone: "The other end hung up.", failed: "Could not connect." };
+    let port = null;
+
+    function join(code) {
+      $("join").hidden = true;
+      $("state").textContent = "Joining " + code + ".";
+      far({
+        code,
+        onState(state) { $("state").textContent = WORDS[state] || state; if (state === "gone") { port = null; $("add").disabled = $("colour").disabled = true; } tell("far", { state }); },
+        // From here on this is ordinary port code. It has no idea how far away the other end is.
+        onPort(p) {
+          port = p;
+          port.onmessage = ({ data }) => {
+            if (data.count === undefined) return;
+            $("count").textContent = data.count; $("swatch").style.background = data.colour;
+            tell("pulse", { cable: "air" });
+          };
+          $("live").hidden = false; $("add").disabled = $("colour").disabled = false;
+          port.postMessage({ do: "read" });
+        },
+      });
+    }
+    const act = (what) => { if (port) port.postMessage({ do: what }); };
+    $("add").onclick = () => act("add");
+    $("colour").onclick = () => act("colour");
+    addEventListener("message", (event) => { if (embedded && event.source === parent && event.data?.cmd) act(event.data.cmd); });
+    $("join").onsubmit = (event) => { event.preventDefault(); const code = $("code").value.trim().toLowerCase(); if (/^[a-z0-9]{6,12}$/.test(code)) { history.replaceState(null, "", "#" + code); join(code); } };
+
+    const code = location.hash.slice(1).toLowerCase();
+    if (/^[a-z0-9]{6,12}$/.test(code)) join(code); else $("join").hidden = false;
+    tell("ready");
+  </script>
+</body>
+</html>

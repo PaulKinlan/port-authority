@@ -85,6 +85,59 @@ const ROLES = {
     });
   },
 
+  // Serves files to whoever holds the other end of a port. The patterns page
+  // gives that end to its service worker, which mounts this site at a path.
+  shelf() {
+    let served = 0;
+    const text = (body, type, status = 200) => ({ status, headers: { "content-type": type + "; charset=utf-8", "cache-control": "no-store" }, body });
+    // A body that arrives a line at a time, to show that it is a stream.
+    const slowly = (lines) => {
+      let i = 0;
+      return new ReadableStream({
+        async pull(controller) {
+          if (i >= lines.length) return controller.close();
+          await new Promise((r) => setTimeout(r, 450));
+          controller.enqueue(new TextEncoder().encode(lines[i++] + "\n"));
+        },
+      });
+    };
+    const FILES = {
+      "catalogue.html": () => text(`<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width">
+<style>html{color-scheme:light dark}body{font:14px/1.4 system-ui,sans-serif;margin:.7rem .8rem}h1{font-size:1rem;margin:0 0 .3rem;display:flex;gap:.4rem;align-items:center}img{width:1.6rem;height:1.6rem}p,li{font:12px/1.45 ui-monospace,Menlo,monospace;margin:0;overflow-wrap:anywhere}ul{list-style:none;padding:0;margin:.3rem 0 0}</style>
+<h1><img src="tulip.svg" alt="">The florist's catalogue</h1>
+<p>Written by ${location.host}. My address is <span id="where"></span>.</p>
+<ul id="stock"></ul>
+<script>
+  document.getElementById("where").textContent = location.host + location.pathname;
+  // A relative fetch. It goes to the same mount, and its body arrives as it is written.
+  fetch("stock.txt").then(async (response) => {
+    const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
+    const start = performance.now();
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      for (const line of value.split("\\n").filter(Boolean)) { const li = document.createElement("li"); li.textContent = line + " (" + ((performance.now() - start) / 1000).toFixed(1) + " s)"; document.getElementById("stock").append(li); }
+    }
+  });
+<\/script>`, "text/html"),
+      "tulip.svg": () => text(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><path d="M16 30V17" stroke="#0e9f8e" stroke-width="3" stroke-linecap="round"/><path d="M8 4c0 9 3 14 8 14s8-5 8-14l-4 4-4-6-4 6z" fill="#e0364c"/></svg>`, "image/svg+xml"),
+      "stock.txt": () => ({ status: 200, headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" }, body: slowly(["tulips: 24", "roses: 9", "peonies: 3"]) }),
+    };
+    on("serve", (data, ports) => {
+      log("given a port. I will answer what comes down it.");
+      ports[0].onmessage = (event) => {
+        const { path } = event.data, reply = event.ports[0];
+        const make = FILES[path];
+        const answer = make ? make() : text("The florist has no " + path, "text/plain", 404);
+        log(`${answer.status} ${path}`); served++;
+        tell("pulse", { cable: "mount" });
+        // The body is transferred when it is a stream: the far side reads it as it is produced.
+        try { reply.postMessage(answer, answer.body instanceof ReadableStream ? [answer.body] : []); }
+        catch (err) { reply.postMessage(text("could not send: " + err.message, "text/plain", 500)); }
+      };
+    });
+  },
+
 };
 
 // The runtime sets up log(), tell(), send() and on(), then tells the stage we are ready.

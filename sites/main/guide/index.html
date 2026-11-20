@@ -81,7 +81,7 @@
           <li>WebSocket, WebRTC data channels and WebTransport carry bytes and strings. They are how you leave the machine. A port at each end with a bridge between gives you <a href="#far">a port that crosses machines</a>.</li>
         </ul>
         <p>Outside the browser's own pages, the same idea appears as real ports between an Android app and its WebView, between an extension's content script and the page it runs in, and between Electron's processes. This site has not tested those.</p>
-        <p class="see">Running: <a href="/lab/">the lab</a> sends to thirteen of these places. <a href="/patterns/#exchange">A SharedWorker as the exchange</a>. <a href="/patterns/#tabserver">A tab that is a web server for other tabs</a>.</p>
+        <p class="see">Running: <a href="/lab/">the lab</a> sends to thirteen of these places. <a href="/patterns/#exchange">A SharedWorker as the exchange</a>. <a href="/patterns/#tabserver">A tab that is a web server for other tabs</a>. <a href="/patterns/#socket">A shared worker holding the only socket</a>. <a href="/patterns/#audio">A worker sending notes to the audio thread</a>.</p>
       </section>
 
       <section id="what">
@@ -143,6 +143,9 @@
           <li>A canvas whose drawing surface has been transferred is painted without the page too, so a worker can show its state while the page is stuck.</li>
           <li>With shared memory, a worker can post a question down a port and block on that line until the answer is written. Synchronous code can call anything asynchronous, a person included. <a href="/isolated/">Running, in the isolated room.</a></li>
           <li>A service worker can answer a fetch by asking a port, which turns a tab into the server for a set of URLs. <a href="/patterns/#tabserver">Running.</a></li>
+          <li>The other end of that port can be on another origin. Introduce your service worker to another site and that site is mounted at a path on yours, streamed bodies included. Measured: a <code>ReadableStream</code> made in a frame on another origin is accepted by the service worker as a response body, and is read while it is still being written. What is mounted runs as your origin. <a href="/patterns/#mounted">Running.</a></li>
+          <li>The audio thread accepts a port. Give a worker the other end and it drives sound with no help from the page. Measured: 13 notes in a 3 second freeze, at one every 230 ms, so none were lost. <a href="/patterns/#audio">Running.</a></li>
+          <li>A shared worker can hold the one connection a site needs, with a port to each tab. An answer goes back down the port of the tab that asked. <a href="/patterns/#socket">Running.</a></li>
         </ul>
       </section>
 
@@ -170,7 +173,7 @@
         <ul>
           <li>Two tabs that are not related cannot pass a port: neither has a reference to the other. A server can introduce them, and they can then open a WebRTC data channel between themselves. Wrap each end in a <code>MessageChannel</code> and both sides hold what looks like an ordinary port. <a href="/hub/">The hub does this</a> when a tool's site is already open.</li>
           <li>That bridge carries JSON only. Ports and streams cannot ride on it, where they can on a real port.</li>
-          <li>The same bridge works between machines. This site has not built that yet.</li>
+          <li>The same bridge works between devices. A pairing code names a meeting place on the server, which passes the handful of messages WebRTC needs and then carries nothing. Each device holds a port, and can hand it on: a phone ends up pressing buttons in a sandboxed frame on a laptop that was given a port and nothing else. <a href="/patterns/#far">Running.</a> Measured between two pages on one computer. Between two networks it depends on both being able to reach each other, and there is no relay for when they cannot.</li>
         </ul>
       </section>
 
@@ -197,7 +200,7 @@
           <li>WebTransport streams. They are ordinary streams and should move like any other, which would let one origin open a session and lend another a single stream of it. Not measured: it needs a server this site does not have yet. The WebSocket version is <a href="/patterns/#lend">running</a>.</li>
           <li>Why video frames and data channels reach a sandboxed frame and not a frame on a real second origin.</li>
           <li>Why the shared worker stops answering part-way through the isolated lab.</li>
-          <li>Ports to a native app, to an extension, and to another machine.</li>
+          <li>Ports to a native app and to an extension. A port to another machine is <a href="/patterns/#far">running</a>, tested between two pages on one computer and not yet between two networks.</li>
         </ul>
       </section>
     </main>

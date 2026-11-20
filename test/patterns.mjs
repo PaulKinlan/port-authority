@@ -21,7 +21,7 @@ check("hero: B hears A directly", /Site A says hello 1/.test(await frameText("#h
 await click("#hero-demo", "Remove the introducer"); await wait(300);
 await click("#hero-demo", "Site B says hello"); await wait(300);
 check("hero: still talking after the introducer is gone", /Site B says hello 1/.test(await frameText("#hero-demo", "left")));
-await page.screenshot({ path: process.argv[2] + "/home.png", fullPage: true });
+if (process.argv[2]) await page.screenshot({ path: process.argv[2] + "/home.png", fullPage: true });
 
 await page.goto(root + "/patterns/");
 for (const id of ["hello", "reply", "attenuate", "exchange", "stream"]) { await page.locator("#" + id).scrollIntoViewIfNeeded(); await page.waitForSelector(`#${id} .controls button`); }
@@ -44,7 +44,7 @@ const right = page.locator("#exchange .box iframe").last().contentFrame();
 check("exchange: tabs talk directly", /hi #1/.test(await right.locator("#log").innerText()), (await page.locator('#exchange .box[data-name="worker"]').innerText()).replace(/\n/g, " | "));
 await click("#stream", "Send a stream"); await wait(3200);
 check("stream: reader got every chunk", /stream ended/.test(await frameText("#stream", "reader")) && /read chunk 6/.test(await frameText("#stream", "reader")) === false || /stream ended/.test(await frameText("#stream", "reader")));
-await page.screenshot({ path: process.argv[2] + "/patterns.png", fullPage: true });
+if (process.argv[2]) await page.screenshot({ path: process.argv[2] + "/patterns.png", fullPage: true });
 check("no page errors", errors.length === 0, errors.join(" | "));
 await browser.close();
 process.exit(failed ? 1 : 0);

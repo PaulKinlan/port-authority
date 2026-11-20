@@ -104,6 +104,16 @@ export default {
       return new Response(null, { status: 101, webSocket: pair[0] });
     }
 
+    // /meet/<code>: two devices find each other here, swap the few messages
+    // WebRTC needs, and then talk directly. Nothing else passes through.
+    if (url.pathname.startsWith("/meet/")) {
+      if (!env.MEET) return new Response("meeting is off", { status: 404 });
+      const code = url.pathname.slice(6);
+      if (!/^[a-z0-9]{6,12}$/.test(code)) return new Response("bad code", { status: 400 });
+      if (request.headers.get("upgrade") !== "websocket") return new Response("expected websocket", { status: 426 });
+      return env.MEET.get(env.MEET.idFromName(code)).fetch(request);
+    }
+
     // The lab's results: every browser that runs the lab reports what it saw.
     if (url.pathname === "/lab/report" || url.pathname === "/lab/error" || url.pathname.startsWith("/lab/data/")) {
       if (!env.LAB) return new Response("the lab store is off", { status: 404 });
@@ -680,4 +690,35 @@ export class Lab {
     }
     return { total: rows.length, groups: [...groups.values()].sort((a, b) => b.last - a.last) };
   }
+}
+
+// ------------------------------------------------------------------ meeting
+
+// One per pairing code. It holds at most a host and a guest, tells them when
+// both are present, and passes each one's messages to the other. It keeps
+// nothing, and once the two are connected directly it carries nothing.
+export class Meet {
+  constructor(state) { this.state = state; }
+
+  async fetch(request) {
+    const role = new URL(request.url).searchParams.get("role") === "host" ? "host" : "guest";
+    const other = role === "host" ? "guest" : "host";
+    for (const old of this.state.getWebSockets(role)) { try { old.close(1000, "replaced"); } catch (err) {} }
+    const pair = new WebSocketPair();
+    this.state.acceptWebSocket(pair[1], [role]);
+    pair[1].serializeAttachment({ role, n: 0 });
+    const others = this.state.getWebSockets(other).filter((ws) => ws.readyState === 1);
+    if (others.length) for (const ws of [pair[1], ...others]) ws.send(JSON.stringify({ t: "both" }));
+    return new Response(null, { status: 101, webSocket: pair[0] });
+  }
+
+  webSocketMessage(ws, text) {
+    if (typeof text !== "string" || text.length > 8000) return;
+    const mine = ws.deserializeAttachment();
+    if (++mine.n > 300) return ws.close(1008, "that is enough");
+    ws.serializeAttachment(mine);
+    for (const peer of this.state.getWebSockets(mine.role === "host" ? "guest" : "host")) if (peer.readyState === 1) peer.send(text);
+  }
+
+  webSocketClose(ws) { try { ws.close(1000); } catch (err) {} }
 }

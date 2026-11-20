@@ -22,7 +22,7 @@ await wait(1000);
 await page.locator("#canvas").scrollIntoViewIfNeeded();
 await click("#canvas", "Hand over the canvas"); await wait(1500);
 const shot = await page.locator("#canvas canvas").screenshot();
-await page.locator("#canvas .demo").screenshot({ path: process.argv[2] + "/canvas.png" });
+if (process.argv[2]) await page.locator("#canvas .demo").screenshot({ path: process.argv[2] + "/canvas.png" });
 const distinct = new Set(shot.toString("base64").match(/.{40}/g)).size;
 check("canvas: another origin painted into this page's canvas", /holding a canvas/.test(await frameText("#canvas", "painter")) && distinct > 40, `(${distinct} distinct chunks)`);
 
