@@ -9,7 +9,7 @@
 const COLORS = { yellow: "#f5b700", red: "#e0364c", teal: "#0e9f8e", ink: "currentColor" };
 
 // Runs inside every frame.
-function runtime() {
+export function runtime() {
   const logEl = document.getElementById("log");
   window.log = (text) => {
     const li = document.createElement("li");
@@ -32,8 +32,8 @@ function runtime() {
   tell("ready");
 }
 
-function frameDoc(title, color, script) {
-  return `<!doctype html><meta charset="utf-8"><style>
+function frameDoc(title, color, script, csp) {
+  return `<!doctype html><meta charset="utf-8">${csp ? `<meta http-equiv="Content-Security-Policy" content="${csp}">` : ""}<style>
     html{color-scheme:light dark}
     body{margin:0;padding:.7rem .8rem;font:14px/1.4 system-ui,sans-serif;background:light-dark(#fff,#141f47);color:light-dark(#0f1c3f,#e9edfa)}
     h1{font:800 1rem/1.1 "Arial Narrow",system-ui,sans-serif;margin:0 0 .5rem;display:flex;align-items:center;gap:.45rem}
@@ -70,12 +70,12 @@ export class Stage {
   }
 
   // Add a sandboxed frame. `script` is a function that runs inside it.
-  frame(name, { title = name, color = "yellow", script = () => {} } = {}) {
+  frame(name, { title = name, color = "yellow", script = () => {}, csp = "" } = {}) {
     const box = this.box(name);
     const frame = document.createElement("iframe");
     frame.title = title;
     frame.sandbox = "allow-scripts";
-    frame.srcdoc = frameDoc(title, COLORS[color] || color, script);
+    frame.srcdoc = frameDoc(title, COLORS[color] || color, script, csp);
     box.frame = frame;
     box.node.append(frame);
     return box.whenReady;

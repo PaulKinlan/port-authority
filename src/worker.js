@@ -89,6 +89,21 @@ export default {
       return env.HUB.get(env.HUB.idFromName(id)).fetch(request);
     }
 
+    // A WebSocket that says back what it hears, for experiments that lend a
+    // live connection to someone else.
+    if (url.pathname === "/echo") {
+      if (request.headers.get("upgrade") !== "websocket") return new Response("expected websocket", { status: 426 });
+      const pair = new WebSocketPair();
+      const server = pair[1];
+      server.accept();
+      let heard = 0;
+      server.addEventListener("message", (event) => {
+        if (++heard > 200) return server.close(1008, "that is enough");
+        server.send(typeof event.data === "string" ? "the server heard: " + event.data.slice(0, 200) : event.data);
+      });
+      return new Response(null, { status: 101, webSocket: pair[0] });
+    }
+
     // The lab's results: every browser that runs the lab reports what it saw.
     if (url.pathname === "/lab/report" || url.pathname === "/lab/error" || url.pathname.startsWith("/lab/data/")) {
       if (!env.LAB) return new Response("the lab store is off", { status: 404 });
