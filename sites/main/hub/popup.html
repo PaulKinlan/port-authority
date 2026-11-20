@@ -122,7 +122,7 @@
             <li><button data-i="${i}" class="${r.score ? "match" : ""}">
               <strong>${esc(r.tool.name)}</strong>
               <span>${esc(r.tool.description)}</span>
-              <span class="muted small"><span class="jack on"></span>${esc(r.s.name)}, ${esc(host(r.s.origin))}</span>
+              <span class="muted small"><span class="jack ${r.s.live ? "on" : ""}"></span>${esc(r.s.name)}, ${esc(host(r.s.origin))}${r.s.live ? ", open in a tab" : ", opens in a window"}</span>
             </button></li>`).join("")}</ul>`
             : `<p>No site has offered your hub a tool yet. Open one that does, add it, and try again.</p>`}
           <div class="actions"><button class="quiet" id="no">Cancel</button></div>`;
@@ -136,6 +136,13 @@
     // side one end of a channel. After that the two sites talk directly and
     // this window, and the server, have no part in it.
     async function choose({ s, tool }) {
+      // Its tab is already open: have the server introduce the two tabs, and
+      // they open a WebRTC channel between themselves. No new window.
+      if (s.live && window.RTCPeerConnection) {
+        app.innerHTML = `<p class="muted">Introducing ${esc(host(client))} to the ${esc(s.name)} tab you have open.</p>`;
+        const made = await sb.ask({ t: "intro", client, service: s.origin, tool: tool.name, rtc: true });
+        if (made.ok) return respond(true, { tool, service: { name: s.name, origin: s.origin }, rtc: { line: made.line }, ...(await credentials()) });
+      }
       app.innerHTML = `<p class="muted">Opening ${esc(s.name)} and introducing it to ${esc(host(client))}.</p>`;
       const win = window.open(s.url, "_blank", "popup,width=560,height=720");
       if (!win) return respond(false, { reason: "The site could not be opened." });

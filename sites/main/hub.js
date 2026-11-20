@@ -11,9 +11,10 @@
 //     without any of those sites being open
 //   - the way to their agent, which runs on a machine and not in a tab
 //
-// A call from one site to another never goes near the server. The picker opens
-// the tool's page in a window, gives each side one end of a MessageChannel,
-// and closes.
+// A call from one site to another never goes near the server. If the tool's
+// site is closed, the picker opens it in a window, gives each side one end of
+// a MessageChannel, and closes. If it is already open in a tab, the server
+// introduces the two tabs and they open a WebRTC channel between themselves.
 //
 // There is no hidden iframe here. Browsers partition storage for embedded third
 // parties, so an embedded hub would be a different hub on every site. A window
@@ -161,6 +162,47 @@ const link = {
   },
 };
 
+// ------------------------------------------------------------------ WebRTC
+//
+// When the tool's site is already open in a tab, there is no window for the
+// picker to hand a port to. The hub server introduces the two tabs instead:
+// it carries a WebRTC handshake between them and then steps away. What comes
+// out is still a MessagePort, with a data channel behind it. This line
+// carries JSON only, so ports and streams cannot ride on it.
+function rtcLine(line, offerer) {
+  return new Promise((resolve, reject) => {
+    const pc = new RTCPeerConnection({ iceServers: [{ urls: "stun:stun.cloudflare.com:3478" }] });
+    const signal = (data) => link.send({ t: "signal", line, data });
+    let chain = Promise.resolve();
+    const stop = () => { link.handlers.delete(onSignal); clearTimeout(timer); };
+    const timer = setTimeout(() => { stop(); pc.close(); reject(new Error("The two tabs could not reach each other.")); }, 12000);
+    const wire = (dc) => {
+      const { port1, port2 } = new MessageChannel();
+      dc.onmessage = (event) => { try { port1.postMessage(JSON.parse(event.data)); } catch {} };
+      port1.onmessage = (event) => { if (dc.readyState === "open") dc.send(JSON.stringify(event.data)); };
+      dc.onclose = () => { port1.close(); pc.close(); };
+      const ready = () => { stop(); resolve(port2); };
+      dc.readyState === "open" ? ready() : (dc.onopen = ready);
+    };
+    const onSignal = (msg) => {
+      if (msg.t !== "signal" || msg.line !== line) return;
+      chain = chain.then(async () => {
+        const { description, candidate } = msg.data || {};
+        if (description) {
+          await pc.setRemoteDescription(description);
+          if (description.type === "offer") { await pc.setLocalDescription(); signal({ description: pc.localDescription }); }
+        } else if (candidate) await pc.addIceCandidate(candidate);
+      }).catch(() => {});
+    };
+    link.handlers.add(onSignal);
+    pc.onicecandidate = (event) => event.candidate && signal({ candidate: event.candidate });
+    if (offerer) {
+      wire(pc.createDataChannel("port-authority"));
+      pc.setLocalDescription().then(() => signal({ description: pc.localDescription }), reject);
+    } else pc.ondatachannel = (event) => wire(event.channel);
+  });
+}
+
 // ------------------------------------------------------------------ serve
 
 function toContent(value) {
@@ -217,6 +259,8 @@ export function serve({ name, description = "", tools = [] }) {
     else if (msg.t === "registered") changed({ connected: true, linked: true });
     else if (msg.t === "closed") changed({ connected: false, linked: !!link.creds });
     else if (msg.t === "call") link.send({ t: "result", id: msg.id, result: await run(msg.name, msg.args, msg.peer) });
+    // The person picked one of our tools while this tab was open.
+    else if (msg.t === "line") rtcLine(msg.line, false).then((port) => attach(port, msg.tool, msg.peer, "webrtc"), () => {});
   });
   if (link.creds) link.connect();
 
@@ -224,10 +268,8 @@ export function serve({ name, description = "", tools = [] }) {
   // one of our tools, and it hands us one end of a channel. The other end is
   // with the site that asked. The line is limited to that one tool: the limit
   // lives here, on the port, and the caller cannot widen it.
-  window.addEventListener("message", (event) => {
-    if (event.origin !== HUB || event.data?.pa !== "line" || !event.ports[0]) return;
-    const { tool, peer } = event.data;
-    const peerRpc = rpc(event.ports[0]);
+  function attach(port, tool, peer, via) {
+    const peerRpc = rpc(port);
     peerRpc.onRequest(async (method, params) => {
       if (method === "initialize") return { protocolVersion: "2025-06-18", capabilities: { tools: {} }, serverInfo: { name, version: "1" } };
       if (method === "tools/list") return { tools: describe().filter((t) => t.name === tool) };
@@ -237,7 +279,11 @@ export function serve({ name, description = "", tools = [] }) {
       }
       throw Object.assign(new Error("Method not found"), { code: -32601 });
     });
-    changed({}, { channel: tool, peer });
+    changed({}, { channel: tool, peer, via });
+  }
+  window.addEventListener("message", (event) => {
+    if (event.origin !== HUB || event.data?.pa !== "line" || !event.ports[0]) return;
+    attach(event.ports[0], event.data.tool, event.data.peer, "window");
   });
   if (window.opener) {
     try { window.opener.postMessage({ pa: "service-ready", url: location.href.split("#")[0] }, HUB); } catch {}
@@ -264,16 +310,19 @@ export function serve({ name, description = "", tools = [] }) {
 
 /**
  * Ask for something by intent. The person chooses which site answers.
- * Resolves to a direct line to that one tool, in a window the hub opened.
- * Nothing on this line goes through a server.
+ * Resolves to a direct line to that one tool: in a window the hub opened, or
+ * over WebRTC to the tab the person already has open. Either way the calls
+ * on this line do not go through a server.
  */
 export async function pick(intent) {
   const { data, ports } = await askHub("pick", { intent });
-  const peer = rpc(ports[0]);
+  const port = data.rtc ? await rtcLine(data.rtc.line, true) : ports[0];
+  const peer = rpc(port);
   return {
     tool: data.tool,
     service: data.service,
-    port: ports[0],
+    via: data.rtc ? "webrtc" : "window",
+    port,
     call: (args) => peer.request("tools/call", { name: data.tool.name, arguments: args }),
     close: () => peer.close(),
   };
