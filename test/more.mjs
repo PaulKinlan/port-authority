@@ -87,7 +87,7 @@ await page.locator("#census").scrollIntoViewIfNeeded();
 await page.waitForSelector('table.census[data-done="true"]', { timeout: 60000 });
 const rows = await page.locator("table.census tbody tr").evaluateAll((trs) => trs.map((tr) => [...tr.cells].map((c) => c.textContent.trim().replace(/\s+/g, " ").slice(0, 34)).join(" | ")));
 console.log(rows.map((r) => "     " + r).join("\n"));
-check("census ran for every kind", rows.length === 14 && rows.every((r) => !/testing/.test(r)));
+check("census ran for every kind", rows.length === 23 && rows.every((r) => !/testing/.test(r)));
 check("no page errors", errors.length === 0, errors.join(" | "));
 await browser.close();
 process.exit(failed ? 1 : 0);
