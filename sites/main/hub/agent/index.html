@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Your agent | Your hub | Port Authority</title>
+  <link rel="stylesheet" href="/base.css">
+  <link rel="stylesheet" href="/hub/hub.css">
+  <script src="/errors.js"></script>
+</head>
+<body>
+  <div class="wrap">
+    <header class="site-bar">
+      <a class="wordmark" href="/">Port Authority</a>
+      <nav><a href="/guide/">The guide</a><a href="/">About</a><a href="/patterns/">Port patterns</a><a href="/hub/" aria-current="page">Your hub</a></nav>
+    </header>
+    <div class="stack" style="--gap:.8rem; padding-top:2rem">
+      <h1 style="font-size:var(--step-3)">Your agent</h1>
+      <p>A site can ask to talk to your agent. If you say yes, it gets a port, and what it says down that port reaches one agent: the one you choose here. That can be the built-in demo agent, which has no model and only matches words to tools, or your own agent running on your machine, reached through a small bridge you start yourself.</p>
+      <p class="small muted">This is separate from <a href="/hub/">the sites that offer you tools</a>. An agent you connect here can call those tools, and that is the only place the two meet.</p>
+    </div>
+    <main class="dash" id="dash"></main>
+  </div>
+  <script type="module">
+    import { switchboard, mountDashboard } from "/hub/ui.js";
+    mountDashboard(document.getElementById("dash"), switchboard(), "agent");
+  </script>
+</body>
+</html>

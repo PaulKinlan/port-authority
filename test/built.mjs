@@ -250,13 +250,89 @@ await open("filter", "built-recorder");
 await click("Attach the kitchen"); await click("Send an order"); await click("Send an order"); await wait(600); await click("Recorder: say"); await wait(600);
 check("recorder: both branches carry every order", /cook: 1 peony wreath/.test(await frameText("kitchen")) && /I hold 2 orders, \d+ bytes/.test(await frameText("recorder")), flat(await frameText("recorder")));
 
+const enabled = (label) => until(async () => !(await page.locator(`${at} .controls button`, { hasText: label }).isDisabled()), 15000);
+const servedText = () => page.locator(`${at} .box[data-name="served"] iframe`).contentFrame().locator("body").innerText();
+
+await open("far", "built-agent");
+await click("Open a line"); await click("Use a stand-in"); await enabled("call addTulips");
+await click("call addTulips"); await wait(700); await click("call readBasket"); await wait(700); await click("call deleteAccount");
+check("agent: the far side calls this browser's tools, and an unoffered name is refused", !!(await until(async () => /deleteAccount: refused, no such tool/.test(await frameText("far")))) && /readBasket: 1 bunches of tulips/.test(await frameText("far")) && /Basket: 1 bunches/.test((await boxText("page")).replace(/\n/g, " ")), flat(await frameText("far")));
+
+await open("mounted", "built-plugins");
+await click("Install the calendar"); await until(async () => /Calendar/.test(await servedText()));
+await click("Open the calendar"); const cal = await until(async () => /Thursday: tulip delivery/.test(await servedText()) && /asked for icon\.svg/.test(await frameText("Calendar")));
+await click("Install the invoices"); await wait(600); await click("Open the invoices");
+check("plugins: each plug-in answers for its own path, page and picture", !!cal && !!(await until(async () => /Invoice 31: paid/.test(await servedText()) && /asked for icon\.svg/.test(await frameText("Invoices")))) && !/invoices/i.test((await frameText("Calendar")).replace("Calendar plug-in", "")), flat(await frameText("Invoices")));
+
+await open("mounted", "built-preview");
+await click("Mount the provider"); await enabled("Open the preview"); await click("Open the preview");
+const draft1 = await until(async () => /Draft 1\. Tulips 4\.50/.test(await servedText()));
+await click("Provider: save"); await click("Reload the preview");
+check("preview: the draft is served from the provider, and a new version shows on reload", !!draft1 && !!(await until(async () => /Draft 2/.test(await servedText()))) && /sent draft\.css, version 2/.test(await frameText("provider")), flat(await frameText("provider")));
+
+await open("socket", "built-feed");
+const feedTab = (name) => page.locator(`${at} .box[data-name="${name}"] iframe`).contentFrame().locator("body").innerText();
+const hubText = async () => (await boxText("worker")).replace(/\n/g, " ");
+const live = await until(async () => /\d+ prices received/.test(await feedTab("tab1")) && /\d+ prices received/.test(await feedTab("tab2")) && /Connections it has made: 1 .*Connected now: yes .*Tabs it feeds: 2/.test(await hubText()));
+await click("Drop the connection");
+const dropped = await until(async () => /Trying again in/.test(await hubText()) || /Connections it has made: 2/.test(await hubText()), 5000);
+const got = Number((await feedTab("tab2")).match(/(\d+) prices/)?.[1]);
+const back = await until(async () => /Connections it has made: 2 .*Connected now: yes/.test(await hubText()) && Number((await feedTab("tab2")).match(/(\d+) prices/)?.[1]) > got, 12000);
+check("feed: two tabs share one subscription, and the worker alone reconnects it", !!live && !!dropped && !!back && /WebSockets opened by this tab: 0/.test(await feedTab("tab1")), flat(await hubText()));
+
+await open("audio", "built-pcm");
+await click("Start the decoder"); await enabled("Freeze"); await wait(600); await click("Freeze");
+const pcm = await until(async () => (await boxText("page")).match(/I ticked (\d+) times, the worker delivered (\d+) blocks, and the sound had (\d+) gaps/), 12000);
+check("pcm: the worker keeps the audio thread fed while the page is frozen", !!pcm && Number(pcm[1]) <= 2 && Number(pcm[2]) >= 20 && Number(pcm[3]) === 0, pcm ? pcm[0] : flat(await boxText("page")));
+await click("Stop the sound");
+
+await open("audio", "built-meter");
+await click("Start the tone"); await enabled("Freeze"); await wait(600); await click("Freeze");
+const meter = await until(async () => (await boxText("page")).match(/I ticked (\d+) times, the worker drew (\d+) readings/), 12000);
+check("meter: readings go from the audio thread to a worker while the page is frozen", !!meter && Number(meter[1]) <= 2 && Number(meter[2]) >= 40, meter ? meter[0] : flat(await boxText("page")));
+await click("Stop the sound");
+
+// The router: windows that know only their own name and the worker in the middle.
+const win = (name) => page.locator(`${at} .box[data-name="${name}"] iframe`).contentFrame().locator("body").innerText();
+at = "#demo"; await page.goto(`${root}/patterns/router/?play=0`); await page.waitForSelector(`${at} .controls button`, { timeout: 15000 }); await wait(900);
+await click("Orders: send to the kitchen"); await click("Kitchen: send to the driver"); await click("Orders: send to the florist");
+check("router: a shared worker passes messages on by name, and says when a name is unknown", !!(await until(async () => /from orders: message 1/.test(await win("kitchen")) && /from kitchen: message 1/.test(await win("driver")) && /undelivered: nobody is called florist/.test(await win("orders")))) && /Passed on: 2\. Undelivered: 1/.test((await boxText("router")).replace(/\n/g, " ")), flat(await boxText("router")));
+await click("Close the kitchen"); await until(async () => /Knows: (orders, driver|driver, orders)/.test((await boxText("router")).replace(/\n/g, " ")), 6000); await click("Orders: send to the kitchen");
+check("router: a closed window leaves the table", !!(await until(async () => /undelivered: nobody is called kitchen/.test(await win("orders")))), flat(await boxText("router")));
+check("router: the page has a diagram of the data flow", (await page.locator("#how figure.flow svg").count()) === 1 && (await page.locator("#how figure.flow svg").evaluate((el) => el.getBoundingClientRect().width)) > 250);
+
+await open("router", "built-swroute");
+await click("Orders: send to the kitchen"); const swFirst = await until(async () => /from orders: message 1/.test(await win("kitchen")));
+await click("Make the service worker forget"); await until(async () => /Knows: nobody/.test((await boxText("router")).replace(/\n/g, " ")));
+await click("Kitchen: send to the driver");
+check("router: a service worker that has forgotten asks who is here, and still delivers", !!swFirst && !!(await until(async () => /from kitchen: message 1/.test(await win("driver")))) && /asked who is here: [1-9]/.test((await boxText("router")).replace(/\n/g, " ")), flat(await boxText("router")));
+
 // The guide carries the same demos, running inside each section.
 await page.goto(root + "/guide/");
 const cards = await page.locator(".live").count();
 at = "#live-built-cap";
 await page.locator(at).scrollIntoViewIfNeeded(); await page.waitForSelector(`${at} .fwd`, { timeout: 15000 }); await page.locator(`${at} .stage-el`).scrollIntoViewIfNeeded(); await wait(800);
 for (let i = 0; i < 4; i++) { await page.locator(`${at} .fwd`).click(); await wait(1300); }
-check("guide: every section has running demos, and they step with Next", cards >= 50 && /4 of 4/.test(await page.locator(`${at} .caption`).innerText()) && /refused: over the limit/.test(await frameText("shop")), `${cards} demos`);
+check("guide: every section has running demos, and they step with Next", cards >= 64 && /4 of 4/.test(await page.locator(`${at} .caption`).innerText()) && /refused: over the limit/.test(await frameText("shop")), `${cards} demos`);
+const guideDemo = async (id) => { at = "#live-" + id; await page.locator(at).scrollIntoViewIfNeeded(); await page.waitForSelector(`${at} .controls button`, { timeout: 15000 }); await page.locator(`${at} .stepper .caption`).waitFor(); if (/\?play=0/.test(page.url()) === false) await page.evaluate((sel) => document.querySelector(sel + " .stage-el")?.scrollIntoView({ block: "center" }), at); await wait(600); };
+await page.goto(root + "/guide/?play=0");
+await guideDemo("bite-start");
+await click("Send a message"); await click("Send a message"); await wait(500);
+const silent = !/received/.test(await frameText("frame"));
+await click("Frame: call port.start()"); await wait(500);
+check("bites: a port without start() holds its messages, and start() delivers them", silent && /received: message 2/.test(await frameText("frame")) && /received: message 1/.test(await frameText("frame")), flat(await frameText("frame")));
+await guideDemo("bite-unreadable");
+await click("Send some text"); await until(async () => /text: acknowledged/.test(await boxText("page")));
+await click("Send a module, carelessly"); await wait(900);
+const quiet = !/messageerror/.test(await boxText("worker"));
+await click("Send a module, with the habits");
+check("bites: an unreadable message is silent by default, and reported with the habits", quiet && !!(await until(async () => /failed, and I know it: the receiver could not rebuild it/.test(await boxText("page")))) && /messageerror/.test(await boxText("worker")), flat(await boxText("page")));
+await guideDemo("bite-gone");
+await click("Start a heartbeat"); await until(async () => /pong 1/.test(await boxText("page"))); await click("Remove the service");
+check("bites: a heartbeat notices the other end has gone", !!(await until(async () => /Treating the other end as gone/.test(await boxText("page")), 6000)), flat(await boxText("page")));
+await guideDemo("bite-lost");
+await click("mention one"); await wait(500); await click("mention both"); await wait(500);
+check("bites: a buffer moved without being mentioned arrives nowhere", /received: a \(64 KB\) and b \(64 KB\)/.test(await frameText("frame")) && /b 0 bytes\. b is nowhere/.test(await boxText("page")) && (await frameText("frame")).split("received: a (64 KB)").length === 3, flat(await frameText("frame")));
 const sections = await page.evaluate(() => [...document.querySelectorAll("main section")].filter((s) => !s.querySelector(".live")).map((s) => s.id));
 check("guide: only the list of open questions has no demo", sections.join() === "open", sections.join());
 

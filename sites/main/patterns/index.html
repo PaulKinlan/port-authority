@@ -13,16 +13,16 @@
   <div class="wrap">
     <header class="site-bar">
       <a class="wordmark" href="/">Port Authority</a>
-      <nav><a href="/guide/">The guide</a><a href="/">Experiments</a><a href="#further">Further out</a><a href="#threads-intro">Across threads</a><a href="#origins-intro">Real sites</a><a href="#places-intro">Further</a><a href="#census">Census</a><a href="/patterns/" aria-current="page">Port patterns</a><a href="/comlink/">Comlink today</a><a href="/hub/">Your hub</a></nav>
+      <nav><a href="/guide/">The guide</a><a href="/">Experiments</a><a href="#further">More to carry</a><a href="#threads-intro">Across threads</a><a href="#origins-intro">Real sites</a><a href="#places-intro">Further</a><a href="#census">Census</a><a href="/patterns/" aria-current="page">Port patterns</a><a href="/comlink/">Comlink today</a><a href="/hub/">Your hub</a></nav>
     </header>
     <div class="stack" style="padding-block:2.5rem 2rem; --gap:1.2rem">
-      <h1 style="font-size:var(--step-3)">Six moves with a port</h1>
+      <h1 style="font-size:var(--step-3)">The six basic patterns</h1>
       <p>Everything else on this site is built from these. Each box below is a real browsing context on its own origin, the cables appear when a port actually lands, and the dots are real messages. Press the buttons.</p>
     </div>
     <nav class="contents" id="contents" aria-label="All the patterns" style="padding-bottom:2rem"></nav>
     <main id="patterns"></main>
     <div class="stack" id="further" style="padding-block:clamp(3rem,8vw,5rem) 2rem; --gap:1.2rem; border-top:2px solid var(--ink)">
-      <h1 style="font-size:var(--step-3)">Further out</h1>
+      <h1 style="font-size:var(--step-3)">More things a port can carry</h1>
       <p>What a port can carry, and where it can end up. These lean on newer parts of the platform, so some will say no in some browsers.</p>
     </div>
     <div id="more"></div>
@@ -37,7 +37,7 @@
     </div>
     <div id="origins"></div>
     <div class="stack" id="places-intro" style="padding-block:clamp(3rem,8vw,5rem) 2rem; --gap:1.2rem; border-top:2px solid var(--ink)">
-      <h1 style="font-size:var(--step-3)">Further than this page</h1>
+      <h1 style="font-size:var(--step-3)">Other devices, service workers, sockets and audio</h1>
       <p>The other end of a port can be on another device, behind a path on your own site, in a worker that every tab shares, or on the thread that makes sound. The code that holds the port is the same each time.</p>
     </div>
     <div id="places"></div>
@@ -60,7 +60,7 @@
       <p class="small muted">The last column is why a port cannot outlive its page on its own: anything that must be moved cannot be stored. Things that are copied can.</p>
     </section>
     <section class="pattern">
-      <h2>Things that will bite you</h2>
+      <h2>Common mistakes</h2>
       <ul class="stack" style="max-width:62ch; padding-left:1.1rem">
         <li>A port you attach with <code>addEventListener</code> stays silent until you call <code>port.start()</code>. Setting <code>onmessage</code> starts it for you.</li>
         <li>Messages posted before the other side is listening are not lost. They wait in the port. You can send a port and start talking into it straight away.</li>

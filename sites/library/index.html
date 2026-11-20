@@ -77,7 +77,8 @@
       $("connect").hidden = s.connected;
       const line = detail?.tool ? `<span class="who">${escapeHtml(hostOf(detail.peer))}</span> called ${detail.tool}(${escapeHtml(JSON.stringify(detail.args))})`
         : detail?.channel ? `<span class="who">${escapeHtml(hostOf(detail.peer))}</span> was handed a direct line to ${detail.channel}`
-        : detail?.revoked ? "A line was revoked by the hub" : null;
+        : detail?.revoked ? "A line was revoked by the hub"
+        : detail?.forgotten ? "Your hub forgot this site. Add it again to bring it back." : null;
       if (line) { $("log").querySelector(".muted")?.remove(); $("log").insertAdjacentHTML("afterbegin", `<li>${line}</li>`); }
     });
     $("connect").onclick = () => service.connect().catch((err) => { $("state").textContent = err.message; });

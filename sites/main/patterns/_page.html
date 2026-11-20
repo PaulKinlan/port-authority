@@ -16,6 +16,9 @@
     .deep ul, .deep ol { padding-left: 1.2rem; display: grid; gap: .5rem; margin: 0; }
     .deep pre { margin: 0; overflow-x: auto; }
     .built { border: 2px solid var(--ink); border-radius: 18px; padding: clamp(.8rem, 3vw, 1.4rem); margin-top: 1.2rem; display: grid; gap: .9rem; grid-template-columns: minmax(0, 1fr); background: color-mix(in srgb, var(--yellow) 10%, var(--paper)); }
+    .flow { margin: 0 0 1.2rem; max-width: 34rem; }
+    .flow svg { width: 100%; height: auto; display: block; }
+    .flow figcaption { font-size: var(--step--1, .85rem); opacity: .8; margin-top: .4rem; }
     .built h3 { font-size: var(--step-1); }
     .built .idea { margin: 0; }
     .deep h3.todo { font-size: var(--step-0); margin: 1.4rem 0 .6rem; }
@@ -71,12 +74,12 @@
       mount($("demo").querySelector(".demo"), demo, TOURS, { autoplay: true });
 
       const list = (items, tag = "ul") => `<${tag}>${items.map((item) => `<li>${item}</li>`).join("")}</${tag}>`;
-      const steps = (TOURS[id] || { steps: [] }).steps;
+      const steps = (demo.tour || TOURS[id] || { steps: [] }).steps;
       const mine = built.filter((b) => b.pattern === id);
       const parts = [];
       parts.push(`<section id="what"><h2>What you are looking at</h2><p>${demo.blurb}</p></section>`);
       parts.push(`<section id="code"><h2>The code</h2><pre>${demo.code}</pre></section>`);
-      if (more.how) parts.push(`<section id="how"><h2>How it works</h2><div class="stack" style="--gap:.9rem">${more.how.map((p) => `<p>${p}</p>`).join("")}</div></section>`);
+      if (more.how) parts.push(`<section id="how"><h2>How it works</h2>${more.diagram || ""}<div class="stack" style="--gap:.9rem">${more.how.map((p) => `<p>${p}</p>`).join("")}</div></section>`);
       if (steps.length) parts.push(`<section id="steps"><h2>Step by step</h2><p style="margin-bottom:.7rem">What each press of Next does in the demo at the top.</p>${list(steps.map(([label, text]) => `<strong>${label}.</strong> ${text}`), "ol")}</section>`);
       if (more.uses) {
         const covered = new Set(mine.flatMap((b) => b.use));
@@ -88,7 +91,7 @@
           ${todo.length ? `<h3 class="todo">Not built yet</h3>${list(todo)}` : ""}</section>`);
       }
       if (more.tryIt) parts.push(`<section id="try"><h2>Things to try</h2>${list(more.tryIt)}</section>`);
-      if (more.traps) parts.push(`<section id="traps"><h2>What will bite you</h2>${list(more.traps)}</section>`);
+      if (more.traps) parts.push(`<section id="traps"><h2>Common mistakes</h2>${list(more.traps)}</section>`);
       if (more.measured) parts.push(`<section id="measured"><h2>Measured</h2><p class="measured">${more.measured} Other browsers are being filled in from <a href="/lab/results/">the lab's results</a>.</p></section>`);
       const related = (more.related || []).map(byId).filter(Boolean);
       if (related.length) parts.push(`<section id="related"><h2>Read next</h2><ul class="cards">${related.map((d) => `<li><a href="/patterns/${d.id}/"><strong>${d.title}</strong><span>${plain(d.blurb).split(". ")[0]}.</span></a></li>`).join("")}</ul></section>`);

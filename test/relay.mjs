@@ -11,7 +11,7 @@ const check = (name, ok, extra = "") => { console.log(`${ok ? "ok  " : "FAIL"} $
 const popupFrom = async (page, click) => { const [popup] = await Promise.all([page.waitForEvent("popup"), click()]); await popup.waitForLoadState(); return popup; };
 
 const hub = await ctx.newPage();
-await hub.goto(base("hub") + "/hub/");
+await hub.goto(base("hub") + "/hub/agent/");
 await hub.check('input[value="relay"]');
 await hub.waitForSelector("[data-command]");
 const wss = (await hub.locator("[data-command]").innerText()).match(/wss?:\/\/[^\s"]+/)[0];

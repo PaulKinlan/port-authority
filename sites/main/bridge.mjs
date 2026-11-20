@@ -2,7 +2,7 @@
 // Port Authority agent bridge. Needs Node 22 or newer, and nothing else.
 //
 //   node bridge.mjs "<address from your hub>" -- <command that starts an ACP agent>
-//   node bridge.mjs "wss://hub.example/h/ID?token=SECRET" -- npx -y @zed-industries/claude-code-acp
+//   node bridge.mjs "wss://hub.example/h/ID?token=SECRET" -- npx -y @agentclientprotocol/claude-agent-acp
 //
 // It starts your agent, speaks the Agent Client Protocol to it over stdio, and
 // connects outwards to your hub server.

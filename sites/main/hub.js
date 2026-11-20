@@ -136,17 +136,29 @@ const link = {
     };
     ws.onmessage = (event) => {
       let msg; try { msg = JSON.parse(event.data); } catch { return; }
+      // The person pressed Forget in their hub. The token is dead: drop it and do not come back.
+      if (msg.t === "forgotten") return this.forgotten(ws);
       if (msg.t === "rpc") this.grantPorts.get(msg.grant)?.postMessage(msg.msg);
       for (const fn of this.handlers) fn(msg);
     };
-    ws.onclose = () => {
+    ws.onclose = (event) => {
       if (this.ws !== ws) return;
+      if (event.code === 4001) return this.forgotten(ws);
       this.ws = null; this.open = false;
       for (const fn of this.handlers) fn({ t: "closed" });
       // Refused before it ever opened, twice running: the token is no good any more.
       if (!opened && ++this.retry > 2) { this.creds = null; write("hub", null); return; }
       setTimeout(() => this.connect(), Math.min(30000, 1000 * 2 ** this.retry));
     };
+  },
+  forgotten(ws) {
+    if (this.ws !== ws) return;
+    this.ws = null; this.open = false; this.creds = null; this.queue.length = 0;
+    write("hub", null);
+    try { ws.close(); } catch {}
+    for (const port of this.grantPorts.values()) port.close();
+    this.grantPorts.clear();
+    for (const fn of this.handlers) fn({ t: "forgotten" });
   },
   send(frame) {
     const text = JSON.stringify(frame);
@@ -258,6 +270,7 @@ export function serve({ name, description = "", tools = [] }) {
     if (msg.t === "open") register();
     else if (msg.t === "registered") changed({ connected: true, linked: true });
     else if (msg.t === "closed") changed({ connected: false, linked: !!link.creds });
+    else if (msg.t === "forgotten") changed({ connected: false, linked: false }, { forgotten: true });
     else if (msg.t === "call") link.send({ t: "result", id: msg.id, result: await run(msg.name, msg.args, msg.peer) });
     // The person picked one of our tools while this tab was open.
     else if (msg.t === "line") rtcLine(msg.line, false).then((port) => attach(port, msg.tool, msg.peer, "webrtc"), () => {});

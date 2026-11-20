@@ -144,6 +144,13 @@
 
   // Runs wherever a value lands. Values arrive on `inlet` and results go back
   // on `out`. They are the same port unless the inlet cannot answer.
+  // Frames, audio and bitmaps hold memory outside the garbage collector's
+  // sight, and a browser complains when one is dropped without being closed.
+  // Every test closes what it made and what it received, whatever happened.
+  globalThis.labRelease = (value) => {
+    try { if (value && typeof value.close === "function" && /^(VideoFrame|AudioData|ImageBitmap)$/.test(Object.prototype.toString.call(value).slice(8, -1))) value.close(); } catch (err) {}
+  };
+
   globalThis.labReceive = (out, where, inlet = out) => {
     let seq = 0;
     const kinds = new Map(globalThis.LAB_KINDS.map((k) => [k.name, k]));
@@ -162,7 +169,7 @@
         out.postMessage({ seq: mine, outcome: "works", note: String(note), type });
       } catch (err) {
         out.postMessage({ seq: mine, outcome: "arrives-broken", note: String((err && err.message) || err).slice(0, 160), type });
-      }
+      } finally { globalThis.labRelease(data.value); }
     };
     inlet.onmessageerror = () => out.postMessage({ seq, outcome: "unreadable", note: "arrived, but could not be rebuilt here" });
     out.postMessage({ hello: where });

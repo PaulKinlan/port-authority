@@ -26,3 +26,24 @@
 .options strong { font: 700 var(--step-0)/1.2 var(--display); }
 .options .match { border-color: var(--accent); }
 .banner { background: var(--accent); color: var(--on-accent); padding: 0.8rem 1.2rem; font-weight: 600; }
+
+.hub-tabs { display: flex; flex-wrap: wrap; gap: .5rem; }
+.hub-tabs a { text-decoration: none; font: 700 var(--step-0)/1 var(--display); padding: .6em 1em; border-radius: 999px; border: 2px solid var(--ink); color: var(--ink); }
+.hub-tabs a[aria-current] { background: var(--ink); color: var(--paper); }
+
+/* Choosing which agent the bridge starts: a grid of cards, one of them picked. */
+.agent-pick { border: 0; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(13.5rem, 1fr)); gap: .6rem; }
+.agent-pick legend { font: 700 var(--step-0)/1.2 var(--display); padding: 0; margin-bottom: .6rem; }
+.agent-card { position: relative; display: grid; grid-template-columns: auto 1fr; grid-template-areas: "badge who" "needs needs"; gap: .5rem .7rem; align-items: center; margin: 0; padding: .8rem .9rem; border-radius: 14px; background: var(--panel); border: 2px solid transparent; cursor: pointer; font-weight: 400; transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease; }
+.agent-card input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
+.agent-card .badge { grid-area: badge; width: 2.4rem; height: 2.4rem; border-radius: 10px; display: grid; place-items: center; font: 800 .95rem/1 var(--display); letter-spacing: .02em; color: #fff; background: linear-gradient(135deg, hsl(var(--hue) 70% 46%), hsl(calc(var(--hue) + 40) 75% 36%)); }
+.agent-card .who { grid-area: who; display: grid; line-height: 1.2; }
+.agent-card .who strong { font: 700 var(--step-0)/1.15 var(--display); }
+.agent-card .needs { grid-area: needs; opacity: .8; }
+.agent-card:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgb(0 0 0 / .12); }
+.agent-card:has(:checked) { border-color: var(--ink); box-shadow: 0 0 0 3px color-mix(in srgb, hsl(var(--hue) 70% 50%) 45%, transparent); }
+.agent-card:has(:checked)::after { content: "✓"; position: absolute; top: .5rem; right: .6rem; width: 1.3rem; height: 1.3rem; border-radius: 50%; display: grid; place-items: center; font: 800 .75rem/1 system-ui; background: var(--ink); color: var(--paper); }
+.agent-card:has(:focus-visible) { outline: 3px solid var(--ink); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .agent-card { transition: none; } .agent-card:hover { transform: none; } }
+.dash, .dash > section, .dash .stack { grid-template-columns: minmax(0, 1fr); min-width: 0; }
+.dash pre { overflow-x: auto; max-width: 100%; }

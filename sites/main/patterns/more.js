@@ -178,7 +178,7 @@ win.postMessage({ feed: port }, location.origin, [port]);`,
   },
   {
     id: "tabserver",
-    title: "A tab that is a web server for other tabs",
+    title: "Serve pages to other tabs from this tab",
     blurb: "A Service Worker can answer a fetch any way it likes, including by asking someone else. This page hands the worker a port. Every request under <code>/patterns/served/</code> is sent up that port, and whatever you type on the left is the response. The page on the right is a real navigation to a real URL, and so is the new tab.",
     code: `<span class="c">// service worker</span>
 onfetch = (event) => event.respondWith(new Promise((resolve) => {
@@ -233,7 +233,7 @@ onfetch = (event) => event.respondWith(new Promise((resolve) => {
 more.push(
   {
     id: "stream-intro",
-    title: "A stream does not survive its introducer. A port does.",
+    title: "A forwarded stream stops when the page that passed it on closes. A port keeps working.",
     blurb: "You can pass a stream on, the same as a port. But a stream that was passed on keeps flowing through every context that touched it. Send one through the introducer, remove the introducer, and the reader stalls with no error and no end. So introduce with a port first, then send the stream down the direct line. Start again between the two to compare.",
     code: `<span class="c">// fragile: the middle is now part of the pipe for ever</span>
 toMiddle.postMessage({ stream }, [stream]);

@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>A tab watching a price | Port Authority</title>
+<style>
+  html{color-scheme:light dark}
+  body{margin:0;padding:.7rem .8rem;font:14px/1.4 system-ui,sans-serif;background:light-dark(#fff,#141f47);color:light-dark(#0f1c3f,#e9edfa)}
+  h1{font:800 1rem/1.1 system-ui,sans-serif;margin:0 0 .3rem}
+  #price{font:800 2rem/1 system-ui,sans-serif;margin:.1rem 0 .3rem}
+  p{margin:0 0 .25rem;font:12px/1.4 ui-monospace,Menlo,monospace}
+</style>
+<h1 id="title">A tab</h1>
+<p id="price">…</p>
+<p id="got">no prices yet</p>
+<p id="state"></p>
+<p>WebSockets opened by this tab: 0</p>
+<script type="module">
+  const embedded = parent !== self;
+  const tell = (wire, data = {}) => embedded && parent.postMessage({ wire, ...data }, "*");
+  const $ = (id) => document.getElementById(id);
+  if (!("SharedWorker" in self)) $("got").textContent = "This browser has no SharedWorker.";
+  else {
+    const port = new SharedWorker("/patterns/feed-worker.js").port;
+    const lock = "pa-feed-" + Math.random().toString(36).slice(2);
+    const join = () => port.postMessage({ join: true, lock });
+    navigator.locks ? navigator.locks.request(lock, () => { join(); return new Promise(() => {}); }) : join();
+    let got = 0;
+    port.onmessage = ({ data }) => {
+      if (data.price) { $("price").textContent = "£" + data.price.price; $("got").textContent = `${++got} prices received, tulips per bunch`; tell("price", { got }); }
+      if (data.state) $("state").textContent = data.state.open ? "the worker's connection is up" : data.state.retryIn ? "the worker is reconnecting. I am just waiting." : "the worker is connecting";
+    };
+  }
+  tell("ready");
+</script>
+</html>

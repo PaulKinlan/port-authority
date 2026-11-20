@@ -119,6 +119,28 @@ export default {
       return new Response(null, { status: 101, webSocket: pair[0] });
     }
 
+    // A WebSocket that sends a price every second, for experiments where one
+    // subscription feeds many tabs. Send it "drop" and it hangs up, so the
+    // other end can show how it reconnects. It hangs up by itself after a while.
+    if (url.pathname === "/ticker") {
+      if (request.headers.get("upgrade") !== "websocket") return new Response("expected websocket", { status: 426 });
+      const pair = new WebSocketPair();
+      const server = pair[1];
+      server.accept();
+      let n = 0;
+      const stop = () => clearInterval(timer);
+      const send = () => {
+        const price = (4 + Math.sin(Date.now() / 9000) * 0.6 + Math.random() * 0.1).toFixed(2);
+        try { server.send(JSON.stringify({ n: ++n, price })); } catch (err) { stop(); }
+        if (n >= 90) { stop(); server.close(1000, "that is enough"); }
+      };
+      const timer = setInterval(send, 1000);
+      send();
+      server.addEventListener("message", (event) => { if (event.data === "drop") { stop(); server.close(1012, "dropped on request"); } });
+      server.addEventListener("close", stop);
+      return new Response(null, { status: 101, webSocket: pair[0] });
+    }
+
     // /meet/<code>: two devices find each other here, swap the few messages
     // WebRTC needs, and then talk directly. Nothing else passes through.
     if (url.pathname.startsWith("/meet/")) {
@@ -390,9 +412,24 @@ export class Hub {
         return this.broadcast();
       }
       case "forget": {
+        const name = (d.known[msg.origin] || {}).name || hostOf(msg.origin);
         delete d.known[msg.origin];
         this.save("known");
-        for (const site of this.siteSockets(msg.origin)) site.close(4001, "forgotten");
+        // Forgetting means the site cannot come back by itself. Its tokens stop
+        // working, anything it was given is taken away, and it is told so,
+        // rather than left to find out by being refused.
+        const tokens = await this.storage.list({ prefix: "site:" });
+        const dead = [...tokens].filter((entry) => entry[1] === msg.origin).map((entry) => entry[0]);
+        if (dead.length) await this.storage.delete(dead);
+        for (const g of Object.values(d.grants)) if (g.client === msg.origin) delete d.grants[g.id];
+        this.save("grants");
+        for (const id of Object.keys(d.lines)) if (d.lines[id].client === msg.origin || d.lines[id].service === msg.origin) delete d.lines[id];
+        this.save("lines");
+        for (const site of this.siteSockets(msg.origin)) {
+          try { site.send(JSON.stringify({ t: "forgotten" })); } catch (err) {}
+          site.close(4001, "forgotten");
+        }
+        this.note(name + " was forgotten. It has to be added again to come back.");
         return this.toolsChanged();
       }
       case "agent-config": {

@@ -24,6 +24,10 @@
     .see { font-size: var(--step--1); }
     .live-set { display: grid; gap: 1.2rem; grid-template-columns: minmax(0, 1fr); margin-top: .6rem; }
     .live { border: 2px solid var(--ink); border-radius: 18px; padding: clamp(.8rem, 3vw, 1.4rem); display: grid; gap: .8rem; grid-template-columns: minmax(0, 1fr); background: color-mix(in srgb, var(--yellow) 10%, var(--paper)); }
+    .bite { border-top: 2px solid var(--ink); padding-top: 1rem; margin-top: 1.4rem; display: grid; gap: .7rem; grid-template-columns: minmax(0, 1fr); }
+    .bite h3 { font-size: var(--step-1); margin: 0; }
+    .bite p { margin: 0; max-width: 70ch; }
+    .bite pre, .live pre { margin: 0; }
     .live h4 { font: 800 var(--step-1)/1.1 var(--display); margin: 0; }
     .live p { margin: 0; max-width: 70ch; }
     .measured { font-size: var(--step--1); background: var(--panel); border-radius: 12px; padding: 0.8rem 1rem; max-width: 66ch; }
@@ -48,7 +52,7 @@
         <li><a href="#keys">7. Keys</a></li>
         <li><a href="#lasting">8. Making a port last</a></li>
         <li><a href="#far">9. Further than one browser</a></li>
-        <li><a href="#bites">10. What will bite you</a></li>
+        <li><a href="#bites">10. Common mistakes, and what to do</a></li>
         <li><a href="#open">11. What is still open</a></li>
       </ul>
     </div>
@@ -62,7 +66,7 @@
           <li>Nothing else identifies a port: no name, no address, no way to look one up. To use a wire you must have been handed an end of it.</li>
           <li>So holding a port is the permission to use it, and passing a port on is how permission is given.</li>
         </ol>
-        <p class="see">Running: <a href="/patterns/hello/">a channel is two ends of one wire</a>, <a href="/patterns/introduce/">introduce two strangers, then leave</a>.</p>
+        <p class="see">Running: <a href="/patterns/hello/">opening a channel</a>, <a href="/patterns/introduce/">connecting two frames and removing yourself</a>.</p>
         <div class="live-set" data-demos="hello built-private introduce built-wire built-rpc"><h3>See it run</h3></div>
       </section>
 
@@ -88,7 +92,7 @@
         </ul>
         <p>Outside the browser's own pages, the same idea appears as real ports between an Android app and its WebView, between an extension's content script and the page it runs in, and between Electron's processes. This site has not tested those.</p>
         <p class="see">Running: <a href="/lab/">the lab</a> sends to thirteen of these places. <a href="/patterns/exchange/">A SharedWorker as the exchange</a>. <a href="/patterns/tabserver/">A tab that is a web server for other tabs</a>. <a href="/patterns/socket/">A shared worker holding the only socket</a>. <a href="/patterns/audio/">A worker sending notes to the audio thread</a>.</p>
-        <div class="live-set" data-demos="exchange built-sync built-leader socket tabserver built-notes built-files"><h3>See it run</h3></div>
+        <div class="live-set" data-demos="exchange router built-swroute built-sync built-leader socket built-feed tabserver built-notes built-files"><h3>See it run</h3></div>
       </section>
 
       <section id="what">
@@ -157,7 +161,7 @@
           <li>The audio thread accepts a port. Give a worker the other end and it drives sound with no help from the page. Measured: 13 notes in a 3 second freeze, at one every 230 ms, so none were lost. <a href="/patterns/audio/">Running.</a></li>
           <li>A shared worker can hold the one connection a site needs, with a port to each tab. An answer goes back down the port of the tab that asked. <a href="/patterns/socket/">Running.</a></li>
         </ul>
-        <div class="live-set" data-demos="frozen built-relay built-watermark audio mounted"><h3>Working examples</h3></div>
+        <div class="live-set" data-demos="frozen built-relay built-watermark audio built-pcm built-meter mounted built-plugins built-preview"><h3>Working examples</h3></div>
       </section>
 
       <section id="keys">
@@ -188,24 +192,114 @@
           <li>That bridge carries JSON only. Ports and streams cannot ride on it, where they can on a real port.</li>
           <li>The same bridge works between devices. A pairing code names a meeting place on the server, which passes the handful of messages WebRTC needs and then carries nothing. Each device holds a port, and can hand it on: a phone ends up pressing buttons in a sandboxed frame on a laptop that was given a port and nothing else. <a href="/patterns/far/">Running.</a> Measured between two pages on one computer. Between two networks it depends on both being able to reach each other, and there is no relay for when they cannot.</li>
         </ul>
-        <div class="live-set" data-demos="far built-approve"><h3>Working examples</h3></div>
+        <div class="live-set" data-demos="far built-approve built-agent"><h3>Working examples</h3></div>
       </section>
 
       <section id="bites">
-        <h2>10. What will bite you</h2>
-        <ul>
-          <li>A port attached with <code>addEventListener</code> stays silent until you call <code>port.start()</code>. Setting <code>onmessage</code> starts it for you.</li>
-          <li>Messages posted before the other side is listening are not lost. They wait in the port.</li>
-          <li>Nothing tells you the other end has gone. A <code>close</code> event is specified, and the Chromium this was built with does not fire it. On one origin, hold a Web Lock in the page and wait on it elsewhere. Across origins, ping.</li>
-          <li>A transferred object is gone from the sender. Post it twice and the second call throws.</li>
-          <li>A port in the transfer list turns up in <code>event.ports</code>. Anything else in the transfer list that is not also somewhere in the message is moved and then lost.</li>
-          <li>When a message cannot be rebuilt on arrival, the receiver gets <code>messageerror</code> and the sender gets nothing. Many kinds fail this way between origins, and to shared workers and service workers. Listen for it.</li>
-          <li>A write to a transferred stream can report success before the far side has refused it. The failure arrives on the next write.</li>
-          <li>Shared workers and service workers inside a frame on another site are partitioned by the top-level site, so a hidden frame cannot be a meeting point for the whole web. A window of its own can.</li>
-          <li>A page that is cross-origin isolated cannot keep a reference to a window that is not. It gets shared memory and loses popups to other origins.</li>
-          <li>A person who has asked for reduced motion still needs to see that something happened. This site skipped its animations for them and looked broken.</li>
-        </ul>
-        <div class="live-set" data-demos="stream-intro"><h3>See one of them happen</h3></div>
+        <h2>10. Common mistakes, and what to do</h2>
+        <p>For each: what goes wrong, what to do about it, and where it helps, the thing happening in front of you.</p>
+        <article class="bite">
+          <h3>A port that listens and hears nothing</h3>
+          <p>A port attached with <code>addEventListener</code> stays silent until you call <code>port.start()</code>. Nothing is thrown and nothing is lost: the messages wait in the port. It looks exactly like the other side never sending.</p>
+          <p class="do"><strong>What to do.</strong> Set <code>onmessage</code>, or call <code>start()</code> on the line after <code>addEventListener</code>, every time. The same waiting is useful: you can post into a port before the other side has attached anything, and it will all be there when they do.</p>
+          <pre>port.addEventListener("message", onMessage);
+port.start();                    <span class="c">// without this, nothing is delivered</span>
+
+port.onmessage = onMessage;      <span class="c">// or this, which starts the port for you</span></pre>
+          <div class="live-set" data-demos="bite-start"></div>
+        </article>
+        <article class="bite">
+          <h3>A message that cannot be rebuilt on arrival</h3>
+          <p>Some things can be sent and cannot be rebuilt where they land. A <code>VideoFrame</code> or a WebAssembly module posted to a shared worker, a service worker or a frame on another origin is one example, and <a href="/lab/">the lab</a> finds many more. The call to <code>postMessage</code> succeeds. The receiver gets a <code>messageerror</code> event with no data in it. The sender gets nothing at all.</p>
+          <p class="do"><strong>What to do.</strong> Three habits, and they are worth having on every port. The receiver always sets <code>onmessageerror</code> and tells the sender. Every message that matters is acknowledged. The sender puts a time limit on every wait. Then, before you depend on sending some kind of object to some place, send one and see: the answer differs by browser and by destination, which is what the lab measures.</p>
+          <pre><span class="c">// the receiver: answer what you read, report what you could not</span>
+port.onmessage = ({ data }) =&gt; { handle(data.value); port.postMessage({ ack: data.id }); };
+port.onmessageerror = () =&gt; port.postMessage({ unreadable: true });
+
+<span class="c">// the sender: every send is a promise with a time limit</span>
+const send = (value, transfer = []) =&gt; new Promise((resolve, reject) =&gt; {
+  const id = crypto.randomUUID();
+  const timer = setTimeout(() =&gt; { waiting.delete(id); reject(new Error("no answer")); }, 2000);
+  waiting.set(id, { resolve, reject, timer });
+  port.postMessage({ id, value }, transfer);
+});
+
+<span class="c">// before relying on a kind of object across a boundary, try it once</span>
+const crosses = await send(sample).then(() =&gt; true, () =&gt; false);</pre>
+          <div class="live-set" data-demos="bite-unreadable"></div>
+        </article>
+        <article class="bite">
+          <h3>Nothing tells you the other end has gone</h3>
+          <p>Close a tab, remove a frame or stop a worker, and the port on your side looks the same as before. A <code>close</code> event is specified, and the Chromium this was built with does not fire it. Posting to a dead port throws nothing.</p>
+          <p class="do"><strong>What to do.</strong> Across origins, send a ping on a timer and treat silence as the end. On one origin there is something exact: the other side takes a Web Lock and never releases it, and you queue for the same lock. The browser grants it to you at the moment they die, however they died. Listen for <code>close</code> as well, for the browsers that do fire it.</p>
+          <pre><span class="c">// across origins: ask, and time the answer</span>
+let alive = true;
+const beat = setInterval(() =&gt; {
+  if (!alive) { clearInterval(beat); port.close(); return onGone(); }
+  alive = false; port.postMessage("ping");
+}, 1000);
+
+<span class="c">// on one origin: a lock the other side holds for as long as it lives</span>
+navigator.locks.request(name, () =&gt; new Promise(() =&gt; {}));     <span class="c">// them, once, at start</span>
+navigator.locks.request(name, () =&gt; onGone());                 <span class="c">// you: granted only when they are gone</span></pre>
+          <div class="live-set" data-demos="bite-gone"></div>
+        </article>
+        <article class="bite">
+          <h3>Something in the transfer list that is not in the message</h3>
+          <p>The transfer list says what to move. The message says what the receiver gets. A buffer or a stream that is in the list and not in the message is moved out of your context and delivered to nobody. Only ports are different: a port in the list turns up in <code>event.ports</code>.</p>
+          <p class="do"><strong>What to do.</strong> Build the transfer list from the message, so the two cannot disagree.</p>
+          <pre>port.postMessage({ a }, [a.buffer, b.buffer]);      <span class="c">// b is moved and lost</span>
+port.postMessage({ a, b }, [a.buffer, b.buffer]);   <span class="c">// everything moved is also sent</span></pre>
+          <div class="live-set" data-demos="bite-lost"></div>
+        </article>
+        <article class="bite">
+          <h3>A transferred object is gone from the sender</h3>
+          <p>After a transfer, your buffer has a length of zero, your stream is locked, and your port is dead. Post the same one a second time and the call throws a <code>DataCloneError</code>.</p>
+          <p class="do"><strong>What to do.</strong> Decide who owns a thing before you send it. If both sides need it, copy it first, or for a stream send one branch of <code>tee()</code>. If you only need it back later, have the other side transfer it home, as in <a href="/patterns/zerocopy/#built-pool">the buffer pool</a>.</p>
+          <pre>port.postMessage({ buffer }, [buffer]);
+buffer.byteLength;                                        <span class="c">// 0</span>
+port.postMessage({ buffer: buffer.slice(0) });            <span class="c">// too late: there is nothing left to copy</span>
+
+const keep = buffer.slice(0);                             <span class="c">// to keep one, copy before you move</span>
+const [mine, theirs] = stream.tee();                      <span class="c">// for a stream, split it and send one branch</span></pre>
+        </article>
+        <article class="bite">
+          <h3>A write to a transferred stream that seems to succeed</h3>
+          <p>When you write into a stream whose other end is in another context, the write can report success before the far side has refused the chunk. The failure arrives on the next write, or on <code>writer.closed</code>.</p>
+          <p class="do"><strong>What to do.</strong> Watch <code>writer.closed</code> from the start, and await <code>writer.ready</code> before each write. Do not treat one resolved write as proof that the chunk was accepted.</p>
+          <pre>const writer = writable.getWriter();
+writer.closed.catch((err) =&gt; onBroken(err));             <span class="c">// hear about a failure whenever it lands</span>
+await writer.ready;                                       <span class="c">// wait for room, which is also where an error surfaces</span>
+await writer.write(chunk);</pre>
+          <div class="live-set" data-demos="stream-intro"></div>
+        </article>
+        <article class="bite">
+          <h3>Shared workers and service workers are separate for each top-level site</h3>
+          <p>A shared worker or a service worker reached from inside a frame on another site is partitioned by the top-level site. The same hidden frame embedded on two sites gets two workers that cannot see each other, so it cannot be a meeting point for the whole web. A service worker also forgets its ports whenever the browser stops it.</p>
+          <p class="do"><strong>What to do.</strong> For something every site can reach, open a top-level window, which is what <a href="/hub/">the hub</a> does. Inside one site, a shared worker is fine. With a service worker, keep nothing that you cannot rebuild by asking the open windows.</p>
+          <pre><span class="c">// a meeting point for many sites has to be a window of its own</span>
+const hub = window.open("https://hub.example/pick", "hub", "popup");
+addEventListener("message", (e) =&gt; { if (e.source === hub &amp;&amp; e.origin === HUB) use(e.ports[0]); });
+
+<span class="c">// a service worker that woke with nothing asks for what it needs</span>
+if (!tabPort) for (const client of await clients.matchAll()) client.postMessage("need-port");</pre>
+          <div class="live-set" data-demos="built-swroute"></div>
+        </article>
+        <article class="bite">
+          <h3>A cross-origin isolated page cannot reach popups on other origins</h3>
+          <p>A page that is cross-origin isolated gets shared memory. It cannot keep a reference to a window that is not isolated, so a popup on another origin is out of reach, and so is any port you hoped to hand it.</p>
+          <p class="do"><strong>What to do.</strong> Choose per page. Keep the page that talks to other origins ordinary, and do the shared-memory work in an isolated page or worker that it reaches with a port. <a href="/isolated/lab/">The isolated lab</a> shows what changes.</p>
+          <pre>if (self.crossOriginIsolated) {
+  <span class="c">// shared memory exists here. window.open() to another origin returns nothing you can post to.</span>
+}</pre>
+        </article>
+        <article class="bite">
+          <h3>With reduced motion on, still show that something happened</h3>
+          <p>A person who has asked for reduced motion still needs to see that something happened. This site skipped its animations for them at first, and looked broken.</p>
+          <p class="do"><strong>What to do.</strong> Replace the movement with something that does not move: a blink, a count, a line of text. Do not replace it with nothing.</p>
+          <pre>if (matchMedia("(prefers-reduced-motion: reduce)").matches) cable.animate({ opacity: [0.25, 1] }, 450);
+else travel(dot, cable);</pre>
+        </article>
       </section>
 
       <section id="open">
@@ -226,7 +320,8 @@
     import { mount } from "/patterns/demos.js";
     import { all } from "/patterns/all.js";
     import { built } from "/patterns/built.js";
-    const find = (id) => all.find((d) => d.id === id) || built.find((d) => d.id === id);
+    import { bites } from "/patterns/bites.js";
+    const find = (id) => all.find((d) => d.id === id) || built.find((d) => d.id === id) || bites.find((d) => d.id === id);
     for (const set of document.querySelectorAll(".live-set")) {
       for (const id of set.dataset.demos.split(" ")) {
         const demo = find(id);
@@ -234,7 +329,7 @@
         const href = demo.pattern ? `/patterns/${demo.pattern}/#${demo.id}` : `/patterns/${demo.id}/`;
         const card = document.createElement("article");
         card.className = "live"; card.id = "live-" + id;
-        card.innerHTML = `<h4>${demo.title}</h4><div class="demo"></div><p>${demo.blurb}</p><p class="small"><a href="${href}">The code, and how it works \u203a</a></p>`;
+        card.innerHTML = `<h4>${demo.title}</h4><div class="demo"></div><p>${demo.blurb}</p>${demo.bite ? "" : `<p class="small"><a href="${href}">The code, and how it works \u203a</a></p>`}`;
         set.append(card);
         const el = card.querySelector(".demo");
         new IntersectionObserver((entries, io) => { if (entries[0].isIntersecting) { io.disconnect(); mount(el, demo, undefined, { autoplay: true }); } }, { rootMargin: "300px" }).observe(el);

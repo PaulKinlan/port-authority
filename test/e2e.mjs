@@ -113,6 +113,18 @@ await planner.reload(); await ready(planner, "registry");
 popup = await popupFrom(planner, () => planner.click("#registry")).catch(() => null);
 check("after a revoke the site has to ask again", !!popup);
 
+// Forgetting a site in the hub disconnects it, and it stays disconnected.
+if (popup && !popup.isClosed()) await popup.close().catch(() => {});
+await hub.bringToFront();
+const florist = hub.locator(".service", { hasText: "pa-florist" }).or(hub.locator(".service", { hasText: "florist" })).first();
+await florist.locator('button[data-act="forget"]').click();
+await hub.waitForFunction(() => document.querySelectorAll(".service").length === 1, null, { timeout: 8000 }).catch(() => {});
+await floristWindow.waitForSelector("text=Not connected", { timeout: 8000 }).catch(() => {});
+await floristWindow.waitForTimeout(4000);   // long enough for a reconnect, if it were going to try
+check("forget: the site is told, shows it is not connected, and does not come back by itself", (await floristWindow.locator("#state").innerText()) === "Not connected" && (await floristWindow.locator("#connect").isVisible()) && /hub forgot this site/.test(await floristWindow.locator("#log").innerText()) && (await hub.locator(".service").count()) === 1, await floristWindow.locator("#state").innerText());
+await floristWindow.reload(); await floristWindow.waitForTimeout(2500);
+check("forget: a reload does not bring it back either", (await floristWindow.locator("#state").innerText()) === "Not connected" && (await hub.locator(".service").count()) === 1);
+
 check("no page errors", errors.length === 0, errors.join(" | "));
 await browser.close();
 process.exit(failed ? 1 : 0);

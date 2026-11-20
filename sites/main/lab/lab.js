@@ -48,9 +48,10 @@ const inPage = (carry) => async () => ({
   // No receiver: the value is put through something in this page and used here.
   direct: async (kind, value) => {
     let back;
-    try { back = await carry(value, kind); } catch (err) { return { outcome: "refused", note: err.name }; }
+    try { back = await carry(value, kind); } catch (err) { return { outcome: "refused", note: `${err.name}: ${err.message}`.slice(0, 200) }; }
     try { return { outcome: "works", note: String(await kind.use(back)) }; }
     catch (err) { return { outcome: "arrives-broken", note: String(err.message || err).slice(0, 160) }; }
+    finally { globalThis.labRelease(back); }
   },
   close() {},
 });
@@ -126,9 +127,19 @@ export const POPUP = { ...PLACES["popup-other"], open: async () => {
 // ------------------------------------------------------------------- running
 
 const errors = [];
-const noteError = (where, message) => { if (errors.length < 40) errors.push({ where, message: String(message).slice(0, 300) }); };
-addEventListener("error", (event) => noteError("page", event.message));
-addEventListener("unhandledrejection", (event) => noteError("promise", event.reason?.message || event.reason));
+const errorListeners = new Set();
+export const onError = (fn) => { errorListeners.add(fn); for (const e of errors) fn(e); };
+// What was being sent where, at this moment. Tests to different places run at
+// once, so an error on the page is listed with everything that was in flight.
+const inFlight = new Map();
+const noteError = (where, message, during) => {
+  if (errors.length >= 40) return;
+  const error = { where, message: String(message).slice(0, 300), during: during ?? [...inFlight.values()].slice(0, 6).join("; ") };
+  errors.push(error);
+  for (const fn of errorListeners) fn(error);
+};
+addEventListener("error", (event) => noteError(event.filename ? `page, ${event.filename.split("/").pop()}:${event.lineno}` : "page", event.message));
+addEventListener("unhandledrejection", (event) => noteError("an unhandled promise", event.reason?.message || event.reason));
 
 // If the tab dies part-way, the next visit finds this note and reports it.
 const JOURNAL = "pa-lab-pending";
@@ -141,7 +152,7 @@ async function one(dest, link, kind, seq) {
   try { value = await kind.make(); } catch (err) { const note = String(err.message || err).slice(0, 160); cannotMake.set(kind.name, note); return { outcome: "cannot-make", note }; }
   try { localStorage.setItem(JOURNAL, JSON.stringify({ kind: kind.name, dest: dest.id, at: Date.now() })); } catch {}
   if (link.direct) {
-    return Promise.race([link.direct(kind, value), new Promise((r) => setTimeout(() => r({ outcome: "no-answer", note: "never finished" }), 2500))]);
+    return Promise.race([link.direct(kind, value), new Promise((r) => setTimeout(() => r({ outcome: "no-answer", note: "never finished" }), 2500))]).finally(() => globalThis.labRelease(value));
   }
   const answer = new Promise((resolve) => {
     const timer = setTimeout(() => { link.answers.removeEventListener("message", on); resolve({ outcome: "no-answer", note: "nothing came back in 2.5 s" }); }, 2500);
@@ -151,7 +162,9 @@ async function one(dest, link, kind, seq) {
   try {
     link.send({ next: seq });
     link.send({ test: kind.name, value }, kind.how === "move" ? [value] : []);
-  } catch (err) { return { outcome: "refused", note: err.name }; }
+  } catch (err) { return { outcome: "refused", note: `${err.name}: ${err.message}`.slice(0, 200) }; }
+  // A copy leaves the original here, and a refusal leaves it unsent. Either way it is ours to close.
+  finally { globalThis.labRelease(value); }
   return answer;
 }
 
@@ -160,7 +173,7 @@ export async function run(destinations, onCell) {
   await Promise.all(destinations.map(async (dest) => {
     results[dest.id] = {};
     let link = null;
-    try { link = await dest.open(); } catch (err) { noteError(dest.id, err.message); }
+    try { link = await dest.open(); } catch (err) { noteError(dest.label, "could not be set up: " + err.message, ""); }
     let seq = 0, silent = 0, lastHeard = "the start", dead = "";
     for (const kind of KINDS) {
       // Three silences in a row means the receiver has probably died. Say so, and stop waiting on it.
@@ -172,14 +185,16 @@ export async function run(destinations, onCell) {
           try { link.send({ ping: true }); } catch { resolve(false); }
         });
         if (alive) silent = 0;
-        else { dead = `the receiver stopped answering after ${lastHeard}`; noteError(dest.id, dead); }
+        else { dead = `the receiver stopped answering after ${lastHeard}`; noteError(dest.label, dead, ""); }
       }
+      inFlight.set(dest.id, `${kind.name} to ${dest.label}`);
       const result = dead ? { outcome: "no-answer", note: dead }
         : link ? await one(dest, link, kind, ++seq).catch((err) => ({ outcome: "no-answer", note: String(err.message || err) })) : { outcome: "no-destination", note: "could not be set up" };
       if (result.outcome === "no-answer") silent++; else if (result.outcome !== "cannot-make" && result.outcome !== "refused") { silent = 0; lastHeard = kind.name; }
       results[dest.id][kind.name] = result;
       onCell(dest, kind, result);
     }
+    inFlight.delete(dest.id);
     try { link?.close(); } catch {}
   }));
   try { localStorage.removeItem(JOURNAL); } catch {}

@@ -10,7 +10,9 @@
     const body = JSON.stringify({ page: location.pathname + location.hash, where, message: String(message).slice(0, 300), ua: navigator.userAgent, browser: brand ? brand.brand : "", version: brand ? brand.version : "" });
     try { navigator.sendBeacon("/lab/error", new Blob([body], { type: "text/plain" })); } catch {}
   };
-  addEventListener("error", (event) => send(event.filename ? event.filename.split("/").pop() + ":" + event.lineno : "page", event.message));
+  // Errors thrown by a browser extension's own scripts say nothing about this site.
+  const foreign = (file) => /^(chrome|moz|safari-web|ms-browser)-extension:/.test(file || "");
+  addEventListener("error", (event) => foreign(event.filename) || send(event.filename ? event.filename.split("/").pop() + ":" + event.lineno : "page", event.message));
   addEventListener("unhandledrejection", (event) => send("promise", event.reason && event.reason.message || event.reason));
   addEventListener("pa-error", (event) => send(event.detail.where, event.detail.message));
 })();
