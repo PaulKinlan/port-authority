@@ -12,7 +12,7 @@
   <div class="wrap">
     <header class="site-bar">
       <a class="wordmark" href="/">Port Authority</a>
-      <nav><a href="/">Experiments</a><a href="#further">Further out</a><a href="#census">Census</a><a href="/patterns/" aria-current="page">Port patterns</a><a href="/hub/">Your hub</a></nav>
+      <nav><a href="/">Experiments</a><a href="#further">Further out</a><a href="#threads-intro">Across threads</a><a href="#census">Census</a><a href="/patterns/" aria-current="page">Port patterns</a><a href="/hub/">Your hub</a></nav>
     </header>
     <div class="stack" style="padding-block:2.5rem 2rem; --gap:1.2rem">
       <h1 style="font-size:var(--step-3)">Six moves with a port</h1>
@@ -24,6 +24,18 @@
       <p>What a port can carry, and where it can end up. These lean on newer parts of the platform, so some will say no in some browsers.</p>
     </div>
     <div id="more"></div>
+    <div class="stack" id="threads-intro" style="padding-block:clamp(3rem,8vw,5rem) 2rem; --gap:1.2rem; border-top:2px solid var(--ink)">
+      <h1 style="font-size:var(--step-3)">Across threads</h1>
+      <p>A port is not tied to a page. It can live in a worker, and what travels over it can be video, or the use of a key. These are about what that makes possible.</p>
+    </div>
+    <div id="threads"></div>
+    <section class="pattern" id="sync">
+      <h2>Block on a port: a synchronous call with no await</h2>
+      <div class="text">
+        <p>Ports are asynchronous, and a great deal of old code is not. Add a few bytes of shared memory and a worker can ask a question down a port and stop dead on that line until the answer is written, even when the answer is a person pressing a button. Shared memory needs a cross-origin isolated page, so this one has a room of its own.</p>
+        <p><a class="button" href="/isolated/">Open the isolated room</a></p>
+      </div>
+    </section>
     <section class="pattern" id="census">
       <h2>What will go down a port in your browser</h2>
       <p>Nothing here is looked up. When you scroll to this table, each kind of object is made, then really sent to a worker, really sent to a frame on another origin, and really written to IndexedDB. The answers are your browser's.</p>
@@ -52,10 +64,11 @@
   <script type="module">
     import { demos, mount } from "/patterns/demos.js";
     import { more } from "/patterns/more.js";
+    import { threads } from "/patterns/threads.js";
     import { runCensus } from "/patterns/census.js";
     const census = document.querySelector("table.census");
     new IntersectionObserver((entries, io) => { if (entries[0].isIntersecting) { io.disconnect(); runCensus(census); } }, { rootMargin: "200px" }).observe(census);
-    for (const [demo, main] of [...demos.map((d) => [d, document.getElementById("patterns")]), ...more.map((d) => [d, document.getElementById("more")])]) {
+    for (const [demo, main] of [...demos.map((d) => [d, document.getElementById("patterns")]), ...more.map((d) => [d, document.getElementById("more")]), ...threads.map((d) => [d, document.getElementById("threads")])]) {
       const section = document.createElement("section");
       section.className = "pattern";
       section.id = demo.id;

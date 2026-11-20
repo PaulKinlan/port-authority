@@ -109,7 +109,7 @@ await line.call({ bouquet: "ember", recipient: "Ada" });</pre>
             <p class="state"><span class="jack on"></span>Working</p>
           </div>
           <div class="body">
-            <p>Another origin painting into a canvas on your page. A function lent across origins and taken back. 64 MB moved in a few milliseconds. A stream pipeline across three origins where pausing the reader stops the source. And a table that tests, in your browser, which of fourteen kinds of object will go down a port.</p>
+            <p>Another origin painting into a canvas on your page. A function lent across origins and taken back. 64 MB moved in a few milliseconds. A stream pipeline across three origins where pausing the reader stops the source. And a table that tests, in your browser, which of twenty-three kinds of object will go down a port.</p>
             <p class="go"><a href="/patterns/#canvas">Paint across origins</a><a href="/patterns/#pipeline">The pipeline</a><a href="/patterns/#census">The census</a></p>
           </div>
         </li>
@@ -121,6 +121,16 @@ await line.call({ bouquet: "ember", recipient: "Ada" });</pre>
           <div class="body">
             <p>In a new window: tear a live widget off the page and it carries on. In a Service Worker: one tab becomes the web server for every other tab. In a bank: a port cannot be stored, but it can be left with a SharedWorker and collected after a reload with nothing lost.</p>
             <p class="go"><a href="/patterns/#tearoff">Tear-off</a><a href="/patterns/#tabserver">Tab as server</a><a href="/patterns/#reload">Survive a reload</a></p>
+          </div>
+        </li>
+        <li class="experiment">
+          <div>
+            <h3>Across threads, and the use of a key</h3>
+            <p class="state"><span class="jack on"></span>Working</p>
+          </div>
+          <div class="body">
+            <p>Two workers that keep talking, and painting, while the page is frozen solid. Live video sent frame by frame through a filter on another origin. A signing key nobody can read, reached through a port that can be narrowed and taken back. And a worker that makes a blocking call down a port and waits for you to answer.</p>
+            <p class="go"><a href="/patterns/#frozen">Freeze the page</a><a href="/patterns/#filter">Video filter</a><a href="/patterns/#signer">The key that stays</a><a href="/isolated/">Blocking call</a></p>
           </div>
         </li>
         <li class="experiment">

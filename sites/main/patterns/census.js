@@ -19,6 +19,15 @@ export const KINDS = [
   { name: "RTCDataChannel", note: "A peer-to-peer connection to another machine.", move: true, make: () => new RTCPeerConnection().createDataChannel("census") },
   { name: "CryptoKey", note: "Copied, not moved. A non-extractable key can be used by the receiver and read by nobody.", move: false, make: () => crypto.subtle.generateKey({ name: "AES-GCM", length: 256 }, false, ["encrypt"]) },
   { name: "FileSystemDirectoryHandle", note: "Copied, not moved. A handle to a folder.", move: false, make: () => navigator.storage.getDirectory() },
+  { name: "SharedArrayBuffer", note: "Shared, not moved or copied: both sides see the same memory. Only exists on a cross-origin isolated page, and only crosses to the same site.", move: false, make: () => new SharedArrayBuffer(8) },
+  { name: "WebAssembly.Module", note: "Copied, not moved. Compiled code, ready to instantiate.", move: false, make: () => new WebAssembly.Module(new Uint8Array([0, 97, 115, 109, 1, 0, 0, 0])) },
+  { name: "CropTarget", note: "Copied, not moved. A token that lets whoever is capturing the screen crop to one of your elements.", move: false, make: () => CropTarget.fromElement(document.body) },
+  { name: "RTCCertificate", note: "Copied, not moved. The identity a peer connection proves itself with.", move: false, make: () => RTCPeerConnection.generateCertificate({ name: "ECDSA", namedCurve: "P-256" }) },
+  { name: "FileSystemFileHandle", note: "Copied, not moved. A handle to one file in this origin's private file system.", move: false, make: async () => (await navigator.storage.getDirectory()).getFileHandle("census.txt", { create: true }) },
+  { name: "ImageData", note: "Copied, not moved. Raw pixels.", move: false, make: () => new ImageData(2, 2) },
+  { name: "File", note: "Copied, not moved. A blob with a name and a date.", move: false, make: () => new File(["census"], "census.txt") },
+  { name: "Error", note: "Copied, not moved. The name, message and stack survive.", move: false, make: () => new RangeError("census") },
+  { name: "Function", note: "Refused everywhere. Wrap it in a port instead.", move: false, make: () => () => 1 },
   { name: "Blob", note: "Copied, not moved. The bytes are shared behind the scenes.", move: false, make: () => new Blob(["census"]) },
 ];
 
@@ -87,10 +96,11 @@ export async function runCensus(table) {
   const cell = (r) => `<td class="${r.ok ? "yes" : "no"}"><span class="jack ${r.ok ? "on" : ""}"></span>${r.ok ? "yes" : `no <span class="muted small">${r.why || ""}</span>`}</td>`;
   const results = {};
   for (const kind of KINDS) {
-    const exists = kind.name in globalThis;
+    const exists = kind.name === "WebAssembly.Module" ? "WebAssembly" in globalThis : kind.name in globalThis;
+    const missing = kind.name === "SharedArrayBuffer" ? "Not on this page: it needs cross-origin isolation. See the isolated room." : "This browser does not have it.";
     const row = body.insertRow();
     row.innerHTML = `<th scope="row"><code>${kind.name}</code><span class="muted small">${kind.note}</span></th><td colspan="3" class="muted">testing</td>`;
-    if (!exists) { row.cells[1].textContent = "This browser does not have it."; results[kind.name] = null; continue; }
+    if (!exists) { row.cells[1].textContent = missing; results[kind.name] = null; continue; }
     const toWorker = await trySend(kind, (port) => worker.postMessage(null, [port]));
     const toOrigin = await trySend(kind, (port) => frame.contentWindow.postMessage(null, "*", [port]));
     const stored = await tryStore(kind, db);

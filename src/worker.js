@@ -55,14 +55,19 @@ async function serve(env, site, pathname) {
     const body = await readAsset(env, key);
     if (body) {
       const ext = key.split(".").pop().toLowerCase();
-      return new Response(body, {
-        headers: {
-          "content-type": TYPES[ext] || "application/octet-stream",
-          "cache-control": "no-cache",
-          // The hub library and bridge are loaded by other origins on purpose.
-          "access-control-allow-origin": "*",
-        },
-      });
+      const headers = {
+        "content-type": TYPES[ext] || "application/octet-stream",
+        "cache-control": "no-cache",
+        // The hub library and bridge are loaded by other origins on purpose.
+        "access-control-allow-origin": "*",
+      };
+      // One room of the site is cross-origin isolated, so that it can use
+      // shared memory. It cannot open or be opened by the rest.
+      if (path.startsWith("/isolated/")) {
+        headers["cross-origin-opener-policy"] = "same-origin";
+        headers["cross-origin-embedder-policy"] = "credentialless";
+      }
+      return new Response(body, { headers });
     }
   }
   return null;

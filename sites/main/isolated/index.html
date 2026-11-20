@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>The isolated room | Port Authority</title>
+  <meta name="description" content="A worker that makes a synchronous call over a MessagePort, by blocking on shared memory until the answer is written.">
+  <link rel="stylesheet" href="/base.css">
+  <link rel="stylesheet" href="/patterns/patterns.css">
+</head>
+<body>
+  <div class="wrap">
+    <header class="site-bar">
+      <a class="wordmark" href="/">Port Authority</a>
+      <nav><a href="/">Experiments</a><a href="/patterns/">Port patterns</a><a href="/isolated/" aria-current="page">Isolated room</a><a href="/hub/">Your hub</a></nav>
+    </header>
+    <div class="stack" style="padding-block:2.5rem 2rem; --gap:1.2rem">
+      <h1 style="font-size:var(--step-3)">The isolated room</h1>
+      <p>This page is cross-origin isolated, which is the price of <code>SharedArrayBuffer</code>. In return, a port can carry memory that both ends see at once, and a thread can stop and wait on it.</p>
+      <p class="small muted" id="state"></p>
+    </div>
+    <main>
+      <section class="pattern" id="sync">
+        <h2>Block on a port: a synchronous call with no await</h2>
+        <div class="demo"></div>
+        <div class="text">
+          <p>The worker runs three lines of plain blocking code. Each <code>ask()</code> posts the question down a port along with a small piece of shared memory, then sleeps on that memory. Whoever holds the other end of the port writes the answer into it and wakes the worker. The worker never yields, so it cannot receive a message. It does not need to: the answer is already in its memory when it wakes. The other end can be you, or another worker doing slow asynchronous work, and the blocking code cannot tell.</p>
+          <pre><span class="c">// in the worker: no async, no await, no callback</span>
+function ask(question) {
+  const memory = new SharedArrayBuffer(516);
+  port.postMessage({ question, memory });
+  Atomics.wait(new Int32Array(memory, 0, 1), 0, 0);   <span class="c">// stops here</span>
+  return read(memory);
+}
+const name = ask("What is your name?");
+
+<span class="c">// whoever holds the other end, whenever they are ready</span>
+write(memory, "Ada");
+Atomics.notify(new Int32Array(memory, 0, 1), 0);</pre>
+        </div>
+      </section>
+      <section class="pattern">
+        <h2>Why this matters</h2>
+        <ul class="stack" style="max-width:62ch; padding-left:1.1rem">
+          <li>Code compiled from C, Python or anything else that expects blocking calls can run in a worker and reach asynchronous browser APIs, other workers, other origins or a person, through one port.</li>
+          <li>The port decides who answers. Hand the other end to someone else and the blocked code is now waiting on them. It is the same introduction as everywhere else on this site.</li>
+          <li>Shared memory only crosses to contexts on the same site in the same isolated group. The question can be passed on to another origin over an ordinary port, and the answer written into the memory by whoever passed it on.</li>
+          <li>An isolated page cannot hold a reference to a window on a page that is not isolated, so it cannot open your hub's picker and get an answer back. That is why this is a room of its own.</li>
+        </ul>
+      </section>
+    </main>
+    <footer class="small muted" style="padding-block:2rem 4rem">A working name and a work in progress.</footer>
+  </div>
+  <script type="module">
+    import { mount } from "/patterns/demos.js";
+
+    document.getElementById("state").textContent = self.crossOriginIsolated
+      ? "This page is cross-origin isolated. Shared memory is available."
+      : "This page is not cross-origin isolated in this browser, so the experiment below cannot run.";
+
+    // The blocking program. Nothing in here is asynchronous.
+    function program() {
+      let port = null;
+      const say = (log) => postMessage({ log });
+      function ask(question) {
+        const memory = new SharedArrayBuffer(516);
+        const flag = new Int32Array(memory, 0, 1);
+        port.postMessage({ question, memory });
+        const start = performance.now();
+        Atomics.wait(flag, 0, 0);
+        const text = new TextDecoder().decode(new Uint8Array(memory, 4, flag[0] - 1).slice());
+        say(`"${text}" after ${((performance.now() - start) / 1000).toFixed(1)} s stopped on one line`);
+        return text;
+      }
+      onmessage = (event) => {
+        port = event.ports[0];
+        say("running, top to bottom");
+        const name = ask("What is your name?");
+        const count = ask(`How many tulips, ${name}?`);
+        const price = ask("What does one tulip cost?");
+        postMessage({ log: `done: ${count} tulips for ${name}, ${(Number(count) * Number(price) || 0).toFixed(2)} in all`, done: true });
+      };
+    }
+    // Used by whoever answers, on any thread.
+    function write(memory, text) {
+      const bytes = new TextEncoder().encode(String(text)).slice(0, 512);
+      new Uint8Array(memory, 4).set(bytes);
+      const flag = new Int32Array(memory, 0, 1);
+      Atomics.store(flag, 0, bytes.length + 1);
+      Atomics.notify(flag, 0);
+    }
+    // A service that takes its time, in a worker of its own.
+    function service() {
+      const answers = [["name", "Grace"], ["many", "24"], ["cost", "1.75"]];
+      onmessage = (event) => {
+        const port = event.ports[0];
+        port.onmessage = async ({ data }) => {
+          postMessage({ log: `asked: ${data.question}` });
+          await new Promise((r) => setTimeout(r, 900));   // slow, asynchronous work
+          const found = answers.find(([key]) => data.question.includes(key));
+          write(data.memory, found ? found[1] : "?");
+          postMessage({ log: `wrote "${found ? found[1] : "?"}" into its memory`, pulse: true });
+        };
+      };
+    }
+    const workerFrom = (...fns) => new Worker(URL.createObjectURL(new Blob([fns.map((fn, i) => i === fns.length - 1 ? `(${fn})()` : String(fn)).join("\n")], { type: "text/javascript" })));
+    const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+    mount(document.querySelector("#sync .demo"), {
+      async setup(stage, ui) {
+        const logBox = (name, title) => {
+          const box = stage.box(name, { html: `<div class="here"><h4>${title}</h4><ul class="log"></ul></div>` });
+          const ul = box.node.querySelector("ul");
+          return { node: box.node, say(text) { const li = document.createElement("li"); li.textContent = text; ul.prepend(li); while (ul.children.length > 6) ul.lastChild.remove(); } };
+        };
+        const worker = logBox("worker", "Worker running blocking code");
+        const me = stage.box("page", { html: `<div class="here"><h4>This page, and you</h4><form hidden><label class="small" for="answer"></label><input type="text" id="answer" autocomplete="off" style="margin-bottom:.4rem"><button class="tiny accent">Answer</button></form><p class="small muted" data-idle>Nobody is waiting on you.</p></div>` });
+        const svc = logBox("service", "Slow service, another worker");
+        const form = me.node.querySelector("form"), input = form.querySelector("input"), label = form.querySelector("label"), idle = me.node.querySelector("[data-idle]");
+        if (!self.crossOriginIsolated) { worker.say("needs a cross-origin isolated page"); return; }
+        let waitingMemory = null;
+        form.onsubmit = (event) => {
+          event.preventDefault();
+          if (!waitingMemory) return;
+          write(waitingMemory, input.value || "nobody");
+          waitingMemory = null; form.hidden = true; idle.hidden = false; input.value = "";
+          stage.pulse("line", "page");
+        };
+        const run = (target) => {
+          const blocked = workerFrom(program);
+          const channel = new MessageChannel();
+          blocked.onmessage = ({ data }) => { worker.say(data.log); if (data.done) buttons.forEach((b) => (b.disabled = false)); };
+          buttons.forEach((b) => (b.disabled = true));
+          if (target === "you") {
+            stage.cable("line", "worker", "page", "red");
+            channel.port1.onmessage = ({ data }) => {
+              waitingMemory = data.memory;
+              label.textContent = data.question; form.hidden = false; idle.hidden = true; input.focus();
+              stage.pulse("line", "worker");
+              worker.say(`stopped at ask("${data.question}")`);
+            };
+          } else {
+            stage.cable("line", "worker", "service", "teal");
+            const slow = workerFrom(write, service);
+            slow.onmessage = ({ data }) => { svc.say(data.log); stage.pulse("line", data.pulse ? "service" : "worker"); };
+            slow.postMessage({}, [channel.port1]);
+          }
+          blocked.postMessage({}, [channel.port2]);
+        };
+        const buttons = [
+          ui.button("Give the port to a slow service", () => run("service")),
+          ui.button("Run it, and answer it yourself", () => run("you"), false, true),
+        ];
+      },
+    });
+  </script>
+</body>
+</html>
