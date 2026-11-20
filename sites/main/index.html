@@ -53,7 +53,7 @@
             <p class="state"><span class="jack on"></span>Working</p>
           </div>
           <div class="body">
-            <p>A site says what it needs in plain words. You choose which site answers. The two end up with a direct line to one tool, and the hub that introduced them is no longer involved. Sites declare tools once and they are offered to WebMCP as well.</p>
+            <p>A site says what it needs in plain words. You choose which site answers. The picker opens that site, hands each side one end of a channel, and closes. The call runs on your machine over that port, and it keeps working with the network unplugged. Sites declare tools once and they are offered to WebMCP as well.</p>
             <p class="go"><a data-site="planner">Open the planner</a><a data-site="florist">the florist</a><a data-site="library">the library</a></p>
             <pre><span class="c">// a site with something to offer</span>
 serve({ name: "Stem and Petal", tools: [{ name: "book_delivery", description, inputSchema, execute }] });
@@ -69,7 +69,7 @@ await line.call({ bouquet: "ember", recipient: "Ada" });</pre>
             <p class="state"><span class="jack on"></span>Working</p>
           </div>
           <div class="body">
-            <p>Your hub keeps a port to every site that has offered it tools, and remembers the ones that are closed. A site you trust can ask for the whole registry and gets a Model Context Protocol connection over a single port. Calls run inside the tab of the site that owns the tool.</p>
+            <p>Sites submit their tools to your hub, a small server that is yours, every time they load. So the picker can list everything you have ever added with nothing open, and you never keep a tab around for it. A site you trust can ask for the whole registry and gets a Model Context Protocol connection over a single port.</p>
             <p class="go"><a href="/hub/">Open your hub</a></p>
           </div>
         </li>
@@ -79,7 +79,7 @@ await line.call({ bouquet: "ember", recipient: "Ada" });</pre>
             <p class="state"><span class="jack on"></span>Working, tested with a stand-in agent</p>
           </div>
           <div class="body">
-            <p>A site asks for an agent and receives a port that speaks the Agent Client Protocol. Which agent is yours to decide. Run the bridge beside Claude Code, Gemini CLI or anything else that speaks ACP, and it connects out to a relay that your hub is also connected to. The agent is handed the registry too, so it can use tools in your open tabs. With nothing set up you get a built-in agent that has no model and only matches words.</p>
+            <p>A site asks for an agent and receives a port that speaks the Agent Client Protocol. Which agent is yours to decide. Run the bridge beside Claude Code, Gemini CLI or anything else that speaks ACP, and it connects out to your hub. The agent is handed the registry too, so it can use tools in your open tabs. With nothing set up you get a built-in agent that has no model and only matches words.</p>
             <p class="go"><a href="/hub/#d-agent">Choose your agent</a><a href="/bridge.mjs">Read the bridge</a></p>
           </div>
         </li>
@@ -141,12 +141,13 @@ await line.call({ bouquet: "ember", recipient: "Ada" });</pre>
       </div>
       <ul class="stack" style="max-width:62ch; padding-left:1.1rem; --gap:.9rem">
         <li>A hidden hub iframe does not work any more. Browsers partition a SharedWorker in a cross-site iframe by the top-level site, so each site would get its own empty hub. The hub has to be a window of its own, which turns out to be the old Web Intents picker, and gives you somewhere to say yes.</li>
-        <li>A port handed over through that window keeps working after the window closes. The introduction is the only moment the hub is needed.</li>
-        <li>The hub can open a site that is closed and hand it a port straight away, so a tool you used last week is still one click from any site.</li>
+        <li>A port handed over through that window keeps working after the window closes, and with the network off. The introduction is the only moment the hub is needed.</li>
+        <li>Nothing has to stay open. A port only lives while both pages do, so the list of who offers what lives on a server, and the picker opens the tool's page when you choose it.</li>
+        <li>A site keeps its link to your hub in its own storage, which partitioning does not touch, and the server only accepts it from that site's origin.</li>
         <li>An agent on a website needs a middle. The hub rewrites the session so a site cannot pick the agent's folder or give it servers, and cannot see another site's session.</li>
         <li>A stream that is relayed through an introducer stalls, silently, when the introducer goes. A port does not. Introduce with a port, then send the stream down it.</li>
         <li>A port can survive its page reloading. It cannot be stored, but it can be posted to a SharedWorker made with <code>extendedLifetime</code> as the page unloads and collected on the next load.</li>
-        <li>Something has to stay open. A SharedWorker lives only while one of its pages does, so today the hub is a tab you keep. An installed app or the browser itself would be a better home.</li>
+        <li>Picking a tool opens its site in a new window even when you already have that site open in a tab, because two unrelated tabs have no way to pass a port. A WebRTC channel introduced by the server may close that gap.</li>
       </ul>
     </section>
 

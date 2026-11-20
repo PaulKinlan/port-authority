@@ -1,4 +1,4 @@
-// The full loop: a site -> hub -> relay (Durable Object) -> bridge -> ACP agent -> MCP -> bridge -> relay -> hub -> florist tab.
+// The full loop: a site -> hub server (Durable Object) -> bridge -> ACP agent -> MCP -> bridge -> hub server -> florist tab.
 import { createRequire } from "node:module";
 import { spawn } from "node:child_process";
 const { chromium } = createRequire(import.meta.url)("playwright");
@@ -14,9 +14,9 @@ const hub = await ctx.newPage();
 await hub.goto(base("hub") + "/hub/");
 await hub.check('input[value="relay"]');
 await hub.waitForSelector("[data-command]");
-const wss = (await hub.locator("[data-command]").innerText()).match(/wss?:\/\/\S+/)[0];
-check("hub shows a relay address", /\/relay\/[\w-]{20,}/.test(wss));
-await hub.waitForSelector("text=The relay is ready");
+const wss = (await hub.locator("[data-command]").innerText()).match(/wss?:\/\/[^\s"]+/)[0];
+check("hub shows an address for the bridge", /\/h\/[\w-]{20,}\?token=[\w-]{20,}/.test(wss));
+await hub.waitForSelector("text=Waiting for the bridge");
 
 const bridge = spawn(process.execPath, ["sites/main/bridge.mjs", LIVE ? wss : wss.replace("hub.localhost", "127.0.0.1"), "--", process.execPath, "test/fake-agent.mjs"], { stdio: ["ignore", "inherit", "inherit"] });
 await hub.waitForSelector("text=Fake test agent", { timeout: 15000 }).catch(() => {});
