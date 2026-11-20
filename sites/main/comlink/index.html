@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Comlink, rebuilt for today's platform | Port Authority</title>
+  <meta name="description" content="How Comlink works, what the web platform has gained since it was written, and a working successor with live demos across real origins.">
+  <link rel="stylesheet" href="/base.css">
+  <link rel="stylesheet" href="/patterns/patterns.css">
+  <style>
+    .lede { padding-block: 2.5rem 2rem; }
+    .lede h1 { font-size: var(--step-3); }
+    .lede p { font-size: var(--step-1); line-height: 1.35; max-width: 40ch; }
+    .prose { display: grid; gap: 1rem; }
+    .prose ul, .prose ol { margin: 0; padding-left: 1.1rem; max-width: 62ch; display: grid; gap: 0.5rem; }
+    .pattern .demo .box { height: 13.5rem; overflow: auto; }
+    .pattern .demo .stage { padding-bottom: 0.6rem; gap: 1rem; }
+    .then-now { border-collapse: collapse; width: 100%; min-width: 40rem; font-size: var(--step--1); }
+    .then-now th, .then-now td { text-align: left; padding: 0.7rem 1rem 0.7rem 0; border-top: 1px solid var(--line); vertical-align: top; }
+    .then-now thead th { border-top: 0; font-family: var(--display); font-size: var(--step-0); }
+    .then-now tbody th { font-weight: 700; width: 24%; }
+    .chapter-head { padding-block: clamp(3rem, 8vw, 5rem) 0.5rem; border-top: 2px solid var(--ink); }
+    .chapter-head h2 { font-size: var(--step-3); }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header class="site-bar">
+      <a class="wordmark" href="/">Port Authority</a>
+      <nav><a href="/">Experiments</a><a href="/patterns/">Port patterns</a><a href="/comlink/" aria-current="page">Comlink today</a><a href="/hub/">Your hub</a></nav>
+    </header>
+
+    <div class="stack lede" style="--gap:1.2rem">
+      <h1>Comlink, rebuilt for today's platform</h1>
+      <p>Comlink made a worker feel like a local object. It was written when ports could carry far less than they can now. This page takes it apart, then puts it back together with what the platform has gained.</p>
+      <p class="small muted" style="font-size:var(--step--1); max-width:62ch">The result is one file with no dependencies, <a href="/hawser.js"><code>hawser.js</code></a> (a hawser is the rope that ties a ship to a port; the name is a placeholder). Every demo below runs it between this page and real pages on other origins, and where it helps, runs Comlink 4.4.2 beside it.</p>
+    </div>
+
+    <section class="pattern">
+      <h2>How Comlink works</h2>
+      <div class="prose">
+        <p>Comlink is about 650 lines, and the idea fits in five steps.</p>
+        <ol>
+          <li><code>wrap(port)</code> returns a <code>Proxy</code> around an empty function. Reading a property does nothing but return another proxy that remembers the path so far.</li>
+          <li>Calling it, awaiting it, assigning to it or using <code>new</code> posts one of six messages down the port: <code>GET</code>, <code>SET</code>, <code>APPLY</code>, <code>CONSTRUCT</code>, <code>ENDPOINT</code> or <code>RELEASE</code>, with the path and a random id.</li>
+          <li><code>expose(object, port)</code> listens on the other end, walks the path on the real object, does the thing, and posts the result back with the same id.</li>
+          <li>Values go through structured clone. To send something by reference, such as a callback, you mark it with <code>proxy()</code>. Comlink then makes a new <code>MessageChannel</code>, exposes the value on one end, and transfers the other end in its place. Every proxied value is its own port.</li>
+          <li>Extra types are handled by named transfer handlers, which is how thrown errors are flattened and rebuilt.</li>
+        </ol>
+        <pre>worker.postMessage({ id: "4f1c…", type: "APPLY", path: ["math", "add"],
+  argumentList: [{ type: "RAW", value: 1 }, { type: "RAW", value: 2 }] });
+<span class="c">// and back</span>
+port.postMessage({ id: "4f1c…", type: "RAW", value: 3 });</pre>
+        <p>That design has aged well. What has changed is everything around it.</p>
+      </div>
+    </section>
+
+    <section class="pattern" id="gone" data-demo="gone">
+      <h2>A call should fail when nobody is there to answer</h2>
+      <div class="demo"></div>
+      <div class="text">
+        <p>Comlink keeps a map of promises waiting for replies and nothing ever empties it. If the worker crashes or the frame is closed, every call in flight waits forever. Here three things notice a departure. A page that is closing says goodbye on every link it holds. The port's new <code>close</code> event is used where the browser has it. And an optional heartbeat catches a side that crashed without a word. Whichever comes first, every pending call rejects with a <code>LinkClosedError</code>, and so does every later one. Ask the question, then remove the frame.</p>
+        <pre>const api = wrap(port, { heartbeat: 1000, timeout: 30_000 });
+try { await api.slow(); }
+catch (error) { <span class="c">// LinkClosedError, or TimeoutError</span> }
+closed(api).then(() => showOffline());</pre>
+      </div>
+    </section>
+
+    <section class="pattern" id="cancel" data-demo="cancel">
+      <h2>Pass an AbortSignal and it arrives as one</h2>
+      <div class="demo"></div>
+      <div class="text">
+        <p>An <code>AbortSignal</code> cannot be cloned, so with Comlink there is no way to cancel work you started. Here a signal in the arguments is swapped for a small token. The far side gets a real signal of its own, and when yours aborts, theirs does, with the same reason. The call also rejects on this side at once. If the caller simply disappears, every signal it sent is aborted, so work is never left running for nobody.</p>
+        <pre>const controller = new AbortController();
+const job = api.count(20, controller.signal);
+cancelButton.onclick = () => controller.abort();
+
+<span class="c">// on the other origin, nothing special</span>
+async count(to, signal) {
+  for (let i = 1; i <= to; i++) { signal.throwIfAborted(); await step(i); }
+}</pre>
+      </div>
+    </section>
+
+    <section class="pattern" id="chain" data-demo="chain">
+      <h2>Use an answer before it has arrived</h2>
+      <div class="demo"></div>
+      <div class="text">
+        <p>With Comlink, each step that returns an object costs a full trip there and back, and a new port. Here a call returns something you can keep calling into straight away. Everything queued in the same tick is sent as one message, the far side runs the steps in order against the real values, and only one port is ever used. Across a worker boundary the saving is small. Across a slow hop, such as a relay or a WebRTC line, it is the difference between one wait and three.</p>
+        <pre><span class="c">// one message out</span>
+const title = await api.open("ideas").latest().title();
+
+<span class="c">// Comlink: three round trips, three ports</span>
+const notebook = await old.open("ideas");
+const note = await notebook.latest();
+const title = await note.title();</pre>
+      </div>
+    </section>
+
+    <section class="pattern" id="ticks" data-demo="ticks">
+      <h2>Loop over something that is still happening elsewhere</h2>
+      <div class="demo"></div>
+      <div class="text">
+        <p>An async generator on the far side can be read with <code>for await</code> on this side. Nothing is produced until it is asked for, so a slow reader slows the writer. Leave the loop and the generator's <code>finally</code> block runs over there. It also runs if the reader is garbage collected or its page goes away. For bytes, return a <code>ReadableStream</code> and it is moved across whole.</p>
+        <pre><span class="c">// there</span>
+async *ticks() {
+  try { for (;;) yield await nextTick(); }
+  finally { stopTicking(); }
+}
+<span class="c">// here</span>
+for await (const tick of api.ticks()) {
+  if (enough(tick)) break; <span class="c">// stopTicking() runs on the other origin</span>
+}</pre>
+      </div>
+    </section>
+
+    <section class="pattern" id="narrow" data-demo="narrow">
+      <h2>Hand someone part of what you hold, and take it back</h2>
+      <div class="demo"></div>
+      <div class="text">
+        <p>Comlink will walk any path a caller sends, including <code>constructor</code>, which on a function is a way to run arbitrary code in the exposing page. That is fine for your own worker and not for another origin. Here a path cannot leave the object's own surface, <code>expose()</code> can list the only paths allowed, and <code>port()</code> asks the owner to mint a new port for a third party that reaches less than you can. The guest talks to the owner directly. Abort the signal and its port dies.</p>
+        <pre>expose(api, port, { only: ["counter", "search"] });
+
+<span class="c">// a holder passes on less than it has</span>
+const revoke = new AbortController();
+const forGuest = await port(api.counter, { only: ["read"], signal: revoke.signal });
+guestWindow.postMessage("here", guestOrigin, [forGuest]);
+revoke.abort(); <span class="c">// later</span></pre>
+      </div>
+    </section>
+
+    <section class="pattern" id="using" data-demo="using">
+      <h2>Lifetimes that end when a scope does</h2>
+      <div class="demo"></div>
+      <div class="text">
+        <p>An object made for you on the far side is yours to end. Dispose of the proxy, with <code>using</code> or by hand, and its <code>Symbol.dispose</code> method is called over there. Forget to, and a <code>FinalizationRegistry</code> does it when the proxy is collected. Close the link, or lose it, and everything it was holding is disposed at once. Functions, class instances and iterators all share the one port, with a reference count kept by the side that owns them.</p>
+        <pre>{
+  using session = await new api.Session("ada");
+  await session.who();
+} <span class="c">// Session[Symbol.dispose]() has now run on the other origin</span></pre>
+      </div>
+    </section>
+
+    <div class="chapter-head stack"><h2>Then and now</h2></div>
+    <section class="pattern" style="border-top:0; padding-top:1.5rem">
+      <div style="overflow-x:auto">
+        <table class="then-now">
+          <thead><tr><th scope="col">Platform feature</th><th scope="col">Comlink 4</th><th scope="col">Here</th></tr></thead>
+          <tbody>
+            <tr><th scope="row">Port <code>close</code> event</th><td>Not used. Calls to a dead port hang.</td><td>Pending and later calls reject. The event is in the HTML standard but Chromium 157 still keeps it behind the <code>MessagePortCloseEvent</code> flag, so a goodbye on <code>pagehide</code> and an optional heartbeat cover for it.</td></tr>
+            <tr><th scope="row"><code>AbortSignal</code></th><td>Cannot be sent.</td><td>Crosses as a working signal. Aborts when the caller goes away.</td></tr>
+            <tr><th scope="row"><code>FinalizationRegistry</code></th><td>Added late, per port.</td><td>Reference counted per object on one port. Disposal reaches the real object.</td></tr>
+            <tr><th scope="row"><code>using</code> and <code>Symbol.dispose</code></th><td><code>proxy[releaseProxy]()</code></td><td>Every proxy is disposable. Disposing the root closes the link.</td></tr>
+            <tr><th scope="row">Async iteration</th><td>None.</td><td>Async generators are read remotely, pull by pull, and cleaned up.</td></tr>
+            <tr><th scope="row">Transferable streams</th><td>Need <code>transfer()</code>.</td><td>Things that can only be moved are moved. Buffers are copied unless you say <code>transfer()</code>.</td></tr>
+            <tr><th scope="row">Errors in structured clone</th><td>Rebuilt from name, message and stack as a plain <code>Error</code>.</td><td>Sent as errors. The class, a custom name and the <code>cause</code> chain survive.</td></tr>
+            <tr><th scope="row">Callbacks</th><td>Each needs <code>proxy()</code>, which writes a marker onto your object, and each gets a channel.</td><td>Functions and class instances go by reference with no marking. Plain data is still copied.</td></tr>
+            <tr><th scope="row">Identity</th><td>A proxy sent back home arrives as a proxy of a proxy.</td><td>It arrives as the original object. The same remote object always gives the same proxy.</td></tr>
+            <tr><th scope="row">Cross-origin</th><td>Any origin by default, any path.</td><td>The origin must be named. Paths cannot reach the prototype. Allow lists, minted ports and revocation.</td></tr>
+            <tr><th scope="row">Round trips</th><td>One per call.</td><td>Calls made in one tick share a message, and can build on each other's results.</td></tr>
+            <tr><th scope="row">Assigning a property</th><td><code>proxy.x = 1</code> sends a message you cannot await.</td><td>Removed. It throws and tells you to call a method.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="pattern">
+      <h2>What is still out of reach</h2>
+      <ul class="stack" style="max-width:62ch; padding-left:1.1rem">
+        <li>The result of a call is not a real <code>Promise</code>. It can be awaited, passed to <code>Promise.all</code> and given <code>.then</code>, but <code>instanceof Promise</code> is false, because it also has to be something you can keep calling into.</li>
+        <li>A chain only shares a message if it is written in one tick. Hold a result, wait, then call into it and it still works, by waiting for the answer first.</li>
+        <li>Garbage collection is a hint and not a promise. Anything that must be released on time should be disposed of on purpose.</li>
+        <li>The heartbeat is a timer, and browsers slow timers in background tabs. Use it to notice a dead frame, not to measure one.</li>
+        <li>Everything is asynchronous. A blocking call needs shared memory and a cross-origin isolated page, which is what <a href="/isolated/">the isolated room</a> is for.</li>
+        <li>Only tested in Chromium so far, plus the same suite in Node, where <code>MessageChannel</code> behaves the same way.</li>
+      </ul>
+    </section>
+
+    <section class="pattern">
+      <h2>The whole surface</h2>
+      <div class="text">
+        <pre>import { expose, wrap, connect, port, closed,
+         share, give, transfer, offer, accept } from "/hawser.js";
+
+expose(target, endpoint, { only, heartbeat, timeout, signal, onclose })
+wrap(endpoint, { heartbeat, timeout, signal, onclose })
+connect(target, endpoint)   <span class="c">// both directions: { remote, close, revoke, closed }</span>
+port(remote, { only, signal }) <span class="c">// a narrowed, revocable port to pass on</span>
+closed(remote)              <span class="c">// promise for why the link ended</span>
+share(object)               <span class="c">// send by reference</span>
+give(object)                <span class="c">// by reference, and theirs to dispose</span>
+transfer(buffer)            <span class="c">// move, do not copy</span>
+offer(window, origin)       <span class="c">// give a window a port, origin required</span>
+accept(origins, callback)   <span class="c">// take ports only from these origins</span></pre>
+        <p>Source: <a href="/hawser.js">hawser.js</a> and its types, <a href="/hawser.d.ts">hawser.d.ts</a>. The behaviour above is pinned down by 30 unit tests and a browser run across three origins, both in the <a href="https://github.com/PaulKinlan/port-authority">repository</a>. Comlink is by Surma and the Chrome Labs team, and is used here under its Apache 2.0 licence.</p>
+      </div>
+    </section>
+
+    <footer class="small muted" style="padding-block:2rem 4rem">A working name and a work in progress.</footer>
+  </div>
+  <script type="module">
+    import { mountAll } from "/comlink/demos.js";
+    mountAll();
+  </script>
+</body>
+</html>

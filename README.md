@@ -15,6 +15,8 @@ Live (interim): https://portauthority.kinlan-test.workers.dev
 | `sites/main/hub/popup.html` | The window sites open to ask the user (the picker) |
 | `sites/main/bridge.mjs` | Run beside an ACP agent; connects it to the hub and gives it the registry as an MCP server |
 | `sites/florist`, `library`, `planner` | Three demo sites, each served on its own origin |
+| `sites/shared/hawser.js` | Hawser (working name): Comlink's idea rebuilt on today's platform. One file, no dependencies, served on every origin |
+| `sites/main/comlink/` | The Comlink chapter: how Comlink works, what has changed, and six live demos against `sites/shared/comlink/peer.html` on the demo origins |
 | `sites/shared/` | CSS and the patch-bay diagram component used by the demos |
 | `src/worker.js` | Cloudflare Worker: picks a site folder by hostname, and runs the hub (one Durable Object per person) |
 
@@ -42,6 +44,39 @@ between sites.
 
 The hub is a visible window, never a hidden iframe: storage inside a cross-site
 iframe is partitioned by top-level site, so it could not be shared.
+
+## Hawser
+
+`hawser.js` keeps Comlink's shape (`expose` on one end of a port, `wrap` on the
+other) and changes what the platform now allows:
+
+- Calls reject with `LinkClosedError` when the other side goes away. A closing
+  page says goodbye on `pagehide`, the port `close` event is used where it
+  exists (Chromium 157 keeps it behind `MessagePortCloseEvent`), and an
+  optional heartbeat catches a crash. There is also a per-link `timeout`.
+- Functions, class instances and async generators cross by reference with no
+  marking, multiplexed on the one port with reference counts. They are released
+  by `Symbol.dispose`, by a `FinalizationRegistry`, or when the link closes.
+- An `AbortSignal` argument arrives as a working signal.
+- `api.open("x").latest().title()` is sent as one message; the far side
+  resolves the chain against the real values.
+- A path cannot reach `constructor`, `__proto__` or anything on
+  `Object.prototype` / `Function.prototype`. `expose(..., { only })` is an
+  allow list, and `port(remote, { only, signal })` mints a narrowed, revocable
+  port for a third party.
+- Errors keep their class, name and `cause`. A proxy sent home is the original
+  object again.
+
+Design choices that were weighed and dropped: one `MessageChannel` per proxied
+value (Comlink's way; simple, but nothing ties the channels' lifetimes
+together and each costs a port), and keeping call results on the far side
+until acknowledged so chains could be built at any time (it doubles the
+message count; chaining within one tick needs no retention at all).
+
+```
+node --expose-gc --test test/hawser.unit.mjs                 # 30 unit tests, no browser
+NODE_PATH=$(npm root -g) node test/hawser.mjs <screenshot-dir>   # /comlink/ across three origins
+```
 
 ## Run it
 
