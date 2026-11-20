@@ -13,7 +13,7 @@
   <div class="wrap">
     <header class="site-bar">
       <a class="wordmark" href="/">Port Authority</a>
-      <nav><a href="/guide/">The guide</a><a href="/">Experiments</a><a href="#further">Further out</a><a href="#threads-intro">Across threads</a><a href="#origins-intro">Real sites</a><a href="#census">Census</a><a href="/patterns/" aria-current="page">Port patterns</a><a href="/hub/">Your hub</a></nav>
+      <nav><a href="/guide/">The guide</a><a href="/">Experiments</a><a href="#further">Further out</a><a href="#threads-intro">Across threads</a><a href="#origins-intro">Real sites</a><a href="#census">Census</a><a href="/patterns/" aria-current="page">Port patterns</a><a href="/comlink/">Comlink today</a><a href="/hub/">Your hub</a></nav>
     </header>
     <div class="stack" style="padding-block:2.5rem 2rem; --gap:1.2rem">
       <h1 style="font-size:var(--step-3)">Six moves with a port</h1>
@@ -58,7 +58,7 @@
       <ul class="stack" style="max-width:62ch; padding-left:1.1rem">
         <li>A port you attach with <code>addEventListener</code> stays silent until you call <code>port.start()</code>. Setting <code>onmessage</code> starts it for you.</li>
         <li>Messages posted before the other side is listening are not lost. They wait in the port. You can send a port and start talking into it straight away.</li>
-        <li>Nothing tells you when the other end has gone. A <code>close</code> event for ports has been specified, but the Chromium this was tested in does not fire it. Between pages on one origin, hold a Web Lock in the page and wait on it from the worker. Across origins, send a ping and treat silence as the answer.</li>
+        <li>Nothing tells you when the other end has gone. A <code>close</code> event for ports has been specified, but Chromium 157 only has it behind the <code>MessagePortCloseEvent</code> flag. Between pages on one origin, hold a Web Lock in the page and wait on it from the worker. Across origins, send a ping and treat silence as the answer.</li>
         <li>A SharedWorker inside a cross-site iframe is partitioned by the top-level site, so a hidden hub iframe is a different hub on every site. A window of its own is first party and reaches the real one. Ports that have already been handed over are not affected.</li>
         <li>A transferred port is gone from the sender. Post it twice and the second call throws.</li>
         <li>A stream that is passed on through a middle context keeps flowing through it. If the middle goes away the reader stalls: no error, no end. Send streams down a direct port.</li>
