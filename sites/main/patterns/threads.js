@@ -154,6 +154,7 @@ port.onmessage = ({ data }) => {
           const frame = new VideoFrame(source, { timestamp: Math.round(t * 1000) });
           channel.port1.postMessage({ frame }, [frame]);
           closedHere = frame.codedWidth === 0;
+          frame.close();   // already empty after the transfer, and harmless to say so
           waiting = true;
           if (shown % 6 === 0) stage.pulse("there", "page");
         } catch (err) { running = false; note.textContent = `This browser cannot do it: ${err.message}`; }
