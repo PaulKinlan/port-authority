@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>A site with several pages | Port Authority</title>
+<style>
+  html { color-scheme: light dark; }
+  body { margin: 0; padding: .7rem .8rem; font: 14px/1.4 system-ui, sans-serif; background: light-dark(#fff, #141f47); color: light-dark(#0f1c3f, #e9edfa); }
+  nav { display: flex; gap: .7rem; font-size: 13px; margin: 0 0 .4rem; }
+  nav a[aria-current] { font-weight: 800; text-decoration: none; color: inherit; }
+  h1 { font: 800 1.1rem/1.1 system-ui, sans-serif; margin: 0 0 .3rem; }
+  p { margin: 0 0 .25rem; }
+  ul { list-style: none; margin: .3rem 0 0; padding: 0; font: 12px/1.45 ui-monospace, Menlo, monospace; }
+  li { padding: .1rem 0; border-top: 1px solid light-dark(#c9d1e0, #2b3970); }
+</style>
+</head>
+<body>
+<nav id="nav"></nav>
+<h1 id="title"></h1>
+<p>Order updates so far: <strong id="n">0</strong></p>
+<p>Missed while changing page: <strong id="gaps">0</strong></p>
+<ul id="log"></ul>
+<script>
+  // Three pages of one site. Each is a real navigation. The port to the order
+  // feed is left with a SharedWorker on the way out and collected on the way in.
+  const params = new URLSearchParams(location.search);
+  const key = params.get("key"), pages = ["Shop", "Basket", "Account"];
+  const here = pages.includes(params.get("page")) ? params.get("page") : "Shop";
+  const link = (page) => "?key=" + key + "&page=" + page;
+  document.getElementById("title").textContent = here;
+  for (const page of pages) { const a = document.createElement("a"); a.href = link(page); a.textContent = page; if (page === here) a.setAttribute("aria-current", "page"); document.getElementById("nav").append(a); }
+  const log = (text) => { const li = document.createElement("li"); li.textContent = text; document.getElementById("log").prepend(li); };
+  const bank = new SharedWorker("/patterns/bank.js", { name: "port-bank", extendedLifetime: true });
+  let port = null, last = Number(sessionStorage.getItem("last-" + key) || 0), gaps = Number(sessionStorage.getItem("gaps-" + key) || 0);
+  const show = () => { document.getElementById("n").textContent = last; document.getElementById("gaps").textContent = gaps; };
+  show();
+  const use = (p, how) => {
+    port = p; log(how);
+    port.onmessage = (e) => {
+      if (last && e.data !== last + 1) gaps++;
+      last = e.data;
+      sessionStorage.setItem("last-" + key, last); sessionStorage.setItem("gaps-" + key, gaps);
+      show();
+      parent.postMessage({ wire: "tick", n: last, gaps, page: here }, location.origin);
+    };
+  };
+  bank.port.onmessage = ({ data, ports }) => {
+    if (data.found) use(ports[0], "collected the port I left behind, last saw " + last);
+    else parent.postMessage({ wire: "need-port" }, location.origin);
+  };
+  bank.port.postMessage({ withdraw: key });
+  addEventListener("message", (event) => {
+    if (event.source !== parent || event.origin !== location.origin) return;
+    if (event.data.cmd === "port") use(event.ports[0], "granted a connection to the order feed");
+    if (event.data.cmd === "go") location.href = link(pages[(pages.indexOf(here) + 1) % pages.length]);
+  });
+  addEventListener("pagehide", () => { if (port) { port.onmessage = null; bank.port.postMessage({ deposit: key }, [port]); port = null; } });
+</script>
+</body>
+</html>
