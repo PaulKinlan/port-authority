@@ -34,7 +34,7 @@
     </header>
 
     <section class="hero">
-      <h1>Pass the port.</h1>
+      <h1>What you can do with a MessagePort</h1>
       <p>A MessagePort can be handed to another window, another origin, a worker, and on again. Whoever holds it can talk, and nobody in between has to stay. These are experiments in how far that goes.</p>
       <div class="hero-demo">
         <p>Three real origins. Site A and Site B have never met. Press <strong>Next</strong> to introduce them, let them talk, then remove the one in the middle.</p>
@@ -81,7 +81,7 @@ await line.call({ bouquet: "ember", recipient: "Ada" });</pre>
           </div>
           <div class="body">
             <p>A site asks for an agent and receives a port that speaks the Agent Client Protocol. Which agent is yours to decide. Run the bridge beside Claude Code, Gemini CLI or anything else that speaks ACP, and it connects out to your hub. The agent is handed the registry too, so it can use tools in your open tabs. With nothing set up you get a built-in agent that has no model and only matches words.</p>
-            <p class="go"><a href="/hub/#d-agent">Choose your agent</a><a href="/bridge.mjs">Read the bridge</a></p>
+            <p class="go"><a href="/hub/agent/">Choose your agent</a><a href="/bridge.mjs">Read the bridge</a></p>
           </div>
         </li>
         <li class="experiment">
@@ -96,7 +96,7 @@ await line.call({ bouquet: "ember", recipient: "Ada" });</pre>
         </li>
         <li class="experiment">
           <div>
-            <h3>Six moves with a port</h3>
+            <h3>The six basic patterns</h3>
             <p class="state"><span class="jack on"></span>Working</p>
           </div>
           <div class="body">
@@ -146,17 +146,17 @@ await line.call({ bouquet: "ember", recipient: "Ada" });</pre>
         </li>
         <li class="experiment">
           <div>
-            <h3>Between real sites: gifts and loans</h3>
+            <h3>Between real sites: sending keys, streams and connections</h3>
             <p class="state"><span class="jack on"></span>Working</p>
           </div>
           <div class="body">
             <p>Four experiments where the other side is a real site with its own storage. A signing key posted to another origin, which keeps it after a reload and cannot be made to give it back. Half a stream as a permission to listen or to speak. Your data piped through another site's transform and back. And a network connection lent to a widget that has no network.</p>
-            <p class="go"><a href="/patterns/keycopy/">The key you cannot take back</a><a href="/patterns/halves/">Half a stream</a><a href="/patterns/roundtrip/">Pipe and back</a><a href="/patterns/lend/">Lend a connection</a></p>
+            <p class="go"><a href="/patterns/keycopy/">Send a key</a><a href="/patterns/halves/">Send one side of a stream</a><a href="/patterns/roundtrip/">Pipe through another site</a><a href="/patterns/lend/">Lend a connection</a></p>
           </div>
         </li>
         <li class="experiment">
           <div>
-            <h3>Further than this page</h3>
+            <h3>Other devices, service workers, sockets and audio</h3>
             <p class="state"><span class="jack on"></span>Working</p>
           </div>
           <div class="body">

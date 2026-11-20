@@ -67,8 +67,26 @@ const ago = (at) => {
 };
 const KIND = { registry: "every tool", agent: "your agent" };
 
-export function mountDashboard(root, sb) {
-  root.innerHTML = `
+// The hub has two pages. "tools" is the registry: which sites offer you tools
+// and who may use them. "agent" is the one agent that sites can be let talk to.
+export function mountDashboard(root, sb, view = "tools") {
+  const tabs = `<nav class="hub-tabs" aria-label="Parts of your hub">
+      <a href="/hub/" ${view === "tools" ? 'aria-current="page"' : ""}>Sites and their tools</a>
+      <a href="/hub/agent/" ${view === "agent" ? 'aria-current="page"' : ""}>Your agent</a>
+    </nav>`;
+  root.innerHTML = view === "agent" ? `${tabs}
+    <section class="stack" aria-labelledby="d-agent">
+      <h2 id="d-agent">Which agent sites get</h2>
+      <div data-part="agent" class="stack"></div>
+    </section>
+    <section class="stack" aria-labelledby="d-access">
+      <h2 id="d-access">Sites you have let talk to it</h2>
+      <div data-part="grants"></div>
+    </section>
+    <section class="stack" aria-labelledby="d-log">
+      <h2 id="d-log">What happened</h2>
+      <ul class="log" data-part="log"></ul>
+    </section>` : `${tabs}
     <section class="stack" aria-labelledby="d-sites">
       <h2 id="d-sites">Sites offering tools</h2>
       <div data-part="services" class="stack"></div>
@@ -77,15 +95,12 @@ export function mountDashboard(root, sb) {
       <h2 id="d-access">Who you have let in</h2>
       <div data-part="grants"></div>
     </section>
-    <section class="stack" aria-labelledby="d-agent">
-      <h2 id="d-agent">Your agent</h2>
-      <div data-part="agent" class="stack"></div>
-    </section>
     <section class="stack" aria-labelledby="d-log">
       <h2 id="d-log">What happened</h2>
       <ul class="log" data-part="log"></ul>
     </section>`;
-  const part = (name) => root.querySelector(`[data-part="${name}"]`);
+  // A part that this page does not show is drawn into a spare element and thrown away.
+  const part = (name) => root.querySelector(`[data-part="${name}"]`) || document.createElement("div");
 
   root.addEventListener("click", (event) => {
     const button = event.target.closest("button[data-act]");
@@ -100,10 +115,34 @@ export function mountDashboard(root, sb) {
     if (event.target.name === "agent-mode") {
       sb.send({ t: "agent-config", mode: event.target.value });
     }
-    if (event.target.name === "agent-example") renderAgent(sb.state, event.target.value);
+    if (event.target.name === "agent-example") { renderAgent(sb.state, event.target.value); root.querySelector('input[name="agent-example"]:checked')?.focus(); }
   });
 
-  let example = "npx -y @zed-industries/claude-code-acp";
+  // Agents that speak the Agent Client Protocol, and the command that starts each
+  // one in that mode. Taken from the protocol's own registry of agents, without
+  // the pinned versions. [name, who makes it, command, what you need first]
+  const AGENTS = [
+    ["Claude Code", "Anthropic", "npx -y @agentclientprotocol/claude-agent-acp", "Runs with npx"],
+    ["Codex", "OpenAI", "npx -y @agentclientprotocol/codex-acp", "Runs with npx"],
+    ["Gemini CLI", "Google", "npx -y @google/gemini-cli --acp", "Runs with npx"],
+    ["Antigravity", "Google", "agy acp", "Needs the agy command, 1.5 or later"],
+    ["pi", "pi-acp adapter", "npx -y pi-acp", "Runs with npx, needs pi installed"],
+    ["GitHub Copilot", "GitHub", "npx -y @github/copilot --acp", "Runs with npx"],
+    ["Cursor", "Cursor", "cursor-agent acp", "Needs the cursor-agent command"],
+    ["OpenCode", "OpenCode", "opencode acp", "Needs the opencode command"],
+    ["goose", "Block", "goose acp", "Needs the goose command"],
+    ["Cline", "Cline", "npx -y cline --acp", "Runs with npx"],
+    ["Qwen Code", "Alibaba", "npx -y @qwen-code/qwen-code --acp", "Runs with npx"],
+    ["Kiro", "AWS", "kiro-cli acp", "Needs the kiro-cli command"],
+    ["Auggie", "Augment Code", "npx -y @augmentcode/auggie --acp", "Runs with npx"],
+    ["Kilo", "Kilo Code", "npx -y @kilocode/cli acp", "Runs with npx"],
+    ["Mistral Vibe", "Mistral", "vibe-acp", "Needs the vibe-acp command"],
+    ["Junie", "JetBrains", "junie --acp=true", "Needs the junie command"],
+    ["Devin", "Cognition", "devin acp", "Needs the devin command"],
+    ["Something else", "Any ACP agent", "<your agent command>", "Put its command after the two dashes"],
+  ];
+  const HUES = [8, 205, 150, 262, 38, 330, 180, 95, 20, 290, 230, 60];
+  let example = AGENTS[0][2];
   function renderAgent(state, pick) {
     if (pick) example = pick;
     const a = state.agent;
@@ -122,11 +161,17 @@ export function mountDashboard(root, sb) {
       ${a.mode === "relay" && a.room ? `
         ${status}
         <div class="stack" style="--gap:.6rem">
-          <label for="agent-example">Start it with</label>
-          <select id="agent-example" name="agent-example">
-            ${[["npx -y @zed-industries/claude-code-acp", "Claude Code"], ["gemini --experimental-acp", "Gemini CLI"], ["<your agent command>", "Something else"]]
-              .map(([cmd, label]) => `<option value="${esc(cmd)}" ${cmd === example ? "selected" : ""}>${label}</option>`).join("")}
-          </select>
+          <fieldset class="agent-pick">
+            <legend>Which agent is it?</legend>
+            ${AGENTS.map(([name, maker, cmd, needs], i) => `<label class="agent-card" style="--hue:${HUES[i % HUES.length]}">
+              <input type="radio" name="agent-example" value="${esc(cmd)}" ${cmd === example ? "checked" : ""}>
+              <span class="badge" aria-hidden="true">${esc(name.replace(/[^A-Za-z ]/g, "").split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase())}</span>
+              <span class="who"><strong>${esc(name)}</strong><span class="muted small">${esc(maker)}</span></span>
+              <span class="needs small">${esc(needs)}</span>
+            </label>`).join("")}
+          </fieldset>
+          <p class="small muted">These are agents listed in <a href="https://agentclientprotocol.com/" target="_blank" rel="noopener">the Agent Client Protocol's registry</a>, with the command each uses to speak the protocol. Each needs its own sign-in, done in its own way, before it will answer.</p>
+          <p style="margin:0;font-weight:700">Then run this on your machine</p>
           <pre data-command>curl -fsSLO ${location.origin}/bridge.mjs
 node bridge.mjs "${wss}" -- ${esc(example)}</pre>
           <p class="small muted">Run it in the folder you want the agent to work in. The address is a secret: anyone who has it can talk to your agent.</p>
@@ -146,9 +191,11 @@ node bridge.mjs "${wss}" -- ${esc(example)}</pre>
       </article>`).join("")
       : `<p class="muted">Nothing yet. Open a site that offers tools and press its button to add it. Two to try: the <a data-site="florist" target="_blank">florist</a> and the <a data-site="library" target="_blank">library</a>.</p>`;
 
-    part("grants").innerHTML = state.grants.length ? `<ul class="grants">${state.grants.map((g) => `
-      <li><span><strong>${esc(host(g.client))}</strong> has ${KIND[g.kind]} <span class="muted small">${ago(g.at)}</span></span>
+    const grants = view === "agent" ? state.grants.filter((g) => g.kind === "agent") : state.grants;
+    part("grants").innerHTML = grants.length ? `<ul class="grants">${grants.map((g) => `
+      <li><span><strong>${esc(host(g.client))}</strong> ${view === "agent" ? "can talk to your agent" : `has ${KIND[g.kind]}`} <span class="muted small">${ago(g.at)}</span></span>
         <button class="tiny quiet" data-act="revoke" data-id="${g.id}">Revoke</button></li>`).join("")}</ul>`
+      : view === "agent" ? `<p class="muted">No site has been let talk to your agent. A site has to ask, and you have to say yes in the hub window. One to try: the <a data-site="planner" target="_blank">planner</a>.</p>`
       : `<p class="muted">No site has been given the registry or your agent. Direct lines to a single tool are not listed here: they are made on your machine and your hub is not part of them.</p>`;
 
     const agentKey = JSON.stringify(state.agent);

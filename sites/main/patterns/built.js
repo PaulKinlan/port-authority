@@ -2,6 +2,7 @@
 // Each entry names the pattern it belongs to and which of that pattern's
 // ideas it covers (by position in deep.js). Same stage as the patterns.
 import { far } from "/farport.js";
+import { swRouter } from "/patterns/router.js";
 
 const logBox = (stage, name, title, extra = "") => {
   const box = stage.box(name, { html: `<div class="here"><h4>${title}</h4>${extra}<ul class="log"></ul></div>` });
@@ -41,21 +42,25 @@ export const built = [
   {
     pattern: "canvas", use: [0], id: "built-chart",
     title: "A chart drawn by another origin, inside your layout",
-    blurb: "The chart maker is a site on another origin. This page gives it the drawing surface of one canvas and a port, and sends it numbers. The bars you see are drawn by the chart maker straight into this page. It never sees the page, and this page never loads its code.",
-    code: `const surface = canvas.transferControlToOffscreen();
-chartMaker.postMessage({ surface, numbers }, [surface]);
+    blurb: "The chart maker is a site on another origin. This page gives it a port and sends it numbers. The chart maker draws the bars on a canvas of its own and sends back each finished frame as an <code>ImageBitmap</code>, which this page shows in a canvas it owns. The chart maker never sees the page, and this page never loads its code.",
+    code: `const show = canvas.getContext("bitmaprenderer");
+chartMaker.onmessage = ({ data }) => show.transferFromImageBitmap(data.frame);
+chartMaker.postMessage({ size: [460, 230], numbers });
 <span class="c">// later, new figures: the chart redraws itself</span>
-chartMaker.postMessage({ numbers: [12, 30, 22, 41, 17] });`,
-    tour: { steps: [["Give the chart maker the canvas", "The canvas's drawing surface and the first numbers go to the other origin. It draws the bars into this page."], ["Send new numbers", "This page posts new figures. The chart maker animates to them.", 2600], ["Send new numbers", "And again. Only numbers go one way, and only pixels come back."]] },
+chartMaker.postMessage({ numbers: [12, 30, 22, 41, 17] });
+
+<span class="c">// the chart maker, after each redraw</span>
+const frame = await createImageBitmap(mine);
+port.postMessage({ frame }, [frame]);`,
+    tour: { steps: [["Ask the chart maker for a chart", "The size and the first numbers go to the other origin. It draws the bars and sends back finished frames."], ["Send new numbers", "This page posts new figures. The chart maker animates to them.", 2600], ["Send new numbers", "And again. Only numbers go one way, and only pixels come back."]] },
     async setup(stage, ui) {
       const box = stage.box("page", { html: `<canvas width="460" height="230" style="width:100%;height:100%;display:block" aria-label="A chart in this page, drawn by another origin"></canvas>` });
       const canvas = box.node.querySelector("canvas");
       await stage.frame("maker", {
         title: "Chart maker on another origin", color: "teal",
         script: () => on("port", (_, [port]) => {
-          let ctx = null, shown = [], target = [];
-          const draw = () => {
-            const { width: w, height: h } = ctx.canvas;
+          let ctx = null, shown = [], target = [], w = 0, h = 0, still = 0;
+          const draw = async () => {
             ctx.fillStyle = "#0f1c3f"; ctx.fillRect(0, 0, w, h);
             shown = target.map((v, i) => (shown[i] ?? 0) + (v - (shown[i] ?? 0)) * 0.12);
             const bar = (w - 40) / shown.length;
@@ -66,10 +71,13 @@ chartMaker.postMessage({ numbers: [12, 30, 22, 41, 17] });`,
               ctx.fillStyle = "#fff"; ctx.font = "600 14px system-ui"; ctx.textAlign = "center";
               ctx.fillText(Math.round(v), 20 + i * bar + bar / 2, h - 30 - tall);
             });
+            // Send the finished frame. Once the bars have settled there is nothing new to send.
+            still = shown.every((v, i) => Math.abs(v - target[i]) < 0.3) ? still + 1 : 0;
+            if (still < 3) { const frame = await createImageBitmap(ctx.canvas); port.postMessage({ frame }, [frame]); }
             requestAnimationFrame(draw);
           };
           port.onmessage = ({ data }) => {
-            if (data.surface) { ctx = data.surface.getContext("2d"); log("holding a canvas. I cannot see the page it is in."); requestAnimationFrame(draw); }
+            if (data.size) { [w, h] = data.size; ctx = new OffscreenCanvas(w, h).getContext("2d"); log("drawing a chart for a page I cannot see"); requestAnimationFrame(draw); }
             if (data.numbers) { target = data.numbers; log("drew " + data.numbers.join(", ")); tell("pulse", { cable: "line" }); }
           };
         }),
@@ -79,9 +87,10 @@ chartMaker.postMessage({ numbers: [12, 30, 22, 41, 17] });`,
       stage.cable("line", "page", "maker", "teal");
       const numbers = () => Array.from({ length: 5 }, () => 5 + Math.floor(Math.random() * 44));
       const again = ui.button("Send new numbers", () => { channel.port1.postMessage({ numbers: numbers() }); stage.pulse("line", "page"); }, true);
-      ui.button("Give the chart maker the canvas", (btn) => {
-        const surface = canvas.transferControlToOffscreen();
-        channel.port1.postMessage({ surface, numbers: numbers() }, [surface]);
+      const show = canvas.getContext("bitmaprenderer");
+      channel.port1.onmessage = ({ data }) => { if (!data.frame) return; if (!canvas.isConnected) { data.frame.close(); return channel.port1.close(); } show.transferFromImageBitmap(data.frame); };
+      ui.button("Ask the chart maker for a chart", (btn) => {
+        channel.port1.postMessage({ size: [canvas.width, canvas.height], numbers: numbers() });
         stage.pulse("line", "page");
         btn.disabled = true; again.disabled = false;
       }, false, true);
@@ -442,7 +451,7 @@ approveButton.onclick = () => port.postMessage({ answer: "approve" });`,
   },
   {
     pattern: "lend", use: [2], id: "built-tap",
-    title: "A logger that can hear a connection and cannot speak on it",
+    title: "Give a logger the incoming half of a connection only",
     blurb: "A WebSocket seen as streams has two halves. This page keeps the half that speaks and gives a logger only the half that listens. The logger has no network access of its own. It records everything the server says, and it has no way to send the server anything, because it was never given anything to write into.",
     code: `const { readable, writable } = await new WebSocketStream(url).opened;
 logger.postMessage({ readable }, "*", [readable]);   <span class="c">// listening half only</span>
@@ -541,7 +550,7 @@ mapFrame.postMessage({ cmd: "port" }, "*", [port2]);
   },
   {
     pattern: "attenuate", use: [2], id: "built-chain",
-    title: "A chain of delegation, where each link gives away less",
+    title: "Pass access on to a third party, with less than you were given",
     blurb: "The owner lets an assistant read the diary and add to it. The assistant passes part of that on to an intern: reading only. The intern's port ends at the assistant, and the assistant's ends at the owner. Nobody in the chain can hand on more than they hold. When the owner cuts off the assistant, the intern is cut off too, without the owner knowing the intern exists.",
     code: `<span class="c">// the assistant, passing on less than it was given</span>
 const { port1, port2 } = new MessageChannel();
@@ -705,7 +714,7 @@ port.onmessage = ({ data }) => {
   },
   {
     pattern: "zerocopy", use: [0, 2], id: "built-pool",
-    title: "Two buffers that go back and forth all day, and are never copied",
+    title: "Reuse two buffers between a page and a worker without copying",
     blurb: "A worker needs somewhere to put each result, and making a fresh 8 MB buffer every time is wasteful. This page makes two, once. One goes to the worker, which fills it and sends it back, while the other is being read here. Then they swap. The counters show megabytes moved climbing and megabytes copied staying at zero.",
     code: `const pool = [new ArrayBuffer(SIZE), new ArrayBuffer(SIZE)];
 worker.onmessage = ({ data }) => {
@@ -802,7 +811,7 @@ lines.pipeThrough(seal).pipeTo(storage);`,
   },
   {
     pattern: "stream", use: [0, 2], id: "built-bigfile",
-    title: "Hand a worker 64 MB without ever holding 64 MB",
+    title: "Stream 64 MB to a worker a megabyte at a time",
     blurb: "This page produces a large file a megabyte at a time and gives the worker a stream of it. The worker reads, adds up a checksum and asks for more. The page makes the next megabyte only when asked, so neither side ever holds more than a chunk or two. The progress bar needs no extra messages: the chunks arriving are the progress.",
     code: `const file = new ReadableStream({ pull(controller) {
   made < TOTAL ? controller.enqueue(nextMegabyte()) : controller.close();   <span class="c">// only when asked</span>
@@ -1700,6 +1709,386 @@ recorder.postMessage({ orders: forRecorder }, "*", [forRecorder]);`,
       }, false, true);
     },
   },
+  {
+    pattern: "far", use: [2], id: "built-agent",
+    title: "An agent on one machine, using tools that live in a browser on another",
+    blurb: "This page is a shop with a basket, and it offers three tools: read the basket, add tulips, and empty it. The agent runs somewhere else. The two are paired with a code and connect directly, and the agent's side holds a port. It is sent the list of tools and calls them by name. This page decides what each name does, and refuses any name it never offered. Here a second page stands in for the agent's machine, and its buttons stand in for the agent's choices.",
+    code: `<span class="c">// this browser owns the tools</span>
+const tools = { readBasket: () => basket.join(", "), addTulips: () => { basket.push("tulips"); return "added"; } };
+const port = await far({ code, host: true });
+port.postMessage({ tools: Object.keys(tools) });
+port.onmessage = ({ data }) =>
+  port.postMessage(data.call in tools ? { result: tools[data.call]() } : { error: "no such tool" });`,
+    tour: { steps: [["Open a line for the agent", "This page opens a meeting place and shows its code."], ["Use a stand-in for the agent's machine", "A second page plays the other machine. The two connect directly, and the tool list is sent.", 4500], ["Agent: call addTulips", "The call crosses to this browser, which runs its own tool."], ["Agent: call readBasket", "The agent reads what is in the basket."], ["Agent: call deleteAccount", "A name this page never offered. It is refused here."]] },
+    async setup(stage, ui) {
+      const me = logBox(stage, "page", "This browser has the tools", `<p class="small" data-code style="margin:0 0 .4rem" hidden></p><p class="small" style="margin:0 0 .4rem">Basket: <strong data-basket>empty</strong></p>`);
+      const other = stage.box("far", { html: `<div class="here"><h4>The agent's machine</h4><p class="small muted">Not connected yet.</p></div>` });
+      if (!("RTCPeerConnection" in self)) return me.say("no WebRTC in this browser");
+      const codeEl = me.node.querySelector("[data-code]"), basketEl = me.node.querySelector("[data-basket]");
+      const basket = [];
+      const show = () => (basketEl.textContent = basket.length ? `${basket.length} bunches of tulips` : "empty");
+      const tools = {
+        readBasket: { about: "Say what is in the basket", run: () => (basket.length ? `${basket.length} bunches of tulips` : "the basket is empty") },
+        addTulips: { about: "Add a bunch of tulips", run: () => { basket.push("tulips"); show(); return "added one bunch"; } },
+        emptyBasket: { about: "Take everything out", run: () => { basket.length = 0; show(); return "emptied"; } },
+      };
+      let line = null, code = null;
+      const calls = ["addTulips", "readBasket", "deleteAccount"].map((name) => ui.button(`Agent: call ${name}`, () => stage.post("far", { cmd: "call:" + name }), true));
+      const standIn = ui.button("Use a stand-in for the agent's machine", (btn) => {
+        btn.disabled = true;
+        other.node.innerHTML = `<iframe title="A stand-in for the agent's machine" src="/far/?embed=1#${code}"></iframe>`;
+        other.frame = other.node.querySelector("iframe");
+      }, true);
+      ui.button("Open a line for the agent", (btn) => {
+        btn.disabled = true;
+        code = [...crypto.getRandomValues(new Uint8Array(6))].map((b) => "abcdefghjkmnpqrstuvwxyz23456789"[b % 31]).join("");
+        codeEl.hidden = false;
+        codeEl.innerHTML = `Code <strong>${code}</strong>. On another machine: <a href="${location.origin}/far/#${code}" target="_blank">${location.host}/far/#${code}</a>`;
+        standIn.disabled = false;
+        line = far({
+          code, host: true,
+          onState(state) { if (state === "gone") { me.say("the other machine hung up"); stage.cut("air"); for (const b of calls) b.disabled = true; } },
+          onPort(port) {
+            const offer = () => port.postMessage({ tools: Object.entries(tools).map(([name, tool]) => ({ name, about: tool.about })) });
+            port.onmessage = ({ data }) => {
+              if (data.do === "read") return offer();
+              if (!data.call) return;
+              stage.pulse("air", "far");
+              const tool = Object.hasOwn(tools, data.call) ? tools[data.call] : null;
+              if (!tool) { me.say(`refused ${data.call}: I never offered that`); return port.postMessage({ tool: data.call, error: "no such tool" }); }
+              const result = tool.run();
+              me.say(`ran ${data.call} for the agent: ${result}`);
+              port.postMessage({ tool: data.call, result });
+            };
+            offer();
+            stage.cable("air", "page", "far", "teal");
+            me.say("connected directly, and sent the list of tools");
+            standIn.disabled = true;
+            if (other.frame) for (const b of calls) b.disabled = false;
+          },
+        });
+        const watch = setInterval(() => { if (!me.node.isConnected) { clearInterval(watch); line?.close(); } }, 1000);
+      }, false, true);
+    },
+  },
+  {
+    pattern: "mounted", use: [1], id: "built-plugins",
+    title: "Plug-ins that each add a page, with its own picture, to a host app",
+    blurb: "The host app is a real page on this site. Two plug-ins from other origins each want to add a page to it. Installing a plug-in means giving the service worker a port to it, and a path. From then on, requests under that path are answered by the plug-in: its page, and the picture that page asks for. The plug-in's server is never involved, and nothing was uploaded. The same caution applies as for any mounted site: a plug-in's page runs as this origin.",
+    code: `<span class="c">// installing a plug-in: a path, and a port to whoever will answer for it</span>
+const { port1, port2 } = new MessageChannel();
+pluginFrame.postMessage({ cmd: "serve" }, "*", [port1]);
+serviceWorker.postMessage({ serve: true, prefix: "/app/calendar/" }, [port2]);`,
+    tour: { steps: [["Install the calendar plug-in", "The service worker gets a port to the plug-in and a path to use it for. The app lists it."], ["Open the calendar's page", "A real navigation inside the app. The page and its picture come from the plug-in.", 2200], ["Install the invoices plug-in", "A second plug-in, a second port, a second path."], ["Open the invoices' page", "The other plug-in answers this one.", 2200]] },
+    async setup(stage, ui) {
+      const plugin = () => on("serve", (_, [port]) => {
+        const name = document.querySelector("h1").textContent.split(" ")[0];
+        const colour = name === "Calendar" ? "#0e9f8e" : "#e0364c";
+        log("installed. Waiting for requests.");
+        port.onmessage = (event) => {
+          const file = new URL(event.data.url).pathname.split("/").pop() || "index.html";
+          log("asked for " + file); tell("pulse", { cable: name });
+          const answer = file === "icon.svg"
+            ? { body: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40"><rect width="40" height="40" rx="8" fill="${colour}"/><text x="20" y="27" font-size="20" text-anchor="middle" fill="#fff" font-family="system-ui">${name[0]}</text></svg>`, headers: { "content-type": "image/svg+xml", "cache-control": "no-store" } }
+            : { body: `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width"><style>body{font:14px system-ui;margin:.7rem;color-scheme:light dark}h1{font-size:1.05rem;margin:0 0 .3rem}img{width:38px;float:right}</style><img src="icon.svg" alt=""><h1>${name}</h1><p>${name === "Calendar" ? "Thursday: tulip delivery. Friday: wedding order." : "Invoice 31: paid. Invoice 32: due Friday."}</p><p><a href="../">Back to the app</a></p>`, headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } };
+          event.ports[0].postMessage(answer);
+        };
+      });
+      await stage.frame("Calendar", { title: "Calendar plug-in, origin one", color: "teal", script: plugin });
+      const me = logBox(stage, "page", "This tab is the host app's server");
+      const server = await serveFrom(stage, "/patterns/served/app/");
+      await stage.frame("Invoices", { title: "Invoices plug-in, origin two", color: "red", script: plugin });
+      const view = stage.box("served", { html: `<div class="here"><h4>The host app</h4><p class="small muted">Not open yet.</p></div>` });
+      if (!server) return;
+      const installed = [];
+      server.handle(() => {
+        me.say("served the app's own page");
+        return { body: `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width"><style>body{font:14px system-ui;margin:.7rem;color-scheme:light dark}h1{font-size:1.05rem;margin:0 0 .3rem}ul{margin:0;padding-left:1.1rem}</style><h1>Host app</h1><p>Installed plug-ins:</p><ul>${installed.map((n) => `<li><a href="${n.toLowerCase()}/">${n}</a></li>`).join("") || "<li>none yet</li>"}</ul>`, headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } };
+      });
+      const registration = await navigator.serviceWorker.getRegistration("/patterns/served/");
+      const go = (path) => { view.node.innerHTML = `<iframe title="The host app" src="/patterns/served/app/${path}?${Date.now()}"></iframe>`; stage.cable("down", "sw", "served", "teal"); };
+      const install = (name, open) => (btn) => {
+        const { port1, port2 } = new MessageChannel();
+        stage.post(name, { cmd: "serve" }, [port1]);
+        registration.active.postMessage({ serve: true, prefix: `/patterns/served/app/${name.toLowerCase()}/` }, [port2]);
+        stage.cable(name, name, "sw", name === "Calendar" ? "teal" : "red");
+        installed.push(name);
+        me.say(`installed ${name} at /app/${name.toLowerCase()}/`);
+        btn.disabled = true; open.disabled = false;
+        go("");
+      };
+      const openCal = ui.button("Open the calendar's page", () => go("calendar/"), true);
+      const openInv = ui.button("Open the invoices' page", () => go("invoices/"), true);
+      ui.button("Install the invoices plug-in", install("Invoices", openInv));
+      ui.button("Install the calendar plug-in", install("Calendar", openCal), false, true);
+    },
+  },
+  {
+    pattern: "mounted", use: [2], id: "built-preview",
+    title: "Preview a page whose files are kept by a storage provider on another origin",
+    blurb: "A person's draft lives with a storage provider, on the provider's origin. This editor wants to show it as a real page, with real relative links, and without copying the files here. So the provider is given a path. The preview on the right is a real navigation, and each file it asks for is fetched from the provider over a port as it is needed. Save a new version at the provider and reload: the preview has it, and the editor never held a file.",
+    code: `<span class="c">// the storage provider, answering one request</span>
+port.onmessage = ({ data, ports: [reply] }) => {
+  const file = files.get(nameFrom(data.url));
+  reply.postMessage(file ? { body: file.text, headers: { "content-type": file.type } } : { status: 404, body: "no such file" });
+};`,
+    tour: { steps: [["Mount the provider's files for preview", "The service worker gets a port to the storage provider."], ["Open the preview", "The draft loads as a real page. Its stylesheet is a second request, to the same provider.", 2200], ["Provider: save a new version", "The file changes at the provider. Nothing is sent here."], ["Reload the preview", "The preview asks again and gets the new version.", 2200]] },
+    async setup(stage, ui) {
+      await stage.frame("provider", {
+        title: "Storage provider, another origin", color: "yellow",
+        script: () => {
+          let version = 1;
+          const files = () => ({
+            "index.html": ["text/html; charset=utf-8", `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width"><link rel="stylesheet" href="draft.css"><h1>Spring price list</h1><p>Draft ${version}. Tulips ${version === 1 ? "4.50" : "4.20, down this week"}.</p>`],
+            "draft.css": ["text/css", "body{font:15px Georgia,serif;margin:.8rem;color-scheme:light dark}h1{font-size:1.2rem;margin:0 0 .3rem}"],
+          });
+          log("holding 2 files for one person");
+          on("serve", (_, [port]) => {
+            log("mounted for preview");
+            port.onmessage = (event) => {
+              const name = new URL(event.data.url).pathname.split("/").pop() || "index.html", file = files()[name];
+              log(file ? `sent ${name}, version ${version}` : `no file called ${name}`); tell("pulse", { cable: "mount" });
+              event.ports[0].postMessage(file ? { body: file[1], headers: { "content-type": file[0], "cache-control": "no-store" } } : { status: 404, body: "no such file", headers: { "content-type": "text/plain" } });
+            };
+          });
+          on("save", () => { version++; log(`saved version ${version} of index.html`); });
+        },
+      });
+      const me = logBox(stage, "page", "This page is the editor");
+      const sw = logBox(stage, "sw", "Service Worker");
+      const view = stage.box("served", { html: `<div class="here"><h4>Preview</h4><p class="small muted">Nothing to preview yet.</p></div>` });
+      if (!("serviceWorker" in navigator)) return sw.say("no Service Worker support here");
+      const prefix = "/patterns/served/preview/";
+      let registration = null, mounted = false;
+      const mount = () => { const { port1, port2 } = new MessageChannel(); stage.post("provider", { cmd: "serve" }, [port1]); registration.active.postMessage({ serve: true, prefix }, [port2]); };
+      const again = (event) => { if (!sw.node.isConnected) return navigator.serviceWorker.removeEventListener("message", again); if (event.data === "need-port" && mounted) mount(); };
+      navigator.serviceWorker.addEventListener("message", again);
+      const show = () => { view.node.innerHTML = `<iframe title="A preview served by the storage provider" src="${prefix}index.html?${Date.now()}"></iframe>`; stage.cable("down", "sw", "served", "teal"); me.say("asked for the preview. I hold none of its files."); };
+      const open = ui.button("Open the preview", (btn) => { show(); btn.disabled = true; save.disabled = false; }, true);
+      const save = ui.button("Provider: save a new version", () => { stage.post("provider", { cmd: "save" }); reload.disabled = false; }, true);
+      const reload = ui.button("Reload the preview", show, true);
+      ui.button("Mount the provider's files for preview", async (btn) => {
+        btn.disabled = true;
+        try {
+          registration = await navigator.serviceWorker.register("/patterns/tabserver-sw.js", { scope: "/patterns/served/" });
+          const worker = registration.active || registration.waiting || registration.installing;
+          if (worker.state !== "activated") await new Promise((resolve) => worker.addEventListener("statechange", () => worker.state === "activated" && resolve()));
+        } catch (err) { return sw.say("could not start: " + err.message); }
+        mounted = true; mount();
+        stage.cable("mount", "provider", "sw", "yellow");
+        sw.say("holding a port to the storage provider");
+        open.disabled = false;
+      }, false, true);
+    },
+  },
+  {
+    pattern: "socket", use: [1, 2], id: "built-feed",
+    title: "One subscription feeds every tab, and one place handles reconnecting",
+    blurb: "Both tabs show a live price, and neither has a connection to the server. A shared worker holds the one subscription and passes each price down a port to every tab. When the connection drops, the worker is the only thing that notices. It waits, tries again, waits longer if that fails, and carries on. The tabs contain no reconnection code at all. Drop the connection and watch them wait.",
+    code: `<span class="c">// the worker: the only code that knows about the connection</span>
+socket.onmessage = ({ data }) => { for (const port of tabs) port.postMessage({ price: data }); };
+socket.onclose = () => setTimeout(connect, Math.min(8000, 500 * 2 ** attempt++));
+
+<span class="c">// every tab, in full</span>
+port.onmessage = ({ data }) => show(data.price);`,
+    tour: { steps: [["Drop the connection", "The server hangs up on the worker. The worker waits half a second and connects again. The tabs did nothing.", 3500], ["Close tab one", "One tab goes. The subscription stays up for the other."]] },
+    async setup(stage, ui) {
+      const one = stage.box("tab1", { src: "/patterns/feed-tab.html" });
+      const hub = stage.box("worker", { html: `<div class="here"><h4>Shared worker</h4><p class="small" style="margin:0 0 .3rem">Connections it has made: <strong data-opened>0</strong></p><p class="small" style="margin:0 0 .3rem">Connected now: <strong data-open>no</strong></p><p class="small" style="margin:0 0 .3rem">Tabs it feeds: <strong data-tabs>none</strong></p><p class="small" data-said style="margin:0;min-height:1.4em"></p></div>` });
+      const two = stage.box("tab2", { src: "/patterns/feed-tab.html" });
+      const q = (name) => hub.node.querySelector(`[data-${name}]`);
+      if (!("SharedWorker" in self)) { q("said").textContent = "This browser has no SharedWorker."; return; }
+      const watch = new SharedWorker("/patterns/feed-worker.js").port;
+      watch.onmessage = ({ data }) => {
+        if (!hub.node.isConnected) return watch.close();
+        const { state } = data; if (!state) return;
+        q("opened").textContent = state.opened; q("open").textContent = state.open ? "yes" : "no"; q("tabs").textContent = state.tabs.length || "none";
+        q("said").textContent = state.open ? "" : state.retryIn ? `dropped. Trying again in ${(state.retryIn / 1000).toFixed(1)} s.` : "connecting";
+      };
+      watch.postMessage({ watch: true });
+      stage.on((name, data) => { if (data.wire === "price") stage.pulse(name === "tab1" ? "c1" : "c2", "worker"); });
+      await Promise.all([one.whenReady, two.whenReady]);
+      stage.cable("c1", "tab1", "worker", "red");
+      stage.cable("c2", "tab2", "worker", "teal");
+      ui.button("Drop the connection", () => watch.postMessage({ drop: true }), false, true);
+      ui.button("Close tab one", (btn) => { stage.remove("tab1"); btn.disabled = true; });
+      ui.link("Open a third tab for real", "/patterns/feed-tab.html");
+    },
+  },
+  {
+    pattern: "audio", use: [1], id: "built-pcm",
+    title: "A decoder worker that hands sound straight to the speakers",
+    blurb: "A worker produces sound a tenth of a second at a time, as a decoder would, and moves each block of samples down a port to the audio thread. The audio thread plays them and reports how far it has got, and the worker uses that to stay about half a second ahead. This page introduced the two and holds nothing. Freeze it for three seconds and the sound carries on without a gap, because no sample ever passes through here.",
+    code: `<span class="c">// the worker: stay half a second ahead of what has been played</span>
+port.onmessage = ({ data }) => {
+  while (sent - data.played < sampleRate / 2) {
+    const block = decodeNext();                       <span class="c">// a Float32Array</span>
+    port.postMessage({ block }, [block.buffer]);      <span class="c">// moved to the audio thread</span>
+    sent += block.length;
+  }
+};`,
+    tour: { steps: [["Start the decoder", "The worker and the audio thread are introduced. Blocks of sound start to flow between them."], ["Freeze this page for 3 seconds", "The page stops. The worker keeps decoding and the audio thread keeps playing.", 4200], ["Stop the sound", "The audio is closed."]] },
+    async setup(stage, ui) {
+      const me = logBox(stage, "page", "This page", `<p class="small" style="margin:0 0 .4rem">Page ticks: <strong data-ticks>0</strong></p>`);
+      const dec = logBox(stage, "decoder", "Decoder worker");
+      stage.box("audio", { html: `<div class="here"><h4>The audio thread</h4><p class="small muted" style="margin:0">Plays whatever blocks of samples arrive on its port, and reports how many it has played.</p></div>` });
+      if (!("AudioWorkletNode" in self)) return me.say("this browser has no audio worklet");
+      const ticksEl = me.node.querySelector("[data-ticks]");
+      let ticks = 0, audio = null;
+      const PLAYER = `class Player extends AudioWorkletProcessor {
+        constructor() { super(); this.queue = []; this.at = 0; this.played = 0; this.gaps = 0; this.calls = 0; this.far = null;
+          this.port.onmessage = (event) => { this.far = event.ports[0]; this.far.onmessage = ({ data }) => this.queue.push(data.block); this.far.postMessage({ played: 0, gaps: 0 }); }; }
+        process(inputs, outputs) {
+          const out = outputs[0][0]; if (!out) return true;
+          for (let i = 0; i < out.length; i++) {
+            const block = this.queue[0];
+            if (!block) { if (this.played) this.gaps++; break; }
+            out[i] = block[this.at++]; this.played++;
+            if (this.at >= block.length) { this.queue.shift(); this.at = 0; }
+          }
+          for (let c = 1; c < outputs[0].length; c++) outputs[0][c].set(out);
+          if (this.far && ++this.calls % 8 === 0) this.far.postMessage({ played: this.played, gaps: this.gaps });
+          return true;
+        }
+      }
+      registerProcessor("player", Player);`;
+      const worker = new Worker(URL.createObjectURL(new Blob([`let sent = 0, blocks = 0, gaps = 0, phase = 0, t = 0;
+        const tune = [262, 330, 392, 523, 392, 330, 294, 349, 440, 587, 440, 349];
+        onmessage = ({ data }) => {
+          if (data.count) return postMessage({ blocks, gaps });
+          const port = data.port, rate = data.rate, size = Math.round(rate / 10);
+          port.onmessage = ({ data: report }) => {
+            gaps = report.gaps;
+            while (sent - report.played < rate / 2) {
+              const block = new Float32Array(size);
+              for (let i = 0; i < size; i++, t++) { const note = Math.floor(t / (rate / 4)), into = (t % (rate / 4)) / rate; phase += 2 * Math.PI * tune[note % tune.length] / rate; block[i] = Math.sin(phase) * 0.25 * Math.exp(-into * 9); }
+              port.postMessage({ block }, [block.buffer]);
+              sent += size; blocks++;
+              if (blocks % 20 === 0) postMessage({ said: "decoded " + blocks + " blocks, " + (sent / rate).toFixed(1) + " s of sound" });
+            }
+          };
+        };`], { type: "text/javascript" })));
+      const stop = () => { audio?.close(); audio = null; worker.terminate(); };
+      const beat = setInterval(() => { if (!ticksEl.isConnected) { clearInterval(beat); stop(); return; } ticksEl.textContent = ++ticks; }, 100);
+      let asked = null;
+      worker.onmessage = ({ data }) => { if (data.said) return dec.say(data.said); asked?.(data); };
+      const count = () => new Promise((resolve) => { asked = resolve; worker.postMessage({ count: true }); });
+      const freeze = ui.button("Freeze this page for 3 seconds", async () => {
+        const before = await count(), mine = ticks;
+        me.say("frozen");
+        await new Promise((r) => requestAnimationFrame(() => setTimeout(r, 30)));
+        const until = performance.now() + 3000;
+        while (performance.now() < until) { /* the main thread is stuck here */ }
+        const after = await count();
+        me.say(`3 s frozen: I ticked ${ticks - mine} times, the worker delivered ${after.blocks - before.blocks} blocks, and the sound had ${after.gaps - before.gaps} gaps`);
+      }, true);
+      const quiet = ui.button("Stop the sound", (btn) => { stop(); stage.cut("pcm"); btn.disabled = freeze.disabled = true; me.say("stopped"); }, true);
+      ui.button("Start the decoder", async (btn) => {
+        btn.disabled = true;
+        try {
+          audio = new AudioContext();
+          await audio.audioWorklet.addModule(URL.createObjectURL(new Blob([PLAYER], { type: "text/javascript" })));
+          const node = new AudioWorkletNode(audio, "player", { outputChannelCount: [2] });
+          node.connect(audio.destination);
+          const { port1, port2 } = new MessageChannel();
+          worker.postMessage({ port: port1, rate: audio.sampleRate }, [port1]);
+          node.port.postMessage({}, [port2]);
+          audio.resume();   // may wait for a tap, so it is not awaited
+          await new Promise((r) => setTimeout(r, 250));
+        } catch (err) { return me.say("could not start: " + err.message); }
+        stage.cable("pcm", "decoder", "audio", "teal");
+        me.say(audio.state === "running" ? "introduced the decoder to the audio thread, and kept no port" : "the browser is holding the sound until you tap");
+        freeze.disabled = quiet.disabled = false;
+      }, false, true);
+    },
+  },
+  {
+    pattern: "audio", use: [2], id: "built-meter",
+    title: "A level meter drawn by a worker, fed from the audio thread",
+    blurb: "A tone swells and fades. A processor on the audio thread measures how loud it is, twenty times a second, and posts each reading down a port. The other end is held by a worker, which draws the meter into a canvas it was handed. The readings go from the audio thread to the worker to the screen. Freeze this page and the meter keeps moving, in time with what you hear.",
+    code: `<span class="c">// on the audio thread</span>
+process([input]) {
+  const level = Math.sqrt(input[0].reduce((sum, s) => sum + s * s, 0) / input[0].length);
+  meterPort.postMessage({ level });        <span class="c">// the other end is in a worker</span>
+  return true;
+}`,
+    tour: { steps: [["Start the tone and the meter", "The audio thread and the meter's worker are given one end each of a channel."], ["Freeze this page for 3 seconds", "The page stops. The meter does not.", 4200], ["Stop the sound", "The audio is closed."]] },
+    async setup(stage, ui) {
+      const me = logBox(stage, "page", "This page", `<p class="small" style="margin:0 0 .4rem">Page ticks: <strong data-ticks>0</strong></p>`);
+      stage.box("audio", { html: `<div class="here"><h4>The audio thread</h4><p class="small muted" style="margin:0">Measures the level of the sound passing through it, and posts each reading to a port.</p></div>` });
+      const screen = stage.box("meter", { html: `<canvas width="300" height="170" style="width:100%;height:100%;display:block" aria-label="A level meter, drawn by a worker"></canvas>` });
+      if (!("AudioWorkletNode" in self) || !("OffscreenCanvas" in self)) return me.say("this browser lacks an audio worklet or an offscreen canvas");
+      const ticksEl = me.node.querySelector("[data-ticks]");
+      let ticks = 0, audio = null;
+      const METER = `class Meter extends AudioWorkletProcessor {
+        constructor() { super(); this.sum = 0; this.n = 0; this.far = null; this.port.onmessage = (event) => { this.far = event.ports[0]; }; }
+        process(inputs, outputs) {
+          const input = inputs[0][0], out = outputs[0];
+          if (!input) return true;
+          for (let c = 0; c < out.length; c++) out[c].set(input);
+          for (let i = 0; i < input.length; i++) this.sum += input[i] * input[i];
+          this.n += input.length;
+          if (this.n >= sampleRate / 20) { if (this.far) this.far.postMessage({ level: Math.sqrt(this.sum / this.n) }); this.sum = 0; this.n = 0; }
+          return true;
+        }
+      }
+      registerProcessor("meter", Meter);`;
+      const css = getComputedStyle(screen.node);
+      const worker = new Worker(URL.createObjectURL(new Blob([`let ctx = null, look = null, readings = 0, peak = 0;
+        onmessage = ({ data }) => {
+          if (data.count) return postMessage({ readings });
+          if (data.surface) { ctx = data.surface.getContext("2d"); look = data.look; draw(0); return; }
+          data.port.onmessage = ({ data: reading }) => { readings++; draw(reading.level); };
+        };
+        function draw(level) {
+          const w = ctx.canvas.width, h = ctx.canvas.height, v = Math.min(1, level / 0.5);
+          peak = Math.max(v, peak - 0.01);
+          ctx.fillStyle = look.panel; ctx.fillRect(0, 0, w, h);
+          ctx.fillStyle = look.ink; ctx.font = "700 14px system-ui"; ctx.fillText("Meter worker", 14, 24);
+          ctx.font = "12px ui-monospace, monospace"; ctx.fillText(readings + " readings drawn", 14, 44);
+          ctx.strokeStyle = look.ink; ctx.lineWidth = 1.5; ctx.strokeRect(14, 70, w - 28, 34);
+          ctx.fillStyle = v > 0.8 ? "#e0364c" : "#0e9f8e"; ctx.fillRect(16, 72, (w - 32) * v, 30);
+          ctx.fillStyle = look.ink; ctx.fillRect(16 + (w - 32) * peak - 2, 68, 3, 38);
+          ctx.fillText("level " + level.toFixed(3), 14, 128);
+        }`], { type: "text/javascript" })));
+      const surface = screen.node.querySelector("canvas").transferControlToOffscreen();
+      worker.postMessage({ surface, look: { panel: css.backgroundColor, ink: css.color } }, [surface]);
+      const stop = () => { audio?.close(); audio = null; };
+      const beat = setInterval(() => { if (!ticksEl.isConnected) { clearInterval(beat); stop(); worker.terminate(); return; } ticksEl.textContent = ++ticks; }, 100);
+      const count = () => new Promise((resolve) => { worker.onmessage = ({ data }) => resolve(data.readings); worker.postMessage({ count: true }); });
+      const freeze = ui.button("Freeze this page for 3 seconds", async () => {
+        const before = await count(), mine = ticks;
+        me.say("frozen");
+        await new Promise((r) => requestAnimationFrame(() => setTimeout(r, 30)));
+        const until = performance.now() + 3000;
+        while (performance.now() < until) { /* the main thread is stuck here */ }
+        me.say(`3 s frozen: I ticked ${ticks - mine} times, the worker drew ${(await count()) - before} readings`);
+      }, true);
+      const quiet = ui.button("Stop the sound", (btn) => { stop(); stage.cut("levels"); btn.disabled = freeze.disabled = true; me.say("stopped"); }, true);
+      ui.button("Start the tone and the meter", async (btn) => {
+        btn.disabled = true;
+        try {
+          audio = new AudioContext();
+          await audio.audioWorklet.addModule(URL.createObjectURL(new Blob([METER], { type: "text/javascript" })));
+          const tone = new OscillatorNode(audio, { frequency: 220 }), swell = new GainNode(audio, { gain: 0.3 });
+          const slow = new OscillatorNode(audio, { frequency: 0.4 }), depth = new GainNode(audio, { gain: 0.28 });
+          slow.connect(depth).connect(swell.gain);
+          const node = new AudioWorkletNode(audio, "meter", { outputChannelCount: [2] }), volume = new GainNode(audio, { gain: 0.4 });
+          tone.connect(swell).connect(node).connect(volume).connect(audio.destination);
+          tone.start(); slow.start();
+          const { port1, port2 } = new MessageChannel();
+          worker.postMessage({ port: port1 }, [port1]);
+          node.port.postMessage({}, [port2]);
+          audio.resume();   // may wait for a tap, so it is not awaited
+          await new Promise((r) => setTimeout(r, 250));
+        } catch (err) { return me.say("could not start: " + err.message); }
+        stage.cable("levels", "audio", "meter", "teal");
+        me.say(audio.state === "running" ? "introduced the audio thread to the meter's worker, and kept no port" : "the browser is holding the sound until you tap");
+        freeze.disabled = quiet.disabled = false;
+      }, false, true);
+    },
+  },
+  swRouter,
 ];
 
 // Ideas that are already what a demo on the site does. key: "pattern:index".
@@ -1724,5 +2113,7 @@ export const shown = {
   "roundtrip:2": ["/patterns/pipeline/#built-stages", "three parties each supplying a stage"],
   "frozen:2": ["/patterns/frozen/#built-relay", "a decoder worker handing frames to a renderer worker"],
   "reload:2": ["/patterns/tearoff/#built-upgrade", "version 1 of a widget handing its port to version 2"],
+  "audio:0": ["#demo", "the demo at the top of this page"],
+  "router:1": ["/hub/", "the hub on this site, which routes calls to whichever site has the tool"],
   "filter:1": ["/patterns/frozen/", "two workers that keep going while the page is frozen"],
 };

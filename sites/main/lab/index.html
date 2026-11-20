@@ -25,6 +25,12 @@
       <ul class="legend" id="legend"></ul>
       <div class="matrix-wrap"><table class="matrix" id="matrix"><caption class="small muted" style="caption-side:bottom;padding:.5rem;text-align:left">Press any mark to see what happened in that test.</caption></table></div>
       <p class="detail panel" id="detail" aria-live="polite">Running.</p>
+      <section class="problems panel" id="problems" hidden aria-live="polite">
+        <h2 style="font-size:var(--step-1);margin:0 0 .4rem">Errors during this run</h2>
+        <ul id="problem-list"></ul>
+        <p class="small muted" style="margin:.5rem 0 0">These are errors the page itself could catch: uncaught errors, rejected promises, places that could not be set up and receivers that stopped answering. Warnings that a browser prints only to its own console cannot be read by a page, so they cannot be listed here.</p>
+      </section>
+      <div id="pop" popover class="cell-pop"></div>
       <p class="pick">
         <button class="tiny quiet" id="again">Run it again</button>
         <button class="tiny quiet" id="popup">Also test a popup on another origin</button>
@@ -34,7 +40,7 @@
     </main>
   </div>
   <script type="module">
-    import { KINDS, DESTINATIONS, POPUP, OUTCOMES, ISOLATED, run, report, environment, diedLastTime } from "/lab/lab.js";
+    import { KINDS, DESTINATIONS, POPUP, OUTCOMES, ISOLATED, run, report, environment, diedLastTime, onError } from "/lab/lab.js";
 
     const $ = (id) => document.getElementById(id);
     const esc = (t) => String(t ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -70,13 +76,42 @@
       td.firstChild.setAttribute("aria-label", `${kind.name} to ${dest.label}: ${OUTCOMES[result.outcome].label}`);
       td.title = `${OUTCOMES[result.outcome].label}${result.note ? ": " + result.note : ""}`;
     }
+    // Pressing a mark opens what happened in that test, right beside the mark.
+    const pop = $("pop");
+    let openFor = null;
+    const place = (td) => {
+      const cell = td.getBoundingClientRect(), box = pop.getBoundingClientRect();
+      const left = Math.max(8, Math.min(cell.left + cell.width / 2 - box.width / 2, innerWidth - box.width - 8));
+      const below = cell.bottom + 8, top = below + box.height > innerHeight - 8 && cell.top - box.height - 8 > 8 ? cell.top - box.height - 8 : below;
+      pop.style.left = left + "px"; pop.style.top = top + "px";
+    };
+    pop.addEventListener("toggle", (event) => { if (event.newState === "closed") { openFor?.classList.remove("open"); openFor = null; } });
+    addEventListener("scroll", () => { if (openFor) place(openFor); }, { passive: true, capture: true });
     $("matrix").addEventListener("click", (event) => {
       const td = event.target.closest("td[data-k]");
       if (!td) return;
       const dest = destinations.find((d) => d.id === td.dataset.d), r = results[dest.id]?.[td.dataset.k];
-      if (!r) return void ($("detail").textContent = "That test has not run yet.");
       const kind = KINDS.find((k) => k.name === td.dataset.k);
-      $("detail").innerHTML = `<strong>${esc(kind.name)}</strong> ${kind.how === "move" ? "moved" : "copied"} to <strong>${esc(dest.label)}</strong>: ${esc(OUTCOMES[r.outcome].text)} ${r.note ? `<span class="muted">${esc(r.note)}</span>` : ""}`;
+      const bad = r && !["works", "cannot-make"].includes(r.outcome);
+      const html = r
+        ? `<p class="what"><strong>${esc(kind.name)}</strong> ${kind.how === "move" ? "moved" : "copied"} to <strong>${esc(dest.label)}</strong></p>
+           <p class="outcome" data-o="${r.outcome}"><b>${OUTCOMES[r.outcome].mark}</b> ${esc(OUTCOMES[r.outcome].label)}. ${esc(OUTCOMES[r.outcome].text)}</p>
+           ${r.note ? `<p class="small muted" style="margin:0">${bad ? "What it said:" : "What happened there:"}</p><pre class="note ${bad ? "bad" : ""}">${esc(r.note)}</pre>` : ""}`
+        : `<p class="what"><strong>${esc(kind.name)}</strong> to <strong>${esc(dest.label)}</strong></p><p style="margin:0">That test has not run yet.</p>`;
+      $("detail").innerHTML = r ? `<strong>${esc(kind.name)}</strong> ${kind.how === "move" ? "moved" : "copied"} to <strong>${esc(dest.label)}</strong>: ${esc(OUTCOMES[r.outcome].text)} ${r.note ? `<span class="muted">${esc(r.note)}</span>` : ""}` : "That test has not run yet.";
+      if (!pop.showPopover) return;
+      const same = openFor === td;
+      try { pop.hidePopover(); } catch {}
+      if (same) return;
+      pop.innerHTML = html;
+      pop.showPopover();
+      openFor = td; td.classList.add("open");
+      place(td);
+    });
+
+    onError((error) => {
+      $("problems").hidden = false;
+      $("problem-list").insertAdjacentHTML("beforeend", `<li><strong>${esc(error.where)}</strong><pre class="note bad">${esc(error.message)}</pre>${error.during ? `<span class="small muted">While sending: ${esc(error.during)}</span>` : ""}</li>`);
     });
 
     function facts(env, ms) {

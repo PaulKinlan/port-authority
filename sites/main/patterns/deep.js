@@ -3,6 +3,8 @@
 // uses: what you could build. traps: what goes wrong. measured: what this
 // site has seen in a real browser. related: other patterns to read next.
 
+import { routerDiagram } from "/patterns/router.js";
+
 export const deep = {
   hello: {
     how: [
@@ -26,6 +28,21 @@ export const deep = {
     traps: ["The introducer cannot take the introduction back. If it needs to, it should keep a link in the chain and forward, as in the attenuate pattern.", "Nothing tells either side that the other has gone. Send a ping and treat silence as the answer."],
     measured: "Chromium 157: messages keep flowing between the two frames after the introducing frame is removed from the document.",
     related: ["hello", "attenuate", "stream-intro", "exchange"],
+  },
+  router: {
+    diagram: routerDiagram,
+    how: [
+      "Most of this site is about getting the middle out of the way: introduce two parties, hand each a port, and leave. This is the opposite choice, made on purpose. The router stays in the path of every message, and in exchange the windows need to know almost nothing. A window knows its own name and how to reach the router. It never learns which window answers to a name, whether that window is open, or how many there are.",
+      "The whole router is a table from names to places it can post to. A window registers by saying its name. To send, a window posts <code>{ to, text }</code> to the router. The router looks <code>to</code> up, and posts <code>{ from, text }</code> to whatever it finds. The sender's name is filled in by the router from the connection the message arrived on, so a window cannot claim to be somebody else.",
+      "As a shared worker, the table holds ports: one per window, handed over when the window connected. As a service worker, there are no ports to hold. The table holds client ids, and the worker reaches a window with <code>clients.get(id)</code> and <code>client.postMessage</code>. Either way the windows share an origin, because that is who can reach the same worker.",
+      "The two differ in how long they remember. A shared worker lives as long as one of its pages does, and its table lives with it. A service worker is stopped by the browser whenever it has been idle for a while, and starts again with nothing. The version below deals with that the simple way: when it cannot place a name, it asks every open window to say who it is, waits a moment, and looks again.",
+      "Because every message passes through one place, that place can do more than forward. It can refuse, log, queue for a window that is not open yet, or send to every window with a role. And if two windows turn out to talk a lot, the router can stop carrying their traffic and introduce them instead: make a channel, post one end to each, and step back.",
+    ],
+    tryIt: ["Open a fourth window from the link. It is called florist. Now send from orders to the florist again: it arrives.", "Close the kitchen, then send to it. The router has already taken it out of the table.", "In the service worker version, make it forget and then send. Watch the count of times it asked who is here go up by one."],
+    uses: ["Windows of one app that open and close in any order, and still reach each other by role.", "A hub that routes each request to whichever open window offers the tool that was asked for.", "A message queue in the worker, holding messages for a window that has not opened yet.", "One window addressing every window with a role at once, such as every open editor."],
+    traps: ["The router sees everything. That is the price of nobody needing a reference to anybody. Where that matters, use it only to introduce, and let the two talk directly.", "A shared worker reached from inside a frame on another site is partitioned by the top-level site. Two sites that embed the same frame get two routers, and their windows cannot find each other.", "A service worker forgets its table whenever the browser stops it. Keep nothing in it that you cannot rebuild by asking the windows, or store it.", "Names are first come, first served here. A second window that registers a name takes it over. Decide whether that is a takeover you want, a refusal, or a group.", "Nothing tells the router that a window has closed. The shared worker waits on a Web Lock the window holds. The service worker finds out when <code>clients.get</code> returns nothing."],
+    measured: "Chromium 157: three same-origin frames with no references to each other exchange messages through a shared worker, and through a service worker using <code>clients.get</code>. After the service worker's table is cleared, one roll call rebuilds it and the message is delivered.",
+    related: ["exchange", "introduce", "socket", "tabserver"],
   },
   reply: {
     how: [
@@ -73,13 +90,14 @@ export const deep = {
   },
   canvas: {
     how: [
-      "<code>canvas.transferControlToOffscreen()</code> splits a canvas in two: the element stays in your page, and its drawing surface becomes an <code>OffscreenCanvas</code> that can be transferred. Whoever receives the surface draws, and the pixels appear in your element.",
-      "Here the surface goes to a frame on another origin. That frame cannot read your page, cannot see the rest of your DOM, and cannot be clickjacked into covering anything, because it owns pixels inside one rectangle you chose and nothing else.",
-      "The drawing does not pass through your main thread. If the receiver is a worker, the canvas keeps animating while your page is busy.",
+      "There are two ways to let someone else draw in your page. Which one to use depends on where the drawer runs.",
+      "For a worker: <code>canvas.transferControlToOffscreen()</code> splits a canvas in two. The element stays in your page, and its drawing surface becomes an <code>OffscreenCanvas</code> that can be transferred. The worker draws, and the pixels appear in your element without passing through your main thread, so the canvas keeps animating while your page is busy.",
+      "For a frame on another origin: the frame draws on an <code>OffscreenCanvas</code> of its own, turns each finished frame into an <code>ImageBitmap</code> and transfers it down a port. Your page shows it with a <code>bitmaprenderer</code> context. A bitmap is moved, so no pixels are copied on the way.",
+      "Either way the drawer cannot read your page or see the rest of your DOM. It fills one rectangle you chose and nothing else.",
     ],
-    tryIt: ["Hand over the canvas, then ask for another colour. The request goes over a port, the pixels come back through the canvas.", "Start again: a canvas can only give up its surface once, so the demo makes a new one."],
+    tryIt: ["Ask the painter to paint, then ask for another colour. The request goes down the port, and the frames come back up it.", "Scroll to the worker demo below to see a surface handed over with <code>transferControlToOffscreen()</code>."],
     uses: ["A chart, map or 3D viewer supplied by another origin that renders into your layout without an iframe's box.", "Moving heavy rendering to a worker.", "A plug-in that may draw and may not read."],
-    traps: ["Once control is transferred, the page can no longer draw on that canvas or read it back.", "The receiver decides the bitmap size. Tell it your size and pixel ratio over the port."],
+    traps: ["In Chrome, do not send the surface from <code>transferControlToOffscreen()</code> to a frame on another site or to a sandboxed frame. Those run in another process, and the frame crashes on its first draw. The message arrives and <code>getContext()</code> succeeds, so nothing warns you. Send it to a worker, or send bitmaps.", "Once control is transferred, the page can no longer draw on that canvas or read it back.", "The receiver decides the bitmap size. Tell it your size and pixel ratio over the port.", "Close an <code>ImageBitmap</code> you are not going to show. It holds memory the garbage collector does not count."],
     related: ["frozen", "filter", "audio"],
   },
   functions: {

@@ -47,7 +47,10 @@
       use: (v) => { const ctx = v.getContext("2d"); need(ctx, "no 2d context here"); ctx.fillRect(0, 0, 1, 1); return "drew on it"; } },
     { name: "OffscreenCanvas (from a canvas element)", group: "Moved", how: "move",
       make: () => document.createElement("canvas").transferControlToOffscreen(),
-      use: (v) => { const ctx = v.getContext("2d"); need(ctx, "no 2d context here"); ctx.fillRect(0, 0, 1, 1); return "drew into the sender's page"; } },
+      // Chrome kills a receiver in another process when its first drawing is
+      // shown, a moment after the drawing call returns. Wait for that moment,
+      // so that a receiver that dies is not recorded as one that worked.
+      use: async (v) => { const ctx = v.getContext("2d"); need(ctx, "no 2d context here"); ctx.fillRect(0, 0, 1, 1); if (globalThis.setTimeout) await new Promise((r) => setTimeout(r, 400)); return "drew into the sender's page"; } },
     { name: "ImageBitmap", group: "Moved", how: "move",
       make: () => createImageBitmap(canvas()),
       use: (v) => { need(v.width === 2, "empty bitmap"); return "2 by 2 pixels"; } },
@@ -144,6 +147,13 @@
 
   // Runs wherever a value lands. Values arrive on `inlet` and results go back
   // on `out`. They are the same port unless the inlet cannot answer.
+  // Frames, audio and bitmaps hold memory outside the garbage collector's
+  // sight, and a browser complains when one is dropped without being closed.
+  // Every test closes what it made and what it received, whatever happened.
+  globalThis.labRelease = (value) => {
+    try { if (value && typeof value.close === "function" && /^(VideoFrame|AudioData|ImageBitmap)$/.test(Object.prototype.toString.call(value).slice(8, -1))) value.close(); } catch (err) {}
+  };
+
   globalThis.labReceive = (out, where, inlet = out) => {
     let seq = 0;
     const kinds = new Map(globalThis.LAB_KINDS.map((k) => [k.name, k]));
@@ -162,7 +172,7 @@
         out.postMessage({ seq: mine, outcome: "works", note: String(note), type });
       } catch (err) {
         out.postMessage({ seq: mine, outcome: "arrives-broken", note: String((err && err.message) || err).slice(0, 160), type });
-      }
+      } finally { globalThis.labRelease(data.value); }
     };
     inlet.onmessageerror = () => out.postMessage({ seq, outcome: "unreadable", note: "arrived, but could not be rebuilt here" });
     out.postMessage({ hello: where });

@@ -7,6 +7,7 @@
 <style>
   html { color-scheme: light dark; }
   body { margin: 0; padding: .7rem .8rem; font: 14px/1.4 system-ui, sans-serif; background: light-dark(#fff, #141f47); color: light-dark(#0f1c3f, #e9edfa); }
+  p { margin: 0 0 .5rem; font-size: 13px; }
   h1 { font: 800 1rem/1.1 "Arial Narrow", system-ui, sans-serif; margin: 0 0 .5rem; }
   button { font: 600 13px system-ui; border-radius: 99px; border: 2px solid currentColor; background: none; color: inherit; padding: .3rem .7rem; cursor: pointer; }
   ul { list-style: none; margin: .5rem 0 0; padding: 0; font: 12px/1.45 ui-monospace, Menlo, monospace; }
@@ -15,6 +16,7 @@
 </head>
 <body>
 <h1 id="name"></h1>
+<p id="who">Nobody else is here yet. Open this page in another tab.</p>
 <button id="hi">Say hi to everyone</button>
 <ul id="log"></ul>
 <script>
@@ -26,10 +28,17 @@
   const worker = new SharedWorker("/patterns/exchange.js", { name: "exchange" });
   worker.port.onmessage = ({ data, ports }) => {
     if (data.type !== "meet") return;
-    direct.set(data.name, ports[0]);
-    ports[0].onmessage = (e) => log(`${data.name}: ${e.data}`);
+    const port = ports[0], cable = [name, data.name].sort().join("~");
+    direct.set(data.name, port);
+    document.getElementById("who").textContent = "Direct lines to: " + [...direct.keys()].join(", ");
+    // Every message on a direct line is answered, so both tabs can see it works.
+    port.onmessage = (e) => {
+      log(`${data.name}: ${e.data}`);
+      if (/^(hello|hi)\b/.test(e.data)) { port.postMessage(`got your "${e.data}"`); tell("pulse", { cable }); }
+    };
     log(`worker introduced ${data.name}`);
     tell("met", { peer: data.name });
+    port.postMessage("hello from " + name);
   };
   const lock = "peer-" + crypto.randomUUID();
   const join = () => worker.port.postMessage({ type: "join", name, lock });

@@ -175,7 +175,7 @@ port.onmessage = ({ data }) => {
   },
   {
     id: "signer",
-    title: "A key that never leaves, and a port that can use it",
+    title: "Let another origin sign with your key without giving it the key",
     blurb: "The vault makes a signing key the browser will not let anyone read, itself included. It gives this page a port that signs. This page lends the shop a weaker port: orders only, three uses. The shop gets real signatures that anyone can check against the public key, and at no point does the key, or the full port, move. Authority is handed on by passing ports, and narrowed at each hop by whoever is passing.",
     code: `<span class="c">// the vault</span>
 const { privateKey, publicKey } = await crypto.subtle.generateKey(ECDSA, false, ["sign", "verify"]);

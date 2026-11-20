@@ -20,7 +20,7 @@ const ECDSA = { name: "ECDSA", namedCurve: "P-256" }, SIGN = { name: "ECDSA", ha
 export const origins = [
   {
     id: "keycopy",
-    title: "Give another site your key, and see that you cannot take it back",
+    title: "Send a key to another site: it gets a copy you cannot take back",
     blurb: "A <code>CryptoKey</code> can be posted to another origin. This page makes a signing key that cannot be read, and sends the key itself to the florist's site. The florist can now sign as you. It cannot read the key either, but it can keep it: it saves the key in its own IndexedDB, and after a reload it still has it. Nothing this page does can undo that. Compare the experiment above, where the key stays put and only a port travels. A copied key is a gift. A port is a loan.",
     code: `const { privateKey } = await crypto.subtle.generateKey(ECDSA, false, ["sign"]);
 floristWindow.postMessage({ key: privateKey }, floristOrigin);   <span class="c">// a copy, not a move</span>
@@ -57,7 +57,7 @@ await crypto.subtle.sign(ECDSA, key, bytes); <span class="c">// signs as you</sp
   },
   {
     id: "halves",
-    title: "Half a stream is a permission",
+    title: "Send only the readable side of a stream",
     blurb: "A stream has a direction, and you can hand over one direction without the other. The library's site gets only something to read from: it can listen and has nothing to speak into. The florist's site gets only something to write into: it can post notes through the slot and cannot see what else is inside. Each half is also a switch its owner keeps. Close the feed and the listener is told it has ended. Shut the box and the next write fails. No roles, no access lists: what you hold is what you may do.",
     code: `<span class="c">// listen only</span>
 library.postMessage({ readable }, origin, [readable]);

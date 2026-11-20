@@ -27,8 +27,12 @@ export function runtime() {
     handlers[event.data.cmd]?.(event.data, event.ports);
   });
   // A frame that breaks says so, on its own face and to the page.
-  addEventListener("error", (event) => { log("error: " + event.message); tell("error", { message: String(event.message) }); });
+  // Scripts that a browser extension adds to this frame are not ours to report.
+  const foreign = (file) => /^(chrome|moz|safari-web|ms-browser)-extension:/.test(file || "");
+  addEventListener("error", (event) => { if (foreign(event.filename)) return; log("error: " + event.message); tell("error", { message: String(event.message), file: (event.filename || "").split("/").pop().slice(0, 60), line: event.lineno }); });
   addEventListener("unhandledrejection", (event) => { const m = String(event.reason && event.reason.message || event.reason); log("error: " + m); tell("error", { message: m }); });
+  // What the browser itself complains about in this frame: something it blocked, slowed or will remove.
+  try { new ReportingObserver((reports) => { for (const r of reports) tell("error", { message: r.type + ": " + (r.body && (r.body.message || r.body.id)) }); }, { types: ["intervention", "deprecation"], buffered: true }).observe(); } catch (err) {}
   tell("ready");
 }
 
@@ -61,7 +65,7 @@ export class Stage {
       if (!box) return;
       if (data.wire === "ready") box.ready();
       if (data.wire === "pulse") this.pulse(data.cable, box.name);
-      if (data.wire === "error") dispatchEvent(new CustomEvent("pa-error", { detail: { where: "frame " + box.name, message: data.message } }));
+      if (data.wire === "error") dispatchEvent(new CustomEvent("pa-error", { detail: { where: "frame " + box.name + (data.file ? `, ${data.file}:${data.line}` : ""), message: data.message } }));
       for (const fn of this.listeners) fn(box.name, data, event.ports);
     };
     addEventListener("message", this.onMessage);

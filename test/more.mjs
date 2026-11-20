@@ -20,11 +20,11 @@ for (const id of ["canvas", "functions", "zerocopy", "tearoff", "tabserver"]) { 
 await wait(1000);
 
 await page.locator("#canvas").scrollIntoViewIfNeeded();
-await click("#canvas", "Hand over the canvas"); await wait(1500);
+await click("#canvas", "Ask the painter to paint"); await wait(1500);
 const shot = await page.locator("#canvas canvas").screenshot();
 if (process.argv[2]) await page.locator("#canvas .demo").screenshot({ path: process.argv[2] + "/canvas.png" });
 const distinct = new Set(shot.toString("base64").match(/.{40}/g)).size;
-check("canvas: another origin painted into this page's canvas", /holding a canvas/.test(await frameText("#canvas", "painter")) && distinct > 40, `(${distinct} distinct chunks)`);
+check("canvas: another origin painted into this page's canvas", /painting frames/.test(await frameText("#canvas", "painter")) && distinct > 40, `(${distinct} distinct chunks)`);
 
 await click("#functions", "Lend onTick"); await wait(2500);
 check("functions: the lent function ran here", /onTick\(5, "counting"\) ran here/.test(await boxText("#functions", "page")));

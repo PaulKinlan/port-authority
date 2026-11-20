@@ -9,7 +9,7 @@ const pageBox = (stage, title = "This page") => {
 export const demos = [
   {
     id: "hello",
-    title: "A channel is two ends of one wire",
+    title: "Open a channel and send a message through it",
     blurb: "<code>new MessageChannel()</code> gives you two entangled ports. Keep one, post the other to anyone you can already reach. From then on you have a private line that no other script on either page can listen to, unlike <code>window.postMessage</code>.",
     code: `const { port1, port2 } = new MessageChannel();
 frame.contentWindow.postMessage("here", "*", [port2]); <span class="c">// port2 is moved, not copied</span>
@@ -38,7 +38,7 @@ port1.postMessage("ping");`,
   },
   {
     id: "introduce",
-    title: "Introduce two strangers, then leave",
+    title: "Connect two frames to each other, then remove yourself",
     blurb: "A port can be passed on by whoever holds it. So a third party that knows two sites can make a channel, give each of them an end, and step away. Remove the introducer here and the other two do not notice. This one move is the whole idea behind the hub.",
     code: `<span class="c">// in the introducer, which holds a port to each side</span>
 const { port1, port2 } = new MessageChannel();
@@ -49,7 +49,7 @@ toRight.postMessage({ meet: "left" }, [port2]);
   },
   {
     id: "reply",
-    title: "Send a return address with every question",
+    title: "Send a reply port with each request",
     blurb: "Instead of matching replies to requests with ids, make a new channel for each request and send one end along with it. The answer comes back on a port that only this request ever had. Slow answers cannot cross, and nobody else can answer in your place.",
     code: `function ask(service, question) {
   const { port1, port2 } = new MessageChannel();
@@ -99,7 +99,7 @@ toRight.postMessage({ meet: "left" }, [port2]);
   },
   {
     id: "attenuate",
-    title: "Give away less than you have, and take it back",
+    title: "Give a frame limited access, then revoke it",
     blurb: "A port is a capability: holding it is the permission. The owner here does not hand out its real line. It makes a new channel, keeps one end, and only answers <code>read</code> on it. To revoke, it closes its end. No account, no token, no list of who is allowed.",
     code: `function readOnly(counter) {
   const { port1, port2 } = new MessageChannel();
@@ -160,7 +160,7 @@ toRight.postMessage({ meet: "left" }, [port2]);
   },
   {
     id: "exchange",
-    title: "A SharedWorker as the exchange",
+    title: "Use a SharedWorker to connect tabs to each other",
     blurb: "Every tab on an origin can reach the same SharedWorker. Here it keeps a port to each tab and does one job: when a tab joins, it makes a channel between that tab and every other, then stays out of it. The tabs talk directly. Open a third in a new tab and it joins the same mesh.",
     code: `<span class="c">// in the SharedWorker</span>
 onconnect = ({ ports: [port] }) => {
@@ -191,7 +191,7 @@ onconnect = ({ ports: [port] }) => {
   },
   {
     id: "stream",
-    title: "Send a stream down the wire",
+    title: "Send a stream to another frame",
     blurb: "Ports carry more than messages. A <code>ReadableStream</code> is transferable too, so you can hand another origin a live stream and it reads with back-pressure, as if the source were local. Chrome and Firefox can do this today.",
     code: `const stream = new ReadableStream({ pull(controller) { controller.enqueue(nextChunk()); } });
 port.postMessage({ stream }, [stream]);
@@ -286,7 +286,7 @@ export const TOURS = {
   reply: { steps: [["Client one asks", "Client one sends a question, and with it a fresh port to answer on."], ["Client two asks", "Client two does the same. Each answer returns on its own port, so they cannot be mixed up."]] },
   attenuate: { steps: [["Share read-only", "The owner gives the guest a port that can read the counter and do nothing else."], ["Guest reads", "The guest reads the counter through its port."], ["Guest tries to add", "The guest asks to change it and is denied. Its port does not do that."], ["Owner adds one", "The owner still can."], ["Revoke", "The owner closes its end of the guest's port."], ["Guest reads", "The guest asks again and hears nothing. Its port goes nowhere now."]] },
   stream: { steps: [["Send a stream", "A stream is transferred. The frame reads it chunk by chunk while this page is still producing it."]] },
-  canvas: { steps: [["Hand over the canvas", "The drawing surface of the canvas on the left moves to another origin, which starts painting into this page."], ["Ask for another colour", "This page asks for a new colour over the port."]] },
+  canvas: { steps: [["Ask the painter to paint", "The painter on another origin starts drawing and sends each finished frame down the port. This page shows them in its own canvas."], ["Ask for another colour", "This page asks for a new colour over the port."]] },
   functions: { steps: [["Lend onTick", "A port standing in for a function goes to the other origin. It calls the function once a tick, and each call runs here.", 3600], ["Take the function back", "The port is closed. The countdown carries on over there, and its calls no longer arrive."]] },
   zerocopy: { steps: [["Transfer 64 MB", "64 MB goes to another origin and back without being copied. While it is away, this page holds zero bytes."]], then: "Now press Copy 64 MB to compare the time." },
   tearoff: { steps: [], then: "Press Tear it off. The widget moves to a window of its own and keeps its live port. This one needs your click, because browsers only open a window for a person." },

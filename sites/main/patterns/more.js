@@ -12,28 +12,35 @@ export const more = [
   {
     id: "canvas",
     title: "Let another origin paint on your page",
-    blurb: "An <code>OffscreenCanvas</code> is transferable. The canvas on the left is in this page's DOM. Hand its drawing surface down a port and a site on another origin paints into it, frame by frame, without being able to read or touch anything else here. An embed with no iframe around the pixels.",
-    code: `const surface = canvas.transferControlToOffscreen();
-port.postMessage({ surface }, [surface]);
+    blurb: "The painter is a frame on another origin. It draws on a canvas of its own and sends each finished frame down a port as an <code>ImageBitmap</code>, which is moved and not copied. This page shows each one in a canvas it owns. The painter cannot read or touch anything here. Handing over the canvas's own drawing surface would be shorter, but Chrome crashes a frame in another process that draws on one, so that is kept for workers.",
+    code: `<span class="c">// the other origin: draw, then send the finished frame</span>
+const mine = new OffscreenCanvas(width, height);
+const ctx = mine.getContext("2d");
+requestAnimationFrame(async function draw(t) {
+  paint(ctx, t);
+  const frame = await createImageBitmap(mine);
+  port.postMessage({ frame }, [frame]);       <span class="c">// moved</span>
+  requestAnimationFrame(draw);
+});
 
-<span class="c">// the other origin</span>
-port.onmessage = ({ data }) => {
-  const ctx = data.surface.getContext("2d");
-  requestAnimationFrame(function draw(t) { paint(ctx, t); requestAnimationFrame(draw); });
-};`,
+<span class="c">// this page: show it</span>
+const show = canvas.getContext("bitmaprenderer");
+port.onmessage = ({ data }) => show.transferFromImageBitmap(data.frame);`,
     async setup(stage, ui) {
       const box = stage.box("page", { html: `<canvas width="460" height="230" style="width:100%;height:100%;display:block" aria-label="A canvas in this page, painted by another origin"></canvas>` });
       const canvas = box.node.querySelector("canvas");
       await stage.frame("painter", {
         title: "Painter on another origin", color: "red",
         script: () => on("port", (_, [port]) => {
-          let hue = 350, ctx = null, frames = 0;
+          let hue = 350, frames = 0, going = false;
           port.onmessage = ({ data }) => {
             if (data.hue !== undefined) { hue = data.hue; return log("told to use hue " + hue); }
-            ctx = data.surface.getContext("2d");
-            log("holding a canvas I cannot see the page of");
-            const draw = (t) => {
-              const { width: w, height: h } = ctx.canvas;
+            if (!data.size || going) return;
+            going = true;
+            const [w, h] = data.size;
+            const mine = new OffscreenCanvas(w, h), ctx = mine.getContext("2d");
+            log("painting frames for a page I cannot see");
+            const draw = async (t) => {
               ctx.fillStyle = "rgba(15,28,63,0.12)"; ctx.fillRect(0, 0, w, h);
               for (let i = 0; i < 5; i++) {
                 const a = t / 700 + i * 1.26;
@@ -41,7 +48,8 @@ port.onmessage = ({ data }) => {
                 ctx.arc(w / 2 + Math.cos(a) * w * 0.32, h / 2 + Math.sin(a * 1.7) * h * 0.32, 12 + i * 3, 0, 7);
                 ctx.fillStyle = `hsl(${hue + i * 14} 85% 58%)`; ctx.fill();
               }
-              if (++frames % 60 === 0) port.postMessage({ frames });
+              const frame = await createImageBitmap(mine);
+              port.postMessage({ frame, frames: ++frames }, [frame]);
               requestAnimationFrame(draw);
             };
             requestAnimationFrame(draw);
@@ -52,14 +60,17 @@ port.onmessage = ({ data }) => {
       stage.post("painter", { cmd: "port" }, [channel.port2]);
       stage.cable("line", "page", "painter", "red");
       const hueBtn = ui.button("Ask for another colour", () => { channel.port1.postMessage({ hue: Math.floor(Math.random() * 360) }); stage.pulse("line", "page"); }, true);
-      channel.port1.onmessage = () => stage.pulse("line", "painter");
-      ui.button("Hand over the canvas", (btn) => {
-        try {
-          const surface = canvas.transferControlToOffscreen();
-          channel.port1.postMessage({ surface }, [surface]);
-          stage.pulse("line", "page");
-          btn.disabled = true; hueBtn.disabled = false;
-        } catch (err) { box.node.insertAdjacentHTML("beforeend", `<p class="small" style="position:absolute;inset:auto 0 0 0;padding:.5rem">This browser cannot do it: ${err.message}</p>`); }
+      const show = canvas.getContext("bitmaprenderer");
+      channel.port1.onmessage = ({ data }) => {
+        if (!data.frame) return;
+        if (!canvas.isConnected) { data.frame.close(); return channel.port1.close(); }
+        show.transferFromImageBitmap(data.frame);
+        if (data.frames % 45 === 1) stage.pulse("line", "painter");
+      };
+      ui.button("Ask the painter to paint", (btn) => {
+        channel.port1.postMessage({ size: [canvas.width, canvas.height] });
+        stage.pulse("line", "page");
+        btn.disabled = true; hueBtn.disabled = false;
       }, false, true);
     },
   },
@@ -178,7 +189,7 @@ win.postMessage({ feed: port }, location.origin, [port]);`,
   },
   {
     id: "tabserver",
-    title: "A tab that is a web server for other tabs",
+    title: "Serve pages to other tabs from this tab",
     blurb: "A Service Worker can answer a fetch any way it likes, including by asking someone else. This page hands the worker a port. Every request under <code>/patterns/served/</code> is sent up that port, and whatever you type on the left is the response. The page on the right is a real navigation to a real URL, and so is the new tab.",
     code: `<span class="c">// service worker</span>
 onfetch = (event) => event.respondWith(new Promise((resolve) => {
@@ -233,7 +244,7 @@ onfetch = (event) => event.respondWith(new Promise((resolve) => {
 more.push(
   {
     id: "stream-intro",
-    title: "A stream does not survive its introducer. A port does.",
+    title: "A forwarded stream stops when the page that passed it on closes. A port keeps working.",
     blurb: "You can pass a stream on, the same as a port. But a stream that was passed on keeps flowing through every context that touched it. Send one through the introducer, remove the introducer, and the reader stalls with no error and no end. So introduce with a port first, then send the stream down the direct line. Start again between the two to compare.",
     code: `<span class="c">// fragile: the middle is now part of the pipe for ever</span>
 toMiddle.postMessage({ stream }, [stream]);
