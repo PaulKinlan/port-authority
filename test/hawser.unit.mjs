@@ -322,3 +322,21 @@ test("disposing the root proxy closes the link for both sides", async () => {
   api[Symbol.dispose]();
   assert.ok((await handle.closed) instanceof LinkClosedError);
 });
+
+test("a link can be closed and another opened on the same endpoint", async () => {
+  // A Worker is not a port: it outlives any one link. Stand in for it with a
+  // pair of ports that are never closed by the library.
+  const { port1, port2 } = new MessageChannel();
+  open.add(port1); open.add(port2);
+  const plain = (p) => ({ postMessage: (m, t) => p.postMessage(m, t), addEventListener: (...a) => p.addEventListener(...a), removeEventListener: (...a) => p.removeEventListener(...a), start: () => p.start() });
+  let served = 0;
+  const serve = () => { served++; expose({ n: () => served }, plain(port2), { onclose: serve }); };
+  serve();
+  const first = wrap(plain(port1));
+  assert.equal(await first.n(), 1);
+  first[Symbol.dispose]();
+  const second = wrap(plain(port1));
+  assert.equal(await second.n(), 2);
+  await sleep(20);
+  assert.equal(await second.n(), 2, "the goodbye was not echoed into the new link");
+});

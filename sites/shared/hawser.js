@@ -132,7 +132,7 @@ class Link {
     });
     this.signalRegistry = new FinalizationRegistry((sid) => this.post({ t: "forget", sid }));
 
-    this.onmessage = (event) => { this.heard = Date.now(); this.receive(event.data, undefined); };
+    this.onmessage = (event) => { this.missed = 0; this.receive(event.data, undefined); };
     this.onclose = () => this.close(new LinkClosedError());
     endpoint.addEventListener("message", this.onmessage);
     endpoint.addEventListener("close", this.onclose);
@@ -140,9 +140,12 @@ class Link {
     openLinks.add(this);
 
     if (heartbeat > 0) {
-      this.heard = Date.now();
+      // Counted in beats and not in milliseconds, because a background tab's
+      // timers run late and a late timer is not a dead peer.
+      this.missed = 0;
       this.beat = setInterval(() => {
-        if (Date.now() - this.heard > heartbeat * 2.5) return this.close(new LinkClosedError("The other side of this link stopped answering"));
+        if (this.missed >= 2) return this.close(new LinkClosedError("The other side of this link stopped answering"));
+        this.missed++;
         this.post({ t: "ping" });
       }, heartbeat);
       this.beat.unref?.();
@@ -350,7 +353,7 @@ class Link {
       }
       case "forget": return void this.signalsIn.delete(message.sid);
       case "ping": return this.post({ t: "pong" });
-      case "bye": return this.close(new LinkClosedError("The other side closed this link"));
+      case "bye": return this.close(new LinkClosedError("The other side closed this link"), true);
     }
   }
 
@@ -459,9 +462,11 @@ class Link {
 
   // ---------------------------------------------------------------- closing
 
-  close(reason = new LinkClosedError("This link was closed from this side")) {
+  close(reason = new LinkClosedError("This link was closed from this side"), heardGoodbye = false) {
     if (this.isClosed) return;
-    try { this.flush(); this.endpoint.postMessage({ t: "bye" }); } catch {}
+    // Say goodbye, unless that is what we are answering: on an endpoint that
+    // outlives the link, such as a Worker, an echo would close the next link.
+    try { this.flush(); if (!heardGoodbye) this.endpoint.postMessage({ t: "bye" }); } catch {}
     this.isClosed = true;
     openLinks.delete(this);
     this.reason = reason instanceof Error ? reason : new LinkClosedError(String(reason));

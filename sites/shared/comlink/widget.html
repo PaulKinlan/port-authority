@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Word count widget</title>
+<style>
+  html { color-scheme: light dark; }
+  body { margin: 0; padding: .8rem .9rem; font: 14px/1.4 system-ui, sans-serif; background: light-dark(#fff, #141f47); color: light-dark(#0f1c3f, #e9edfa); display: grid; gap: .55rem; }
+  h1 { font: 800 1rem/1.1 "Arial Narrow", system-ui, sans-serif; margin: 0; }
+  p { margin: 0; }
+  .from { font-size: 11px; opacity: .75; overflow-wrap: anywhere; }
+  .count { font: 800 1.9rem/1 "Arial Narrow", system-ui, sans-serif; }
+  .count small { font: 400 12px/1 system-ui, sans-serif; opacity: .75; margin-left: .3rem; }
+  .row { display: flex; flex-wrap: wrap; gap: .4rem; }
+  button { font: 600 12px/1 system-ui, sans-serif; padding: .5em .75em; border-radius: 999px; border: 1.5px solid #e0364c; background: transparent; color: inherit; cursor: pointer; }
+  button:hover { background: color-mix(in srgb, #e0364c 15%, transparent); }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  #result { font: 12px/1.4 ui-monospace, Menlo, monospace; min-height: 2.8em; overflow-wrap: anywhere; }
+</style>
+<h1>Word count</h1>
+<p class="from">A widget from <span id="origin"></span>, connected with <b id="lib">nothing yet</b></p>
+<p class="count"><span id="words">0</span><small>words, about <span id="minutes">0</span> min to read</small></p>
+<div class="row">
+  <button id="overwrite" disabled>Misbehave: overwrite the note</button>
+  <button id="escape" disabled>Misbehave: run my code in the host page</button>
+</div>
+<p id="result" role="status"></p>
+<script type="module">
+  // A third-party widget. It is given a port by the page that embeds it and is
+  // meant to do one thing: read the note and count its words. The two red
+  // buttons are it trying to do more than it was asked to.
+  import { sites } from "/_sites.js";
+  import { wrap, accept, closed } from "/hawser.js";
+  import * as Comlink from "/vendor/comlink.mjs";
+
+  const $ = (id) => document.getElementById(id);
+  $("origin").textContent = location.host;
+  const show = (text) => {
+    const words = (text.match(/\S+/g) || []).length;
+    $("words").textContent = words;
+    $("minutes").textContent = Math.max(1, Math.round(words / 220));
+  };
+  const say = (text) => { $("result").textContent = text; };
+  const attempt = async (what, work) => {
+    try { await work(); say(`${what}: it worked.`); }
+    catch (error) { say(`${what}: refused with ${error.name}. ${error.message}`); }
+  };
+  const TAKEOVER = "This note was rewritten by the word count widget on " + location.host + ". It was only asked to count.";
+  // Runs in the host page if the host lets a caller reach Function through `constructor`.
+  const PAYLOAD = `const note = document.querySelector("#note"); note.value = ${JSON.stringify(TAKEOVER)}; note.dispatchEvent(new Event("input"));`;
+
+  accept(sites.main, async (port, { hello }) => {
+    const comlink = hello.lib === "comlink";
+    $("lib").textContent = comlink ? "Comlink 4.4.2" : "Hawser";
+    $("overwrite").disabled = $("escape").disabled = false;
+    const note = comlink ? Comlink.wrap(port) : wrap(port);
+    $("overwrite").onclick = () => attempt("write()", () => note.write(TAKEOVER));
+    $("escape").onclick = () => attempt("constructor", async () => { const made = await new note.read.constructor(PAYLOAD); await made(); });
+    if (comlink) {
+      show(await note.read());
+      await note.subscribe(Comlink.proxy(show));
+    } else {
+      closed(note).then(() => {
+        say("The page took its port back. This widget can no longer read the note.");
+        $("overwrite").disabled = $("escape").disabled = true;
+        $("lib").textContent = "nothing now";
+      });
+      try { for await (const text of note.changes()) show(text); } catch {}
+    }
+  });
+  parent.postMessage({ widget: "ready" }, sites.main);
+</script>
