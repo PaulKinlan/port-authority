@@ -57,7 +57,7 @@
           <li>Nothing else identifies a port: no name, no address, no way to look one up. To use a wire you must have been handed an end of it.</li>
           <li>So holding a port is the permission to use it, and passing a port on is how permission is given.</li>
         </ol>
-        <p class="see">Running: <a href="/patterns/#hello">a channel is two ends of one wire</a>, <a href="/patterns/#introduce">introduce two strangers, then leave</a>.</p>
+        <p class="see">Running: <a href="/patterns/hello/">a channel is two ends of one wire</a>, <a href="/patterns/introduce/">introduce two strangers, then leave</a>.</p>
       </section>
 
       <section id="where">
@@ -81,7 +81,7 @@
           <li>WebSocket, WebRTC data channels and WebTransport carry bytes and strings. They are how you leave the machine. A port at each end with a bridge between gives you <a href="#far">a port that crosses machines</a>.</li>
         </ul>
         <p>Outside the browser's own pages, the same idea appears as real ports between an Android app and its WebView, between an extension's content script and the page it runs in, and between Electron's processes. This site has not tested those.</p>
-        <p class="see">Running: <a href="/lab/">the lab</a> sends to thirteen of these places. <a href="/patterns/#exchange">A SharedWorker as the exchange</a>. <a href="/patterns/#tabserver">A tab that is a web server for other tabs</a>. <a href="/patterns/#socket">A shared worker holding the only socket</a>. <a href="/patterns/#audio">A worker sending notes to the audio thread</a>.</p>
+        <p class="see">Running: <a href="/lab/">the lab</a> sends to thirteen of these places. <a href="/patterns/exchange/">A SharedWorker as the exchange</a>. <a href="/patterns/tabserver/">A tab that is a web server for other tabs</a>. <a href="/patterns/socket/">A shared worker holding the only socket</a>. <a href="/patterns/audio/">A worker sending notes to the audio thread</a>.</p>
       </section>
 
       <section id="what">
@@ -91,20 +91,20 @@
           <thead><tr><th>Kind</th><th>How</th><th>Measured, to a frame on another origin</th></tr></thead>
           <tbody>
             <tr><td><code>MessagePort</code></td><td>Moved</td><td>Works, and works again from there to a worker inside that frame.</td></tr>
-            <tr><td><code>ArrayBuffer</code></td><td>Moved</td><td>Works. The sender's buffer drops to zero bytes. <a href="/patterns/#zerocopy">64 MB in a few milliseconds.</a></td></tr>
+            <tr><td><code>ArrayBuffer</code></td><td>Moved</td><td>Works. The sender's buffer drops to zero bytes. <a href="/patterns/zerocopy/">64 MB in a few milliseconds.</a></td></tr>
             <tr><td><code>ReadableStream</code>, <code>WritableStream</code>, <code>TransformStream</code></td><td>Moved</td><td>Work. The data keeps flowing through the context that sent the stream.</td></tr>
-            <tr><td><code>OffscreenCanvas</code></td><td>Moved</td><td>Works, including one tied to a canvas in your page. <a href="/patterns/#canvas">Another origin paints in your page.</a></td></tr>
+            <tr><td><code>OffscreenCanvas</code></td><td>Moved</td><td>Works, including one tied to a canvas in your page. <a href="/patterns/canvas/">Another origin paints in your page.</a></td></tr>
             <tr><td><code>ImageBitmap</code></td><td>Moved or copied</td><td>Works.</td></tr>
-            <tr><td><code>VideoFrame</code>, <code>AudioData</code>, <code>EncodedVideoChunk</code></td><td>Moved or copied</td><td>Arrive unreadable. They do work to a worker and to a sandboxed frame. <a href="/patterns/#filter">Video through a sandboxed filter.</a></td></tr>
+            <tr><td><code>VideoFrame</code>, <code>AudioData</code>, <code>EncodedVideoChunk</code></td><td>Moved or copied</td><td>Arrive unreadable. They do work to a worker and to a sandboxed frame. <a href="/patterns/filter/">Video through a sandboxed filter.</a></td></tr>
             <tr><td><code>RTCDataChannel</code>, <code>MediaSourceHandle</code></td><td>Moved</td><td>Arrive unreadable. They work to a worker and to a sandboxed frame.</td></tr>
             <tr><td><code>MediaStreamTrack</code></td><td>Moved, by the specification</td><td>Refused everywhere. A live camera track cannot be handed over yet. Frames can.</td></tr>
-            <tr><td><code>CryptoKey</code></td><td>Copied</td><td>Works, including a key nobody can read. The receiver can use it and <a href="/patterns/#keycopy">keep it for good</a>.</td></tr>
+            <tr><td><code>CryptoKey</code></td><td>Copied</td><td>Works, including a key nobody can read. The receiver can use it and <a href="/patterns/keycopy/">keep it for good</a>.</td></tr>
             <tr><td><code>Blob</code>, <code>File</code>, <code>ImageData</code>, errors, geometry, plain data</td><td>Copied</td><td>Work. Maps, sets, dates, big integers and cycles survive.</td></tr>
             <tr><td><code>RTCCertificate</code>, <code>CropTarget</code></td><td>Copied</td><td>Work.</td></tr>
             <tr><td>File system handles</td><td>Copied</td><td>Arrive unreadable. They work within the origin.</td></tr>
             <tr><td><code>SharedArrayBuffer</code>, <code>WebAssembly.Module</code>, shared <code>WebAssembly.Memory</code></td><td>Shared, or copied</td><td>Stay within the origin. Shared memory also needs <a href="/isolated/">a cross-origin isolated page</a>.</td></tr>
             <tr><td><code>Promise</code></td><td>Neither</td><td>Not refused. It arrives as an empty object, silently.</td></tr>
-            <tr><td>Functions, DOM nodes, symbols, proxies, <code>URL</code>, <code>Response</code>, <code>MediaStream</code>, <code>AbortSignal</code>, workers</td><td>Neither</td><td>Refused with <code>DataCloneError</code>. <a href="/patterns/#functions">A port can stand in for a function.</a></td></tr>
+            <tr><td>Functions, DOM nodes, symbols, proxies, <code>URL</code>, <code>Response</code>, <code>MediaStream</code>, <code>AbortSignal</code>, workers</td><td>Neither</td><td>Refused with <code>DataCloneError</code>. <a href="/patterns/functions/">A port can stand in for a function.</a></td></tr>
           </tbody>
         </table></div>
         <p class="measured">The full table has 45 kinds against 13 destinations, and each test uses the thing where it lands, because arriving is not the same as working. <a href="/lab/">Run it in your browser</a> or <a href="/lab/results/">see what others reported</a>.</p>
@@ -115,11 +115,11 @@
         <p>Because a port can only be used by whoever holds it, the ordinary moves of access control become ordinary moves with ports.</p>
         <ul>
           <li><strong>Grant</strong>: send a port.</li>
-          <li><strong>Introduce</strong>: make a channel, send one end to each of two parties, and keep nothing. They now talk without you, and removing you changes nothing. <a href="/patterns/#introduce">Running.</a></li>
-          <li><strong>Reply to exactly one asker</strong>: send a fresh port with each question, and answer on it. No request ids, and no way to answer the wrong party. <a href="/patterns/#reply">Running.</a></li>
-          <li><strong>Give less than you have</strong>: do not pass on your own port. Make a new channel, keep one end, and forward only what you choose to. The limit lives with you and the holder cannot widen it. <a href="/patterns/#attenuate">Running.</a></li>
+          <li><strong>Introduce</strong>: make a channel, send one end to each of two parties, and keep nothing. They now talk without you, and removing you changes nothing. <a href="/patterns/introduce/">Running.</a></li>
+          <li><strong>Reply to exactly one asker</strong>: send a fresh port with each question, and answer on it. No request ids, and no way to answer the wrong party. <a href="/patterns/reply/">Running.</a></li>
+          <li><strong>Give less than you have</strong>: do not pass on your own port. Make a new channel, keep one end, and forward only what you choose to. The limit lives with you and the holder cannot widen it. <a href="/patterns/attenuate/">Running.</a></li>
           <li><strong>Revoke</strong>: close your end. The other side is not told, so a client should treat silence as the answer.</li>
-          <li><strong>Delegate along a chain</strong>: each holder passes on a narrower port of its own. <a href="/patterns/#signer">A signing port narrowed to three orders.</a></li>
+          <li><strong>Delegate along a chain</strong>: each holder passes on a narrower port of its own. <a href="/patterns/signer/">A signing port narrowed to three orders.</a></li>
         </ul>
         <p>There are no accounts, tokens or lists of who is allowed in any of these. What you hold is what you may do.</p>
       </section>
@@ -127,25 +127,25 @@
       <section id="streams">
         <h2>5. Streams</h2>
         <ul>
-          <li>A stream sent down a port is read on the far side while the near side is still producing it, with back-pressure: a slow reader slows the source. <a href="/patterns/#stream">Running</a>, and <a href="/patterns/#pipeline">across three origins</a>.</li>
-          <li>A stream has a direction, and each direction can be given away separately. A readable alone is permission to listen. A writable alone is permission to speak. <a href="/patterns/#halves">Running, between real sites.</a></li>
+          <li>A stream sent down a port is read on the far side while the near side is still producing it, with back-pressure: a slow reader slows the source. <a href="/patterns/stream/">Running</a>, and <a href="/patterns/pipeline/">across three origins</a>.</li>
+          <li>A stream has a direction, and each direction can be given away separately. A readable alone is permission to listen. A writable alone is permission to speak. <a href="/patterns/halves/">Running, between real sites.</a></li>
           <li>The owner keeps the switch. Close the controller and the listener is told the feed has ended. Error the sink and the next write fails.</li>
-          <li>A transform has two ends and both can be given away, which makes a transform a service: <code>mine.pipeThrough(theirs)</code>, where <code>theirs</code> runs on another origin. <a href="/patterns/#roundtrip">Running.</a></li>
-          <li>A network connection is two streams. Hand them to a context that has no network access and it can talk on that one connection and no other, until you close it. <a href="/patterns/#lend">Running.</a></li>
-          <li>A stream does not survive the context it was passed through. If a middle party forwards a stream and then goes away, the reader stalls with no error. Send streams down a direct port. <a href="/patterns/#stream-intro">Running.</a></li>
+          <li>A transform has two ends and both can be given away, which makes a transform a service: <code>mine.pipeThrough(theirs)</code>, where <code>theirs</code> runs on another origin. <a href="/patterns/roundtrip/">Running.</a></li>
+          <li>A network connection is two streams. Hand them to a context that has no network access and it can talk on that one connection and no other, until you close it. <a href="/patterns/lend/">Running.</a></li>
+          <li>A stream does not survive the context it was passed through. If a middle party forwards a stream and then goes away, the reader stalls with no error. Send streams down a direct port. <a href="/patterns/stream-intro/">Running.</a></li>
         </ul>
       </section>
 
       <section id="threads">
         <h2>6. Threads</h2>
         <ul>
-          <li>A port given to a worker belongs to the worker's thread. Two workers introduced to each other keep talking while the page is frozen. <a href="/patterns/#frozen">Running.</a></li>
+          <li>A port given to a worker belongs to the worker's thread. Two workers introduced to each other keep talking while the page is frozen. <a href="/patterns/frozen/">Running.</a></li>
           <li>A canvas whose drawing surface has been transferred is painted without the page too, so a worker can show its state while the page is stuck.</li>
           <li>With shared memory, a worker can post a question down a port and block on that line until the answer is written. Synchronous code can call anything asynchronous, a person included. <a href="/isolated/">Running, in the isolated room.</a></li>
-          <li>A service worker can answer a fetch by asking a port, which turns a tab into the server for a set of URLs. <a href="/patterns/#tabserver">Running.</a></li>
-          <li>The other end of that port can be on another origin. Introduce your service worker to another site and that site is mounted at a path on yours, streamed bodies included. Measured: a <code>ReadableStream</code> made in a frame on another origin is accepted by the service worker as a response body, and is read while it is still being written. What is mounted runs as your origin. <a href="/patterns/#mounted">Running.</a></li>
-          <li>The audio thread accepts a port. Give a worker the other end and it drives sound with no help from the page. Measured: 13 notes in a 3 second freeze, at one every 230 ms, so none were lost. <a href="/patterns/#audio">Running.</a></li>
-          <li>A shared worker can hold the one connection a site needs, with a port to each tab. An answer goes back down the port of the tab that asked. <a href="/patterns/#socket">Running.</a></li>
+          <li>A service worker can answer a fetch by asking a port, which turns a tab into the server for a set of URLs. <a href="/patterns/tabserver/">Running.</a></li>
+          <li>The other end of that port can be on another origin. Introduce your service worker to another site and that site is mounted at a path on yours, streamed bodies included. Measured: a <code>ReadableStream</code> made in a frame on another origin is accepted by the service worker as a response body, and is read while it is still being written. What is mounted runs as your origin. <a href="/patterns/mounted/">Running.</a></li>
+          <li>The audio thread accepts a port. Give a worker the other end and it drives sound with no help from the page. Measured: 13 notes in a 3 second freeze, at one every 230 ms, so none were lost. <a href="/patterns/audio/">Running.</a></li>
+          <li>A shared worker can hold the one connection a site needs, with a port to each tab. An answer goes back down the port of the tab that asked. <a href="/patterns/socket/">Running.</a></li>
         </ul>
       </section>
 
@@ -153,8 +153,8 @@
         <h2>7. Keys</h2>
         <p>There are two ways to let another origin use a key, and they are not alike.</p>
         <ul>
-          <li><strong>Send the key.</strong> A non-extractable <code>CryptoKey</code> can be posted to another origin. Measured: it arrives, it signs, and it still cannot be read. But it is a copy. The receiver can store it in its own IndexedDB and keep using it after you have destroyed yours. <a href="/patterns/#keycopy">Running, between real sites.</a></li>
-          <li><strong>Send a port that uses the key.</strong> The key stays where it was made. The port can be limited to certain messages, counted, passed on in a weaker form, and closed. <a href="/patterns/#signer">Running.</a></li>
+          <li><strong>Send the key.</strong> A non-extractable <code>CryptoKey</code> can be posted to another origin. Measured: it arrives, it signs, and it still cannot be read. But it is a copy. The receiver can store it in its own IndexedDB and keep using it after you have destroyed yours. <a href="/patterns/keycopy/">Running, between real sites.</a></li>
+          <li><strong>Send a port that uses the key.</strong> The key stays where it was made. The port can be limited to certain messages, counted, passed on in a weaker form, and closed. <a href="/patterns/signer/">Running.</a></li>
         </ul>
         <p>For delegating authority you mean to be able to take back, send the port.</p>
       </section>
@@ -162,8 +162,8 @@
       <section id="lasting">
         <h2>8. Making a port last</h2>
         <ul>
-          <li>A port cannot be saved. Leave it with a <code>SharedWorker</code> in <code>pagehide</code> and collect it on the next load. Create the worker with <code>extendedLifetime: true</code>, or it dies with its last page. Messages sent meanwhile wait in the port. <a href="/patterns/#reload">Running.</a></li>
-          <li>A port survives its page being torn off into a new window, if it is handed to that window. <a href="/patterns/#tearoff">Running.</a></li>
+          <li>A port cannot be saved. Leave it with a <code>SharedWorker</code> in <code>pagehide</code> and collect it on the next load. Create the worker with <code>extendedLifetime: true</code>, or it dies with its last page. Messages sent meanwhile wait in the port. <a href="/patterns/reload/">Running.</a></li>
+          <li>A port survives its page being torn off into a new window, if it is handed to that window. <a href="/patterns/tearoff/">Running.</a></li>
           <li>For anything that must outlive every tab, a port is the wrong tool. Keep the durable part on a server and make fresh ports when a page opens. This site's <a href="/hub/">hub</a> keeps its registry on a server for that reason.</li>
         </ul>
       </section>
@@ -173,7 +173,7 @@
         <ul>
           <li>Two tabs that are not related cannot pass a port: neither has a reference to the other. A server can introduce them, and they can then open a WebRTC data channel between themselves. Wrap each end in a <code>MessageChannel</code> and both sides hold what looks like an ordinary port. <a href="/hub/">The hub does this</a> when a tool's site is already open.</li>
           <li>That bridge carries JSON only. Ports and streams cannot ride on it, where they can on a real port.</li>
-          <li>The same bridge works between devices. A pairing code names a meeting place on the server, which passes the handful of messages WebRTC needs and then carries nothing. Each device holds a port, and can hand it on: a phone ends up pressing buttons in a sandboxed frame on a laptop that was given a port and nothing else. <a href="/patterns/#far">Running.</a> Measured between two pages on one computer. Between two networks it depends on both being able to reach each other, and there is no relay for when they cannot.</li>
+          <li>The same bridge works between devices. A pairing code names a meeting place on the server, which passes the handful of messages WebRTC needs and then carries nothing. Each device holds a port, and can hand it on: a phone ends up pressing buttons in a sandboxed frame on a laptop that was given a port and nothing else. <a href="/patterns/far/">Running.</a> Measured between two pages on one computer. Between two networks it depends on both being able to reach each other, and there is no relay for when they cannot.</li>
         </ul>
       </section>
 
@@ -197,10 +197,10 @@
         <h2>11. What is still open</h2>
         <ul>
           <li>Safari and Firefox. Everything marked "measured" is Chromium until <a href="/lab/results/">the results page</a> says otherwise.</li>
-          <li>WebTransport streams. They are ordinary streams and should move like any other, which would let one origin open a session and lend another a single stream of it. Not measured: it needs a server this site does not have yet. The WebSocket version is <a href="/patterns/#lend">running</a>.</li>
+          <li>WebTransport streams. They are ordinary streams and should move like any other, which would let one origin open a session and lend another a single stream of it. Not measured: it needs a server this site does not have yet. The WebSocket version is <a href="/patterns/lend/">running</a>.</li>
           <li>Why video frames and data channels reach a sandboxed frame and not a frame on a real second origin.</li>
           <li>Why the shared worker stops answering part-way through the isolated lab.</li>
-          <li>Ports to a native app and to an extension. A port to another machine is <a href="/patterns/#far">running</a>, tested between two pages on one computer and not yet between two networks.</li>
+          <li>Ports to a native app and to an extension. A port to another machine is <a href="/patterns/far/">running</a>, tested between two pages on one computer and not yet between two networks.</li>
         </ul>
       </section>
     </main>
