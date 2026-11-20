@@ -15,13 +15,13 @@
     </header>
     <div class="stack" style="--gap:.8rem; padding-top:2rem">
       <h1 style="font-size:var(--step-3)">Your hub</h1>
-      <p>Keep this tab open. It holds a line to every site that is offering you tools, and it is where sites come to ask for one. Nothing here leaves your browser unless you connect your own agent.</p>
+      <p>You do not need to keep this open. Your hub lives on a server and remembers which sites offer you which tools. This page is only for looking at it and changing it. Calls between two sites happen on your machine and never pass through here.</p>
     </div>
     <main class="dash" id="dash"></main>
   </div>
   <script type="module">
     import { switchboard, mountDashboard } from "/hub/ui.js";
-    mountDashboard(document.getElementById("dash"), switchboard("dashboard"));
+    mountDashboard(document.getElementById("dash"), switchboard());
   </script>
 </body>
 </html>
