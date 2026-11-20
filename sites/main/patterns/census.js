@@ -31,10 +31,18 @@ export const KINDS = [
   { name: "Blob", note: "Copied, not moved. The bytes are shared behind the scenes.", move: false, make: () => new Blob(["census"]) },
 ];
 
+// Frames, audio and bitmaps hold memory until they are closed, and the browser
+// complains when one is thrown away open.
+const release = (value) => { if (["VideoFrame", "AudioData", "ImageBitmap"].includes(value?.constructor?.name)) try { value.close(); } catch {} };
+
 const receiver = () => {
   const answer = (ok, type) => ({ ok, type });
   const handle = (port) => {
-    port.onmessage = (event) => port.postMessage(answer(true, Object.prototype.toString.call(event.data.value).slice(8, -1)));
+    port.onmessage = (event) => {
+      const value = event.data.value;
+      port.postMessage(answer(true, Object.prototype.toString.call(value).slice(8, -1)));
+      if (value && typeof value.close === "function" && typeof value.clone === "function") try { value.close(); } catch (err) {}
+    };
     port.onmessageerror = () => port.postMessage(answer(false, "arrived but could not be read"));
   };
   return handle;
@@ -62,6 +70,8 @@ async function trySend(kind, connect) {
   const channel = new MessageChannel();
   connect(channel.port2);
   return new Promise((resolve) => {
+    const settle = resolve;
+    resolve = (result) => { release(value); settle(result); };
     const timer = setTimeout(() => resolve({ ok: false, why: "no answer" }), 1500);
     channel.port1.onmessage = ({ data }) => { clearTimeout(timer); resolve(data.ok ? { ok: true } : { ok: false, why: data.type }); channel.port1.close(); };
     try { channel.port1.postMessage({ value }, kind.move ? [value] : []); }
@@ -73,6 +83,8 @@ async function tryStore(kind, db) {
   let value;
   try { value = await kind.make(); } catch { return { ok: false, why: "cannot be made here" }; }
   return new Promise((resolve) => {
+    const settle = resolve;
+    resolve = (result) => { release(value); settle(result); };
     try {
       const tx = db.transaction("s", "readwrite");
       tx.objectStore("s").put(value, kind.name);
