@@ -36,6 +36,17 @@ const mine = await caption("attenuate");
 await page.waitForTimeout(3500);
 check("a press of your own takes over from the tour", /Owner adds one\. The owner still can/.test(mine) && (await caption("attenuate")) === mine, mine.slice(0, 80));
 
+// The newer experiments play themselves too, at phone size.
+const go = async (id) => { await page.locator("#" + id).scrollIntoViewIfNeeded(); await page.waitForSelector(`#${id} .stage-el`); await page.locator(`#${id} .stage-el`).scrollIntoViewIfNeeded(); };
+await go("far");
+check("far: the tour connects a stand-in device and runs to the end", (await finished("far", 45000)) && /asked for another colour/.test(await frameText("#far", "tool")), (await caption("far")).slice(0, 80));
+if (shots) await page.locator("#far").screenshot({ path: shots + "/tour-far.png" });
+await go("mounted");
+check("mounted: the tour mounts, loads and unmounts", (await finished("mounted", 40000)) && /Nothing is mounted here/.test(await frameText("#mounted", "view")), (await caption("mounted")).slice(0, 80));
+await go("socket");
+check("socket: the tour runs to the end on one socket", (await finished("socket", 40000)) && /says hello 2/.test(await frameText("#socket", "tab2")), (await caption("socket")).slice(0, 80));
+if (shots) await page.locator("#socket").screenshot({ path: shots + "/tour-socket.png" });
+
 check("no page errors", errors.length === 0, errors.join(" | "));
 await browser.close();
 process.exit(failed ? 1 : 0);
