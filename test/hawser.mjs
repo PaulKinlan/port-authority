@@ -5,7 +5,7 @@
 import { createRequire } from "node:module";
 const { chromium } = createRequire(import.meta.url)("playwright");
 const LIVE = process.env.LIVE;
-const root = LIVE ? `https://portauthority.${LIVE}` : "http://hub.localhost:8787";
+const root = LIVE ? process.env.LIVE_MAIN || `https://portauthority.${LIVE}` : "http://hub.localhost:8787";
 // CHROMIUM_ARGS=--enable-blink-features=MessagePortCloseEvent turns on the port close event.
 const args = (process.env.CHROMIUM_ARGS || "").split(" ").filter(Boolean);
 const browser = await chromium.launch({ args, ...(process.env.HTTPS_PROXY && LIVE ? { proxy: { server: process.env.HTTPS_PROXY } } : {}) });

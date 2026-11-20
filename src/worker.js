@@ -25,13 +25,20 @@ const TYPES = {
 function label(host) { return host.split(":")[0].split(".")[0]; }
 function siteFor(host) { return LABELS[label(host)] || "main"; }
 
-function siteOrigins(url) {
+// Where each site lives. Locally and on plain workers.dev the names follow the
+// host that was asked. When the main site has a domain of its own (MAIN_HOST),
+// the demo sites do not: they stay at their workers.dev addresses (DEMO_SUFFIX).
+function siteOrigins(url, env) {
   const host = url.host;
   const first = host.split(".")[0];
   const local = host.includes("localhost") || host.startsWith("127.");
+  const out = {};
+  if (!local && env.MAIN_HOST && env.DEMO_SUFFIX) {
+    for (const [site, name] of Object.entries(PROD)) out[site] = site === "main" ? "https://" + env.MAIN_HOST : "https://" + name + env.DEMO_SUFFIX;
+    return out;
+  }
   const rest = host.includes(".") ? host.slice(first.length) : "." + host; // ".kinlan-test.workers.dev"
   const names = local ? LOCAL : PROD;
-  const out = {};
   for (const [site, name] of Object.entries(names)) out[site] = url.protocol + "//" + name + rest;
   return out;
 }
@@ -83,6 +90,12 @@ export default {
     const url = new URL(request.url);
     const site = siteFor(url.host);
 
+    // The main site has one address. Its old workers.dev address sends people on,
+    // so that the demo sites and the hub all agree on which origin is the hub.
+    if (env.MAIN_HOST && env.DEMO_SUFFIX && url.host === PROD.main + env.DEMO_SUFFIX && (request.method === "GET" || request.method === "HEAD") && !request.headers.get("upgrade")) {
+      return Response.redirect("https://" + env.MAIN_HOST + url.pathname + url.search, 302);
+    }
+
     // /h/<hub id>: a WebSocket into one person's hub.
     if (url.pathname.startsWith("/h/")) {
       const id = url.pathname.slice(3);
@@ -123,7 +136,7 @@ export default {
     }
 
     if (url.pathname === "/_sites.js") {
-      const body = "export const sites = " + JSON.stringify(siteOrigins(url)) + ";\nexport const site = " + JSON.stringify(site) + ";\n";
+      const body = "export const sites = " + JSON.stringify(siteOrigins(url, env)) + ";\nexport const site = " + JSON.stringify(site) + ";\n";
       return new Response(body, { headers: { "content-type": TYPES.js, "access-control-allow-origin": "*", "cache-control": "no-cache" } });
     }
 
