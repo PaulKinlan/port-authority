@@ -55,6 +55,39 @@ check("tabserver: iframe navigation is answered by this tab", /Served by tab one
 const other = await ctx.newPage();
 await other.goto(root + "/patterns/served/some/other/path");
 check("tabserver: a different tab gets a real page at a real URL", /Served by tab one/.test(await other.locator("body").innerText()) && /some\/other\/path/.test(await other.locator("body").innerText()));
+// ---- second batch
+for (const id of ["stream-intro", "pipeline", "reload"]) { await page.locator("#" + id).scrollIntoViewIfNeeded(); await page.waitForSelector(`#${id} .controls button`); }
+await wait(800);
+const reads = async () => ((await frameText("#stream-intro", "right")).match(/read \d+/g) || []).length;
+await click("#stream-intro", "Stream through the introducer"); await wait(2200);
+await click("#stream-intro", "Remove the introducer"); await wait(600);
+const r1 = await reads(); await wait(2500); const r2 = await reads();
+check("stream relayed through the introducer stalls when it is removed", r1 > 0 && r2 <= r1 + 1, `(${r1} then ${r2})`);
+await click("#stream-intro", "Start again"); await wait(1200);
+await click("#stream-intro", "Introduce, then stream directly"); await wait(2200);
+await click("#stream-intro", "Remove the introducer"); await wait(300);
+const d1 = await reads(); await wait(2500); const d2 = await reads();
+check("stream sent down the introduced port keeps flowing", d2 >= d1 + 2, `(${d1} then ${d2})`);
+
+await click("#pipeline", "Start the pipe"); await wait(2500);
+check("pipeline: chunks cross three origins transformed", /read CHUNK \d+!/.test(await frameText("#pipeline", "sink")));
+await click("#pipeline", "Pause the reader"); await wait(2500);
+const asked1 = await boxText("#pipeline", "page"); await wait(2500); const asked2 = await boxText("#pipeline", "page");
+check("pipeline: pausing the reader stops the source", asked1 === asked2, asked2.replace(/\n/g, " "));
+
+await page.locator("#reload").scrollIntoViewIfNeeded(); await wait(2500);
+await click("#reload", "Reload the frame"); await wait(2500);
+await click("#reload", "Reload the frame"); await wait(2500);
+const bank = await boxText("#reload", "bank");
+check("reload: the port survives two reloads with no gaps", /2 reloads, at \d+, 0 gaps/.test(bank) && /withdrew my port/.test(await frameText("#reload", "keeper")), bank.replace(/\n/g, " "));
+await click("#reload", "Try to store a port in IndexedDB"); await wait(500);
+check("reload: IndexedDB refuses a port", /DataCloneError/.test(await boxText("#reload", "bank")));
+
+await page.locator("#census").scrollIntoViewIfNeeded();
+await page.waitForSelector('table.census[data-done="true"]', { timeout: 60000 });
+const rows = await page.locator("table.census tbody tr").evaluateAll((trs) => trs.map((tr) => [...tr.cells].map((c) => c.textContent.trim().replace(/\s+/g, " ").slice(0, 34)).join(" | ")));
+console.log(rows.map((r) => "     " + r).join("\n"));
+check("census ran for every kind", rows.length === 14 && rows.every((r) => !/testing/.test(r)));
 check("no page errors", errors.length === 0, errors.join(" | "));
 await browser.close();
 process.exit(failed ? 1 : 0);

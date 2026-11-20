@@ -227,3 +227,158 @@ onfetch = (event) => event.respondWith(new Promise((resolve) => {
     },
   },
 ];
+
+// ---------------------------------------------------------------- streams
+
+more.push(
+  {
+    id: "stream-intro",
+    title: "A stream does not survive its introducer. A port does.",
+    blurb: "You can pass a stream on, the same as a port. But a stream that was passed on keeps flowing through every context that touched it. Send one through the introducer, remove the introducer, and the reader stalls with no error and no end. So introduce with a port first, then send the stream down the direct line. Start again between the two to compare.",
+    code: `<span class="c">// fragile: the middle is now part of the pipe for ever</span>
+toMiddle.postMessage({ stream }, [stream]);
+
+<span class="c">// sturdy: the middle only introduces</span>
+const direct = await introducedPort();
+direct.postMessage({ stream }, [stream]);`,
+    async setup(stage, ui) {
+      const source = () => {
+        let viaIntro = null, direct = null;
+        const make = () => { let n = 0; return new ReadableStream({ async pull(c) { await new Promise((r) => setTimeout(r, 600)); c.enqueue(++n); log("wrote " + n); } }, { highWaterMark: 0 }); };
+        on("port", (_, [port]) => { viaIntro = port; port.onmessage = (e) => { direct = e.ports[0]; log("introduced to the reader"); const s = make(); send(direct, "direct", { stream: s }, [s]); log("sent a stream down the direct line"); }; });
+        on("relay", () => { const s = make(); send(viaIntro, "i-left", { stream: s }, [s]); log("sent a stream to the introducer"); });
+      };
+      const reader = () => {
+        const read = async (stream, how) => { log("reading a stream that came " + how); const r = stream.getReader(); for (;;) { const { value, done } = await r.read(); if (done) return log("ended"); log("read " + value); tell("read", { n: value }); } };
+        on("port", (_, [port]) => { port.onmessage = (e) => { if (e.data.stream) read(e.data.stream, "through the introducer"); else if (e.ports[0]) e.ports[0].onmessage = (m) => read(m.data.stream, "down the direct line"); }; });
+      };
+      await Promise.all([
+        stage.frame("left", { title: "Source", color: "red", script: source }),
+        stage.frame("intro", {
+          title: "Introducer", color: "yellow",
+          script: () => {
+            const lines = {};
+            on("port", (data, [port]) => {
+              lines[data.side] = port;
+              if (data.side === "left") port.onmessage = (e) => { log("passing the stream on"); send(lines.right, "i-right", e.data, [e.data.stream]); };
+            });
+            on("introduce", () => { const { port1, port2 } = new MessageChannel(); send(lines.left, "i-left", {}, [port1]); send(lines.right, "i-right", {}, [port2]); log("introduced them"); });
+          },
+        }),
+        stage.frame("right", { title: "Reader", color: "teal", script: reader }),
+      ]);
+      for (const name of ["left", "right"]) {
+        const channel = new MessageChannel();
+        stage.post(name, { cmd: "port" }, [channel.port1]);
+        stage.post("intro", { cmd: "port", side: name }, [channel.port2]);
+        stage.cable("i-" + name, name, "intro", "ink");
+      }
+      const removeBtn = ui.button("Remove the introducer", (btn) => { stage.remove("intro"); btn.disabled = true; }, true);
+      const lock = (...buttons) => buttons.forEach((b) => (b.disabled = true));
+      const directBtn = ui.button("Introduce, then stream directly", (btn) => { stage.post("intro", { cmd: "introduce" }); stage.cable("direct", "left", "right", "teal"); lock(btn, relayBtn); removeBtn.disabled = false; });
+      const relayBtn = ui.button("Stream through the introducer", (btn) => { stage.post("left", { cmd: "relay" }); lock(btn, directBtn); removeBtn.disabled = false; }, false, true);
+    },
+  },
+  {
+    id: "pipeline",
+    title: "Back-pressure across three origins",
+    blurb: "A transform can be a service. This page hands its stream to another origin, which returns a transformed stream, which goes to a third origin to be read. Nothing is buffered without limit: pause the reader and, a few chunks later, the source stops being asked for more. Three origins, one pipe, and the slowest end sets the pace.",
+    code: `<span class="c">// the transformer, on its own origin</span>
+port.onmessage = ({ data }) => {
+  const out = data.readable.pipeThrough(new TransformStream({ transform: shout }));
+  port.postMessage({ readable: out }, [out]);
+};`,
+    async setup(stage, ui) {
+      const box = stage.box("page", { html: `<div class="here"><h4>This page, the source</h4><ul class="log"><li>idle</li></ul></div>` });
+      const say = (text) => { box.node.querySelector("ul").innerHTML = `<li>${text}</li>`; };
+      await Promise.all([
+        stage.frame("shout", {
+          title: "Transformer, origin two", color: "yellow",
+          script: () => on("port", (_, [port]) => {
+            port.onmessage = ({ data }) => {
+              let n = 0;
+              const out = data.readable.pipeThrough(new TransformStream({ transform(chunk, c) { log(`shouted ${++n}`); c.enqueue(String(chunk).toUpperCase() + "!"); } }));
+              send(port, "a", { readable: out }, [out]);
+            };
+          }),
+        }),
+        stage.frame("sink", {
+          title: "Reader, origin three", color: "teal",
+          script: () => {
+            let paused = false, wake = null;
+            on("pause", (data) => { paused = data.paused; log(paused ? "paused" : "reading again"); if (!paused) wake?.(); });
+            on("port", (_, [port]) => {
+              port.onmessage = async ({ data }) => {
+                const reader = data.readable.getReader();
+                for (;;) {
+                  if (paused) await new Promise((r) => (wake = r));
+                  const { value, done } = await reader.read();
+                  if (done) break;
+                  log("read " + value);
+                  await new Promise((r) => setTimeout(r, 350));
+                }
+              };
+            });
+          },
+        }),
+      ]);
+      const toShout = new MessageChannel(), toSink = new MessageChannel();
+      stage.post("shout", { cmd: "port" }, [toShout.port2]);
+      stage.post("sink", { cmd: "port" }, [toSink.port2]);
+      stage.cable("a", "page", "shout", "yellow");
+      stage.cable("b", "shout", "sink", "teal");
+      toShout.port1.onmessage = ({ data }) => { toSink.port1.postMessage({ readable: data.readable }, [data.readable]); stage.pulse("b", "shout"); };
+      let paused = false;
+      const pauseBtn = ui.button("Pause the reader", (btn) => { paused = !paused; stage.post("sink", { cmd: "pause", paused }); btn.textContent = paused ? "Let the reader continue" : "Pause the reader"; }, true);
+      ui.button("Start the pipe", (btn) => {
+        let made = 0;
+        const readable = new ReadableStream({ pull(c) { c.enqueue(`chunk ${++made}`); say(`asked for ${made} chunk${made === 1 ? "" : "s"} so far`); stage.pulse("a", "page"); } }, { highWaterMark: 0 });
+        toShout.port1.postMessage({ readable }, [readable]);
+        btn.disabled = true; pauseBtn.disabled = false;
+      }, false, true);
+    },
+  },
+  {
+    id: "reload",
+    title: "Keep a port across a page reload",
+    blurb: "A port cannot be saved. IndexedDB, sessionStorage and history state all refuse it, because a port can be moved but never copied. It can be left with someone, though. As this frame unloads it posts its port to a SharedWorker, and when it loads again it asks for it back. The worker is created with <code>extendedLifetime</code>, so it outlives the page even when that page was its only client. The feed never knew: ticks sent during the reload waited in the port, and the count has no gaps.",
+    code: `const bank = new SharedWorker("/bank.js", { extendedLifetime: true });
+addEventListener("pagehide", () => bank.port.postMessage({ deposit: key }, [port]));
+
+<span class="c">// next load</span>
+bank.port.postMessage({ withdraw: key });
+bank.port.onmessage = ({ ports }) => resume(ports[0]);`,
+    async setup(stage, ui) {
+      const key = "k" + Math.random().toString(36).slice(2, 8);
+      await stage.frame("feed", {
+        title: "Feed on another origin", color: "teal",
+        script: () => on("port", (_, [port]) => { let n = 0; log("ticking into one port"); setInterval(() => send(port, "line", ++n), 400); }),
+      });
+      const bankBox = stage.box("bank", { html: `<div class="here"><h4>Port bank, a SharedWorker</h4><ul class="log"><li>empty</li></ul></div>` });
+      const keeper = stage.box("keeper", { src: `/patterns/keeper.html?key=${key}` });
+      let refusal = "";
+      const note = (text) => { bankBox.node.querySelector("ul").innerHTML = `<li>${text}</li>${refusal}`; };
+      let reloads = 0;
+      stage.on((name, data) => {
+        if (name !== "keeper") return;
+        if (data.wire === "need-port") {
+          const channel = new MessageChannel();
+          stage.post("feed", { cmd: "port" }, [channel.port1]);
+          keeper.frame.contentWindow.postMessage({ cmd: "port" }, location.origin, [channel.port2]);
+          stage.cable("line", "feed", "keeper", "teal");
+        }
+        if (data.wire === "need-port" && reloads) refusal = "<li>The bank did not survive the reload. This browser may not support extendedLifetime.</li>";
+        if (data.wire === "tick") note(`${reloads} reload${reloads === 1 ? "" : "s"}, at ${data.n}, ${data.gaps} gap${data.gaps === 1 ? "" : "s"} in the count`);
+      });
+      ui.button("Try to store a port in IndexedDB", () => {
+        const open = indexedDB.open("pa-refusal", 1);
+        open.onupgradeneeded = () => open.result.createObjectStore("s");
+        open.onsuccess = () => {
+          try { open.result.transaction("s", "readwrite").objectStore("s").put(new MessageChannel().port1, "k"); note("stored, which is a surprise"); }
+          catch (err) { refusal = `<li>IndexedDB refused the port: ${err.name}</li>`; note("asked IndexedDB"); }
+        };
+      });
+      ui.button("Reload the frame", () => { reloads++; note("holding the port while the page is gone"); keeper.frame.contentWindow.location.reload(); }, false, true);
+    },
+  },
+);

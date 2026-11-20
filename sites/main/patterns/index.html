@@ -12,7 +12,7 @@
   <div class="wrap">
     <header class="site-bar">
       <a class="wordmark" href="/">Port Authority</a>
-      <nav><a href="/">Experiments</a><a href="/patterns/" aria-current="page">Port patterns</a><a href="/hub/">Your hub</a></nav>
+      <nav><a href="/">Experiments</a><a href="#further">Further out</a><a href="#census">Census</a><a href="/patterns/" aria-current="page">Port patterns</a><a href="/hub/">Your hub</a></nav>
     </header>
     <div class="stack" style="padding-block:2.5rem 2rem; --gap:1.2rem">
       <h1 style="font-size:var(--step-3)">Six moves with a port</h1>
@@ -24,6 +24,17 @@
       <p>What a port can carry, and where it can end up. These lean on newer parts of the platform, so some will say no in some browsers.</p>
     </div>
     <div id="more"></div>
+    <section class="pattern" id="census">
+      <h2>What will go down a port in your browser</h2>
+      <p>Nothing here is looked up. When you scroll to this table, each kind of object is made, then really sent to a worker, really sent to a frame on another origin, and really written to IndexedDB. The answers are your browser's.</p>
+      <div style="overflow-x:auto">
+        <table class="census">
+          <thead><tr><th scope="col">Kind</th><th scope="col">To a worker</th><th scope="col">To another origin</th><th scope="col">Into IndexedDB</th></tr></thead>
+          <tbody><tr><td colspan="4" class="muted">Waiting until you scroll here.</td></tr></tbody>
+        </table>
+      </div>
+      <p class="small muted">The last column is why a port cannot outlive its page on its own: anything that must be moved cannot be stored. Things that are copied can.</p>
+    </section>
     <section class="pattern">
       <h2>Things that will bite you</h2>
       <ul class="stack" style="max-width:62ch; padding-left:1.1rem">
@@ -32,6 +43,8 @@
         <li>Nothing tells you when the other end has gone. A <code>close</code> event for ports has been specified, but the Chromium this was tested in does not fire it. Between pages on one origin, hold a Web Lock in the page and wait on it from the worker. Across origins, send a ping and treat silence as the answer.</li>
         <li>A SharedWorker inside a cross-site iframe is partitioned by the top-level site, so a hidden hub iframe is a different hub on every site. A window of its own is first party and reaches the real one. Ports that have already been handed over are not affected.</li>
         <li>A transferred port is gone from the sender. Post it twice and the second call throws.</li>
+        <li>A stream that is passed on through a middle context keeps flowing through it. If the middle goes away the reader stalls: no error, no end. Send streams down a direct port.</li>
+        <li>A port cannot be saved anywhere. IndexedDB, sessionStorage and history state all refuse it. To keep one across a reload, post it to a SharedWorker in <code>pagehide</code> and ask for it back. Create the worker with <code>extendedLifetime: true</code>, or it dies with its last page.</li>
       </ul>
     </section>
     <footer class="small muted" style="padding-block:2rem 4rem">A working name and a work in progress.</footer>
@@ -39,6 +52,9 @@
   <script type="module">
     import { demos, mount } from "/patterns/demos.js";
     import { more } from "/patterns/more.js";
+    import { runCensus } from "/patterns/census.js";
+    const census = document.querySelector("table.census");
+    new IntersectionObserver((entries, io) => { if (entries[0].isIntersecting) { io.disconnect(); runCensus(census); } }, { rootMargin: "200px" }).observe(census);
     for (const [demo, main] of [...demos.map((d) => [d, document.getElementById("patterns")]), ...more.map((d) => [d, document.getElementById("more")])]) {
       const section = document.createElement("section");
       section.className = "pattern";
