@@ -7,6 +7,7 @@
   <meta name="description" content="A worker that makes a synchronous call over a MessagePort, by blocking on shared memory until the answer is written.">
   <link rel="stylesheet" href="/base.css">
   <link rel="stylesheet" href="/patterns/patterns.css">
+  <script src="/errors.js"></script>
 </head>
 <body>
   <div class="wrap">
@@ -107,6 +108,7 @@ Atomics.notify(new Int32Array(memory, 0, 1), 0);</pre>
     const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
     mount(document.querySelector("#sync .demo"), {
+      id: "sync",
       async setup(stage, ui) {
         const logBox = (name, title) => {
           const box = stage.box(name, { html: `<div class="here"><h4>${title}</h4><ul class="log"></ul></div>` });
@@ -152,7 +154,7 @@ Atomics.notify(new Int32Array(memory, 0, 1), 0);</pre>
           ui.button("Run it, and answer it yourself", () => run("you"), false, true),
         ];
       },
-    });
+    }, { sync: { steps: [["Give the port to a slow service", "The worker runs three blocking questions. Another worker answers each one after a pause, by writing into shared memory.", 4200]], then: "Now press Run it, and answer it yourself. The worker will stop on one line until you do." } });
   </script>
 </body>
 </html>

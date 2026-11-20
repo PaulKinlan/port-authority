@@ -24,6 +24,7 @@
     .lineage li { break-inside: avoid; padding-block: 0.6rem; border-top: 1px solid var(--line); }
     .lineage time { font-family: var(--mono); font-size: var(--step--1); color: var(--muted); margin-right: 0.6rem; }
   </style>
+  <script src="/errors.js"></script>
 </head>
 <body>
   <div class="wrap">
@@ -131,6 +132,16 @@ await line.call({ bouquet: "ember", recipient: "Ada" });</pre>
           <div class="body">
             <p>Two workers that keep talking, and painting, while the page is frozen solid. Live video sent frame by frame through a filter on another origin. A signing key nobody can read, reached through a port that can be narrowed and taken back. And a worker that makes a blocking call down a port and waits for you to answer.</p>
             <p class="go"><a href="/patterns/#frozen">Freeze the page</a><a href="/patterns/#filter">Video filter</a><a href="/patterns/#signer">The key that stays</a><a href="/isolated/">Blocking call</a></p>
+          </div>
+        </li>
+        <li class="experiment">
+          <div>
+            <h3>The lab: what can be sent where</h3>
+            <p class="state"><span class="jack on"></span>Working</p>
+          </div>
+          <div class="body">
+            <p>Forty-five kinds of object, sent for real to thirteen places a message can go: workers of every sort, the audio thread, frames on this origin, another origin and no origin, and the places that take no transfer list. Each one is used where it lands. Your browser's results are added to everyone's, so the table shows where browsers disagree.</p>
+            <p class="go"><a href="/lab/">Run the lab</a><a href="/lab/results/">What browsers reported</a><a href="/isolated/lab/">The isolated lab</a></p>
           </div>
         </li>
         <li class="experiment">

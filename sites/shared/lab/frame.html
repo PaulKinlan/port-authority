@@ -1,0 +1,15 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Lab receiver</title>
+<script src="kinds.js"></script>
+<script>
+  // A receiver for the lab, as a frame or a popup. With ?via=worker it passes
+  // the port on to a worker of its own, so the value lands one hop further in.
+  const via = new URLSearchParams(location.search).get("via");
+  addEventListener("message", (event) => {
+    if (!event.data || !event.data.ctl) return;
+    if (via === "worker") new Worker("receiver-worker.js").postMessage({ ctl: true }, [event.ports[0]]);
+    else labReceive(event.ports[0], "frame");
+  });
+  (window.opener || parent).postMessage({ lab: "frame-ready" }, "*");
+</script>

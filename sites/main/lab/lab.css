@@ -1,0 +1,26 @@
+.matrix-wrap { overflow-x: auto; border: 2px solid var(--ink); border-radius: 14px; background: var(--panel); }
+.matrix { border-collapse: collapse; font-size: var(--step--1); width: max-content; min-width: 100%; }
+.matrix th, .matrix td { border-top: 1px solid var(--line); padding: 0.35rem 0.5rem; text-align: center; }
+.matrix thead th { border-top: 0; vertical-align: bottom; font-family: var(--display); font-weight: 700; line-height: 1.15; }
+.matrix thead .group th { font-size: 0.75rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); border-left: 1px solid var(--line); }
+.matrix thead .dest th { max-width: 5.5rem; min-width: 4.6rem; white-space: normal; overflow-wrap: anywhere; font-size: 0.8rem; }
+.matrix tbody th { text-align: left; font-weight: 500; position: sticky; left: 0; background: var(--panel); max-width: 17rem; min-width: 11rem; z-index: 1; }
+.matrix tbody th small { display: block; color: var(--muted); font-weight: 400; }
+.matrix tr.band th { background: var(--ink); color: var(--paper); font: 700 0.8rem/1 var(--display); letter-spacing: 0.06em; text-transform: uppercase; text-align: left; padding: 0.45rem 0.5rem; }
+.matrix td { padding: 0; }
+.matrix td button { all: unset; display: block; width: 100%; padding: 0.4rem 0; cursor: pointer; font: 700 1rem/1 var(--mono); }
+.matrix td button:focus-visible { outline: 3px solid var(--accent); outline-offset: -3px; }
+.matrix td[data-o="works"] { color: var(--teal); }
+.matrix td[data-o="arrives-broken"], .matrix td[data-o="unreadable"] { color: color-mix(in srgb, var(--yellow) 70%, var(--ink)); }
+.matrix td[data-o="refused"], .matrix td[data-o="no-answer"] { color: var(--red); }
+.matrix td[data-o="cannot-make"], .matrix td[data-o="no-destination"], .matrix td[data-o="pending"] { color: var(--muted); }
+.matrix td.mixed { background: color-mix(in srgb, var(--yellow) 22%, transparent); }
+.matrix td.differs { box-shadow: inset 0 0 0 2px var(--red); }
+.legend { display: flex; flex-wrap: wrap; gap: 0.4rem 1.2rem; font-size: var(--step--1); padding: 0; margin: 0; list-style: none; }
+.legend b { font-family: var(--mono); margin-right: 0.35em; }
+.detail { min-height: 3.2rem; font-size: var(--step--1); }
+.facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); gap: 0.8rem; }
+.facts div { background: var(--panel); border-radius: 12px; padding: 0.8rem 1rem; }
+.facts strong { display: block; font: 800 var(--step-2)/1 var(--display); }
+.pick { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.pick button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
