@@ -79,6 +79,12 @@ async function serve(env, site, pathname) {
         headers["cross-origin-embedder-policy"] = "credentialless";
         headers["cross-origin-resource-policy"] = "cross-origin";
       }
+      // Ask the browser itself to say when a page crashes, or when it steps in
+      // or warns about something. A crashed page cannot report its own crash.
+      if (ext === "html") {
+        headers["reporting-endpoints"] = 'default="/lab/reports"';
+        headers["document-policy"] = "include-js-call-stacks-in-crash-reports";
+      }
       return new Response(body, { headers });
     }
   }
@@ -152,7 +158,7 @@ export default {
     }
 
     // The lab's results: every browser that runs the lab reports what it saw.
-    if (url.pathname === "/lab/report" || url.pathname === "/lab/error" || url.pathname.startsWith("/lab/data/")) {
+    if (url.pathname === "/lab/report" || url.pathname === "/lab/reports" || url.pathname === "/lab/error" || url.pathname.startsWith("/lab/data/")) {
       if (!env.LAB) return new Response("the lab store is off", { status: 404 });
       return env.LAB.get(env.LAB.idFromName("lab")).fetch(request);
     }
@@ -678,6 +684,27 @@ export class Lab {
       if (text.length > 4000) return json({ error: "too large" }, 413);
       let e; try { e = JSON.parse(text); } catch { return json({ error: "not JSON" }, 400); }
       this.sql.exec("INSERT INTO errors (at, page, place, message, browser, version, ua) VALUES (?, ?, ?, ?, ?, ?, ?)", Date.now(), str(e.page, 120), str(e.where, 60), str(e.message, 300), str(e.browser, 40), str(e.version, 40), str(e.ua, 300));
+      this.sql.exec("DELETE FROM errors WHERE at NOT IN (SELECT at FROM errors ORDER BY at DESC LIMIT 1000)");
+      return json({ ok: true });
+    }
+    // What the browser's Reporting API sends: crashes, interventions and
+    // deprecations. Kept with the errors, with the same few fields.
+    if (url.pathname === "/lab/reports" && request.method === "POST") {
+      const text = await request.text();
+      if (text.length > 40000) return json({ error: "too large" }, 413);
+      let list; try { list = JSON.parse(text); } catch { return json({ error: "not JSON" }, 400); }
+      for (const r of (Array.isArray(list) ? list : [list]).slice(0, 10)) {
+        if (!r || typeof r !== "object") continue;
+        const b = r.body && typeof r.body === "object" ? r.body : {};
+        let page = ""; try { const u = new URL(r.url); page = u.host === url.host ? u.pathname : u.host + u.pathname; } catch {}
+        const where = b.sourceFile ? " at " + String(b.sourceFile).split("/").pop() + ":" + (b.lineNumber || 0) : "";
+        const stack = b.stack ? " | " + String(b.stack).replace(/\s+/g, " ") : "";
+        const message = r.type === "crash" ? "the page crashed" + (b.reason ? " (" + b.reason + ")" : "") + stack : (b.message || b.id || b.reason || JSON.stringify(b)) + where;
+        const ua = str(r.user_agent, 300);
+        const m = ua.match(/(Edg|OPR|Firefox|Chrome|Version)\/([\d.]+)/) || [];
+        const browser = { Edg: "Microsoft Edge", OPR: "Opera", Firefox: "Firefox", Chrome: "Chrome", Version: "Safari" }[m[1]] || "";
+        this.sql.exec("INSERT INTO errors (at, page, place, message, browser, version, ua) VALUES (?, ?, ?, ?, ?, ?, ?)", Date.now(), str(page, 120), str("browser report: " + r.type, 60), str(message, 300), browser, str(m[2], 40), ua);
+      }
       this.sql.exec("DELETE FROM errors WHERE at NOT IN (SELECT at FROM errors ORDER BY at DESC LIMIT 1000)");
       return json({ ok: true });
     }

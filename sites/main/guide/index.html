@@ -104,7 +104,7 @@
             <tr><td><code>MessagePort</code></td><td>Moved</td><td>Works, and works again from there to a worker inside that frame.</td></tr>
             <tr><td><code>ArrayBuffer</code></td><td>Moved</td><td>Works. The sender's buffer drops to zero bytes. <a href="/patterns/zerocopy/">64 MB in a few milliseconds.</a></td></tr>
             <tr><td><code>ReadableStream</code>, <code>WritableStream</code>, <code>TransformStream</code></td><td>Moved</td><td>Work. The data keeps flowing through the context that sent the stream.</td></tr>
-            <tr><td><code>OffscreenCanvas</code></td><td>Moved</td><td>Works, including one tied to a canvas in your page. <a href="/patterns/canvas/">Another origin paints in your page.</a></td></tr>
+            <tr><td><code>OffscreenCanvas</code></td><td>Moved</td><td>Works. One tied to a canvas in your page is safe to send to a worker. In Chrome, sent to a frame in another process, it crashes that frame on the first draw. <a href="/patterns/canvas/">Painting across origins.</a></td></tr>
             <tr><td><code>ImageBitmap</code></td><td>Moved or copied</td><td>Works.</td></tr>
             <tr><td><code>VideoFrame</code>, <code>AudioData</code>, <code>EncodedVideoChunk</code></td><td>Moved or copied</td><td>Arrive unreadable. They do work to a worker and to a sandboxed frame. <a href="/patterns/filter/">Video through a sandboxed filter.</a></td></tr>
             <tr><td><code>RTCDataChannel</code>, <code>MediaSourceHandle</code></td><td>Moved</td><td>Arrive unreadable. They work to a worker and to a sandboxed frame.</td></tr>

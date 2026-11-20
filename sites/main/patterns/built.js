@@ -42,21 +42,25 @@ export const built = [
   {
     pattern: "canvas", use: [0], id: "built-chart",
     title: "A chart drawn by another origin, inside your layout",
-    blurb: "The chart maker is a site on another origin. This page gives it the drawing surface of one canvas and a port, and sends it numbers. The bars you see are drawn by the chart maker straight into this page. It never sees the page, and this page never loads its code.",
-    code: `const surface = canvas.transferControlToOffscreen();
-chartMaker.postMessage({ surface, numbers }, [surface]);
+    blurb: "The chart maker is a site on another origin. This page gives it a port and sends it numbers. The chart maker draws the bars on a canvas of its own and sends back each finished frame as an <code>ImageBitmap</code>, which this page shows in a canvas it owns. The chart maker never sees the page, and this page never loads its code.",
+    code: `const show = canvas.getContext("bitmaprenderer");
+chartMaker.onmessage = ({ data }) => show.transferFromImageBitmap(data.frame);
+chartMaker.postMessage({ size: [460, 230], numbers });
 <span class="c">// later, new figures: the chart redraws itself</span>
-chartMaker.postMessage({ numbers: [12, 30, 22, 41, 17] });`,
-    tour: { steps: [["Give the chart maker the canvas", "The canvas's drawing surface and the first numbers go to the other origin. It draws the bars into this page."], ["Send new numbers", "This page posts new figures. The chart maker animates to them.", 2600], ["Send new numbers", "And again. Only numbers go one way, and only pixels come back."]] },
+chartMaker.postMessage({ numbers: [12, 30, 22, 41, 17] });
+
+<span class="c">// the chart maker, after each redraw</span>
+const frame = await createImageBitmap(mine);
+port.postMessage({ frame }, [frame]);`,
+    tour: { steps: [["Ask the chart maker for a chart", "The size and the first numbers go to the other origin. It draws the bars and sends back finished frames."], ["Send new numbers", "This page posts new figures. The chart maker animates to them.", 2600], ["Send new numbers", "And again. Only numbers go one way, and only pixels come back."]] },
     async setup(stage, ui) {
       const box = stage.box("page", { html: `<canvas width="460" height="230" style="width:100%;height:100%;display:block" aria-label="A chart in this page, drawn by another origin"></canvas>` });
       const canvas = box.node.querySelector("canvas");
       await stage.frame("maker", {
         title: "Chart maker on another origin", color: "teal",
         script: () => on("port", (_, [port]) => {
-          let ctx = null, shown = [], target = [];
-          const draw = () => {
-            const { width: w, height: h } = ctx.canvas;
+          let ctx = null, shown = [], target = [], w = 0, h = 0, still = 0;
+          const draw = async () => {
             ctx.fillStyle = "#0f1c3f"; ctx.fillRect(0, 0, w, h);
             shown = target.map((v, i) => (shown[i] ?? 0) + (v - (shown[i] ?? 0)) * 0.12);
             const bar = (w - 40) / shown.length;
@@ -67,10 +71,13 @@ chartMaker.postMessage({ numbers: [12, 30, 22, 41, 17] });`,
               ctx.fillStyle = "#fff"; ctx.font = "600 14px system-ui"; ctx.textAlign = "center";
               ctx.fillText(Math.round(v), 20 + i * bar + bar / 2, h - 30 - tall);
             });
+            // Send the finished frame. Once the bars have settled there is nothing new to send.
+            still = shown.every((v, i) => Math.abs(v - target[i]) < 0.3) ? still + 1 : 0;
+            if (still < 3) { const frame = await createImageBitmap(ctx.canvas); port.postMessage({ frame }, [frame]); }
             requestAnimationFrame(draw);
           };
           port.onmessage = ({ data }) => {
-            if (data.surface) { ctx = data.surface.getContext("2d"); log("holding a canvas. I cannot see the page it is in."); requestAnimationFrame(draw); }
+            if (data.size) { [w, h] = data.size; ctx = new OffscreenCanvas(w, h).getContext("2d"); log("drawing a chart for a page I cannot see"); requestAnimationFrame(draw); }
             if (data.numbers) { target = data.numbers; log("drew " + data.numbers.join(", ")); tell("pulse", { cable: "line" }); }
           };
         }),
@@ -80,9 +87,10 @@ chartMaker.postMessage({ numbers: [12, 30, 22, 41, 17] });`,
       stage.cable("line", "page", "maker", "teal");
       const numbers = () => Array.from({ length: 5 }, () => 5 + Math.floor(Math.random() * 44));
       const again = ui.button("Send new numbers", () => { channel.port1.postMessage({ numbers: numbers() }); stage.pulse("line", "page"); }, true);
-      ui.button("Give the chart maker the canvas", (btn) => {
-        const surface = canvas.transferControlToOffscreen();
-        channel.port1.postMessage({ surface, numbers: numbers() }, [surface]);
+      const show = canvas.getContext("bitmaprenderer");
+      channel.port1.onmessage = ({ data }) => { if (!data.frame) return; if (!canvas.isConnected) { data.frame.close(); return channel.port1.close(); } show.transferFromImageBitmap(data.frame); };
+      ui.button("Ask the chart maker for a chart", (btn) => {
+        channel.port1.postMessage({ size: [canvas.width, canvas.height], numbers: numbers() });
         stage.pulse("line", "page");
         btn.disabled = true; again.disabled = false;
       }, false, true);

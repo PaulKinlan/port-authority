@@ -47,7 +47,10 @@
       use: (v) => { const ctx = v.getContext("2d"); need(ctx, "no 2d context here"); ctx.fillRect(0, 0, 1, 1); return "drew on it"; } },
     { name: "OffscreenCanvas (from a canvas element)", group: "Moved", how: "move",
       make: () => document.createElement("canvas").transferControlToOffscreen(),
-      use: (v) => { const ctx = v.getContext("2d"); need(ctx, "no 2d context here"); ctx.fillRect(0, 0, 1, 1); return "drew into the sender's page"; } },
+      // Chrome kills a receiver in another process when its first drawing is
+      // shown, a moment after the drawing call returns. Wait for that moment,
+      // so that a receiver that dies is not recorded as one that worked.
+      use: async (v) => { const ctx = v.getContext("2d"); need(ctx, "no 2d context here"); ctx.fillRect(0, 0, 1, 1); if (globalThis.setTimeout) await new Promise((r) => setTimeout(r, 400)); return "drew into the sender's page"; } },
     { name: "ImageBitmap", group: "Moved", how: "move",
       make: () => createImageBitmap(canvas()),
       use: (v) => { need(v.width === 2, "empty bitmap"); return "2 by 2 pixels"; } },

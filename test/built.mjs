@@ -26,7 +26,7 @@ const order = await page.evaluate(() => { const y = (s) => document.querySelecto
 check("page order: the demo, then what it is, the code, how it works, what to build", order);
 const pixels = () => page.locator(`${at} .box[data-name="page"] canvas`).screenshot().then((b) => b.toString("base64"));
 const blank = await pixels();
-await click("Give the chart maker"); await wait(1500);
+await click("Ask the chart maker"); await wait(1500);
 const first = await pixels();
 await click("Send new numbers"); await wait(1500);
 check("chart: another origin draws bars into this page's canvas, and redraws on new numbers", blank !== first && first !== (await pixels()) && /drew \d+, \d+/.test(await frameText("maker")), flat(await frameText("maker")));

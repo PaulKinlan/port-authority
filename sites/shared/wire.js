@@ -31,6 +31,8 @@ export function runtime() {
   const foreign = (file) => /^(chrome|moz|safari-web|ms-browser)-extension:/.test(file || "");
   addEventListener("error", (event) => { if (foreign(event.filename)) return; log("error: " + event.message); tell("error", { message: String(event.message), file: (event.filename || "").split("/").pop().slice(0, 60), line: event.lineno }); });
   addEventListener("unhandledrejection", (event) => { const m = String(event.reason && event.reason.message || event.reason); log("error: " + m); tell("error", { message: m }); });
+  // What the browser itself complains about in this frame: something it blocked, slowed or will remove.
+  try { new ReportingObserver((reports) => { for (const r of reports) tell("error", { message: r.type + ": " + (r.body && (r.body.message || r.body.id)) }); }, { types: ["intervention", "deprecation"], buffered: true }).observe(); } catch (err) {}
   tell("ready");
 }
 

@@ -174,23 +174,26 @@ export async function run(destinations, onCell) {
     results[dest.id] = {};
     let link = null;
     try { link = await dest.open(); } catch (err) { noteError(dest.label, "could not be set up: " + err.message, ""); }
-    let seq = 0, silent = 0, lastHeard = "the start", dead = "";
+    let seq = 0, lastHeard = "the start", dead = "", restarts = 0;
+    const alive = () => new Promise((resolve) => {
+      const timer = setTimeout(() => { link.answers.removeEventListener("message", on); resolve(false); }, 1200);
+      const on = (event) => { if (event.data?.pong) { clearTimeout(timer); link.answers.removeEventListener("message", on); resolve(true); } };
+      link.answers.addEventListener("message", on);
+      try { link.send({ ping: true }); } catch { resolve(false); }
+    });
     for (const kind of KINDS) {
-      // Three silences in a row means the receiver has probably died. Say so, and stop waiting on it.
-      if (silent >= 3 && !dead && link?.answers) {
-        const alive = await new Promise((resolve) => {
-          const timer = setTimeout(() => { link.answers.removeEventListener("message", on); resolve(false); }, 1200);
-          const on = (event) => { if (event.data?.pong) { clearTimeout(timer); link.answers.removeEventListener("message", on); resolve(true); } };
-          link.answers.addEventListener("message", on);
-          try { link.send({ ping: true }); } catch { resolve(false); }
-        });
-        if (alive) silent = 0;
-        else { dead = `the receiver stopped answering after ${lastHeard}`; noteError(dest.label, dead, ""); }
-      }
       inFlight.set(dest.id, `${kind.name} to ${dest.label}`);
       const result = dead ? { outcome: "no-answer", note: dead }
         : link ? await one(dest, link, kind, ++seq).catch((err) => ({ outcome: "no-answer", note: String(err.message || err) })) : { outcome: "no-destination", note: "could not be set up" };
-      if (result.outcome === "no-answer") silent++; else if (result.outcome !== "cannot-make" && result.outcome !== "refused") { silent = 0; lastHeard = kind.name; }
+      // A silence may mean this value killed the receiver. Ask it. If it is
+      // gone, say which value did it, and start a new receiver for the rest.
+      if (result.outcome === "no-answer" && !dead && link?.answers && !(await alive())) {
+        result.note = "the receiver died, or stopped answering for good";
+        noteError(dest.label, `the receiver died on ${kind.name} (last answer: ${lastHeard})`, kind.name);
+        try { link.close(); } catch {}
+        try { if (++restarts > 3) throw new Error("too many restarts"); link = await dest.open(); seq = 0; }
+        catch (err) { dead = `the receiver died on ${kind.name} and could not be started again`; }
+      } else if (result.outcome !== "no-answer" && result.outcome !== "cannot-make" && result.outcome !== "refused") lastHeard = kind.name;
       results[dest.id][kind.name] = result;
       onCell(dest, kind, result);
     }

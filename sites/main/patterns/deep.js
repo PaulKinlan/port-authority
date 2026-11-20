@@ -90,13 +90,14 @@ export const deep = {
   },
   canvas: {
     how: [
-      "<code>canvas.transferControlToOffscreen()</code> splits a canvas in two: the element stays in your page, and its drawing surface becomes an <code>OffscreenCanvas</code> that can be transferred. Whoever receives the surface draws, and the pixels appear in your element.",
-      "Here the surface goes to a frame on another origin. That frame cannot read your page, cannot see the rest of your DOM, and cannot be clickjacked into covering anything, because it owns pixels inside one rectangle you chose and nothing else.",
-      "The drawing does not pass through your main thread. If the receiver is a worker, the canvas keeps animating while your page is busy.",
+      "There are two ways to let someone else draw in your page. Which one to use depends on where the drawer runs.",
+      "For a worker: <code>canvas.transferControlToOffscreen()</code> splits a canvas in two. The element stays in your page, and its drawing surface becomes an <code>OffscreenCanvas</code> that can be transferred. The worker draws, and the pixels appear in your element without passing through your main thread, so the canvas keeps animating while your page is busy.",
+      "For a frame on another origin: the frame draws on an <code>OffscreenCanvas</code> of its own, turns each finished frame into an <code>ImageBitmap</code> and transfers it down a port. Your page shows it with a <code>bitmaprenderer</code> context. A bitmap is moved, so no pixels are copied on the way.",
+      "Either way the drawer cannot read your page or see the rest of your DOM. It fills one rectangle you chose and nothing else.",
     ],
-    tryIt: ["Hand over the canvas, then ask for another colour. The request goes over a port, the pixels come back through the canvas.", "Start again: a canvas can only give up its surface once, so the demo makes a new one."],
+    tryIt: ["Ask the painter to paint, then ask for another colour. The request goes down the port, and the frames come back up it.", "Scroll to the worker demo below to see a surface handed over with <code>transferControlToOffscreen()</code>."],
     uses: ["A chart, map or 3D viewer supplied by another origin that renders into your layout without an iframe's box.", "Moving heavy rendering to a worker.", "A plug-in that may draw and may not read."],
-    traps: ["Once control is transferred, the page can no longer draw on that canvas or read it back.", "The receiver decides the bitmap size. Tell it your size and pixel ratio over the port."],
+    traps: ["In Chrome, do not send the surface from <code>transferControlToOffscreen()</code> to a frame on another site or to a sandboxed frame. Those run in another process, and the frame crashes on its first draw. The message arrives and <code>getContext()</code> succeeds, so nothing warns you. Send it to a worker, or send bitmaps.", "Once control is transferred, the page can no longer draw on that canvas or read it back.", "The receiver decides the bitmap size. Tell it your size and pixel ratio over the port.", "Close an <code>ImageBitmap</code> you are not going to show. It holds memory the garbage collector does not count."],
     related: ["frozen", "filter", "audio"],
   },
   functions: {

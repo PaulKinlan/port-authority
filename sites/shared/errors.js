@@ -15,4 +15,12 @@
   addEventListener("error", (event) => foreign(event.filename) || send(event.filename ? event.filename.split("/").pop() + ":" + event.lineno : "page", event.message));
   addEventListener("unhandledrejection", (event) => send("promise", event.reason && event.reason.message || event.reason));
   addEventListener("pa-error", (event) => send(event.detail.where, event.detail.message));
+  // The browser's own complaints never reach an error event: a feature it
+  // blocked or slowed down, or one it is about to remove. A crash cannot be
+  // seen from here at all, so the browser sends those itself, to /lab/reports.
+  try {
+    new ReportingObserver((reports) => {
+      for (const r of reports) send(r.type + (r.body && r.body.sourceFile ? ", " + r.body.sourceFile.split("/").pop() + ":" + r.body.lineNumber : ""), r.body && (r.body.message || r.body.id));
+    }, { types: ["intervention", "deprecation"], buffered: true }).observe();
+  } catch {}
 })();
