@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>One of the site's tabs | Port Authority</title>
+<style>
+  html{color-scheme:light dark}
+  body{margin:0;padding:.7rem .8rem;font:14px/1.4 system-ui,sans-serif;background:light-dark(#fff,#141f47);color:light-dark(#0f1c3f,#e9edfa)}
+  h1{font:800 1rem/1.1 system-ui,sans-serif;margin:0 0 .3rem;display:flex;align-items:center;gap:.45rem}
+  h1::before{content:"";width:.8em;height:.8em;border-radius:50%;background:#9aa3b8}
+  body.lead h1::before{background:#f5b700}
+  p{margin:0 0 .3rem;font:12px/1.4 ui-monospace,Menlo,monospace}
+  #role{font-weight:700}
+</style>
+<h1 id="title">A tab</h1>
+<p id="role">joining</p>
+<p id="here"></p>
+<p id="job"></p>
+<script type="module">
+  const embedded = parent !== self;
+  const tell = (wire, data = {}) => embedded && parent.postMessage({ wire, ...data }, "*");
+  const $ = (id) => document.getElementById(id);
+  if (!("SharedWorker" in self)) $("role").textContent = "This browser has no SharedWorker.";
+  else {
+    const port = new SharedWorker("/patterns/crew-worker.js").port;
+    const lock = "pa-crew-" + Math.random().toString(36).slice(2);
+    const join = () => port.postMessage({ join: true, lock });
+    navigator.locks ? navigator.locks.request(lock, () => { join(); return new Promise(() => {}); }) : join();
+    let lead = false, runs = 0;
+    port.onmessage = ({ data }) => {
+      lead = data.lead;
+      document.body.classList.toggle("lead", lead);
+      $("title").textContent = "I am " + data.you;
+      $("role").textContent = lead ? "I am the leader. I do the sync." : "Following " + data.leader + ".";
+      $("here").textContent = "Here now: " + data.tabs.join(", ");
+      if (!lead) $("job").textContent = "";
+      tell("crew", { lead, you: data.you });
+    };
+    // Only the leader does the background job.
+    setInterval(() => { if (lead) $("job").textContent = `sync runs done by me: ${++runs}`; }, 700);
+  }
+  tell("ready");
+</script>
+</html>

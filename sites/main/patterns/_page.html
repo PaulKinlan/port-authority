@@ -51,7 +51,7 @@
     import { mount, TOURS } from "/patterns/demos.js";
     import { all, plain } from "/patterns/all.js";
     import { deep } from "/patterns/deep.js";
-    import { built } from "/patterns/built.js";
+    import { built, shown } from "/patterns/built.js";
 
     const id = location.pathname.split("/").filter(Boolean)[1];
     const index = all.findIndex((d) => d.id === id);
@@ -80,10 +80,12 @@
       if (steps.length) parts.push(`<section id="steps"><h2>Step by step</h2><p style="margin-bottom:.7rem">What each press of Next does in the demo at the top.</p>${list(steps.map(([label, text]) => `<strong>${label}.</strong> ${text}`), "ol")}</section>`);
       if (more.uses) {
         const covered = new Set(mine.flatMap((b) => b.use));
-        const todo = more.uses.filter((_, i) => !covered.has(i));
+        const seen = more.uses.map((text, i) => [text, shown[`${id}:${i}`]]).filter(([, where], i) => where && !covered.has(i));
+        const todo = more.uses.filter((_, i) => !covered.has(i) && !shown[`${id}:${i}`]);
         parts.push(`<section id="uses"><h2>What you could build with it</h2>${mine.length ? `<p>${mine.length === 1 ? "This one is built and running below." : "These are built and running below."}</p>` : ""}
           ${mine.map((b) => `<article class="built" id="${b.id}"><h3>${b.title}</h3><p class="small muted idea">The idea: ${b.use.map((i) => more.uses[i]).join(" ")}</p><div class="demo"></div><p>${b.blurb}</p><pre>${b.code}</pre></article>`).join("")}
-          ${todo.length ? `<h3 class="todo">${mine.length ? "Not built yet" : "Ideas, not built yet"}</h3>${list(todo)}` : ""}</section>`);
+          ${seen.length ? `<h3 class="todo">Already running</h3>${list(seen.map(([text, [href, label]]) => `${text} <a href="${href}">See ${label}.</a>`))}` : ""}
+          ${todo.length ? `<h3 class="todo">Not built yet</h3>${list(todo)}` : ""}</section>`);
       }
       if (more.tryIt) parts.push(`<section id="try"><h2>Things to try</h2>${list(more.tryIt)}</section>`);
       if (more.traps) parts.push(`<section id="traps"><h2>What will bite you</h2>${list(more.traps)}</section>`);

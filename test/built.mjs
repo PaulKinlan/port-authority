@@ -91,13 +91,74 @@ await click("Give the logger"); await click("This page: say something"); await w
 const lg = await frameText("logger");
 check("tap: the logger hears the server and cannot speak", /logged: the server heard: hello 1/.test(lg) && /nothing to speak into/.test(lg) && /listening half only/.test(lg), flat(lg));
 
+await open("introduce", "built-wire");
+await click("Wire the two widgets"); await click("List: pick the next place"); await wait(900);
+check("wire: the list moves the map with nothing through the page", /moved to 51\.478/.test(await frameText("map")) && /it says: showing Kew Gardens/.test(await frameText("list")) && !/Kew/.test(await boxText("page")), flat(await frameText("map")));
+
+await open("attenuate", "built-chain");
+await click("Give the assistant"); await click("Assistant: pass on"); await wait(600); await click("Intern: read"); await wait(900); await click("Intern: try to add"); await wait(900);
+const intern1 = await frameText("intern");
+check("chain: the intern reads through the assistant and cannot add", /read: 2 entries/.test(intern1) && /refused: this port is read only/.test(intern1) && /Entries: 2/.test((await boxText("page")).replace(/\n/g, " ")), flat(intern1));
+await click("Owner: cut off"); await click("Intern: read"); await wait(1500);
+check("chain: cutting off the assistant cuts off the intern", /asked, and heard nothing/.test(await frameText("intern")), flat(await frameText("intern")));
+
+await open("exchange", "built-leader");
+const tabText = (name) => page.locator(`${at} .box[data-name="${name}"] iframe`).contentFrame().locator("body").innerText();
+const leaders = async () => { const out = []; for (const n of ["tab-a", "tab-b", "tab-c"]) { if (!(await page.locator(`${at} .box[data-name="${n}"] iframe`).count())) continue; if (/I am the leader/.test(await tabText(n).catch(() => ""))) out.push(n); } return out; };
+const one = await until(async () => { const l = await leaders(); return l.length === 1 && l; });
+check("leader: exactly one of three tabs leads and runs the job", !!one && !!(await until(async () => /sync runs done by me: \d+/.test(await tabText(one[0])))), String(one));
+await click("Close the leader");
+const two = await until(async () => { const l = await leaders(); return l.length === 1 && l[0] !== one[0] && l; }, 12000);
+check("leader: closing the leader promotes another tab", !!two, String(two));
+
+await open("filter", "built-watermark");
+const outPixels = () => page.locator(`${at} .box[data-name="out"] canvas`).screenshot().then((b) => b.toString("base64"));
+const before = await outPixels();
+await click("Start the video"); await wait(1500);
+const mid = await outPixels();
+check("watermark: frames come back from the plug-in drawn on", before !== mid && !!(await until(async () => /captioned \d+ frames/.test(await frameText("plugin")))), flat(await frameText("plugin")));
+await click("Change the caption"); await wait(600);
+check("watermark: the caption can be changed", /caption: Roses arrive/.test(await frameText("plugin")));
+
+await open("zerocopy", "built-pool");
+await click("Start the pool"); await wait(2500); await click("Stop"); await wait(400);
+const pool = (await boxText("page")).replace(/\n/g, " ");
+check("pool: two buffers make many round trips", /Buffers ever made: 2/.test(pool) && Number(pool.match(/Round trips: (\d+)/)?.[1]) >= 10 && /Copied: 0 MB/.test(pool), flat(pool));
+
+await open("roundtrip", "built-cipher");
+await click("Ask the cipher service");
+await until(async () => !(await page.locator(`${at} .controls button`, { hasText: "Seal a line" }).isDisabled()));
+await click("Seal a line");
+check("cipher: a line is sealed by another origin and opened again", !!(await until(async () => /Deliver to 14 Mill Lane/.test(await boxText("out")))) && /sealed: [0-9a-f]{16}/.test(await boxText("page")) && !/Mill Lane/.test(await boxText("page")), flat(await boxText("page")));
+
+await open("stream", "built-bigfile");
+await click("Stream 64 MB");
+const doneBig = await until(async () => /read all 64 MB/.test(await boxText("worker")), 25000);
+const big = (await boxText("page")).replace(/\n/g, " ");
+check("bigfile: 64 MB reaches the worker while a few MB at most are held", !!doneBig && /Made so far: 64/.test(big) && Number(big.match(/Most held at once: (\d+)/)?.[1]) <= 6, flat(big));
+
+await open("keycopy", "built-keyworker");
+await click("Make a key"); await until(async () => !(await page.locator(`${at} .controls button`, { hasText: "Ask the worker" }).isDisabled()));
+await click("Ask the worker to sign"); await click("Page: try to sign"); await wait(900);
+const kw = await boxText("page");
+check("keyworker: the worker signs, the page verifies and cannot sign alone", /verified: "order 1"/.test(kw) && /I cannot sign/.test(kw) && /signed: order 1/.test(await boxText("worker")), flat(kw));
+
+await open("functions", "built-method");
+await click("Lend the badge"); await click("Add tulips"); await click("Badge: ask for the total"); await click("Badge: try to clear"); await wait(900);
+const badge = await frameText("badge");
+check("method: the badge can call total and cannot clear", /total\(\) returned 4\.5/.test(badge) && /clear\(\): not on this port/.test(badge) && /1 bunches/.test(await boxText("page")), flat(badge));
+
+await open("reply", "built-rpc");
+await click('"add", 2, 3'); await click('"divide", 1, 0'); await click("Three calls at once");
+check("rpc: calls resolve, reject, and come back to the right caller", !!(await until(async () => /all three back: "first asked, last back", 42, "third asked"/.test(await boxText("page")))) && /resolved with 5/.test(await boxText("page")) && /rejected: cannot divide by zero/.test(await boxText("page")), flat(await boxText("page")));
+
 // The guide carries the same demos, running inside each section.
 await page.goto(root + "/guide/");
 const cards = await page.locator(".live").count();
 at = "#live-built-cap";
 await page.locator(at).scrollIntoViewIfNeeded(); await page.waitForSelector(`${at} .fwd`, { timeout: 15000 }); await page.locator(`${at} .stage-el`).scrollIntoViewIfNeeded(); await wait(800);
 for (let i = 0; i < 4; i++) { await page.locator(`${at} .fwd`).click(); await wait(1300); }
-check("guide: every section has running demos, and they step with Next", cards >= 24 && /4 of 4/.test(await page.locator(`${at} .caption`).innerText()) && /refused: over the limit/.test(await frameText("shop")), `${cards} demos`);
+check("guide: every section has running demos, and they step with Next", cards >= 34 && /4 of 4/.test(await page.locator(`${at} .caption`).innerText()) && /refused: over the limit/.test(await frameText("shop")), `${cards} demos`);
 const sections = await page.evaluate(() => [...document.querySelectorAll("main section")].filter((s) => !s.querySelector(".live")).map((s) => s.id));
 check("guide: only the list of open questions has no demo", sections.join() === "open", sections.join());
 

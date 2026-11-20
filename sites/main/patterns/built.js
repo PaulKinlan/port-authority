@@ -468,4 +468,502 @@ writer.write("hello");`,
       }, false, true);
     },
   },
+  {
+    pattern: "introduce", use: [1, 2], id: "built-wire",
+    title: "Two vendors' widgets, wired together by the page that embeds them",
+    blurb: "A list of places from one vendor and a map from another, each in its own frame on its own origin. Neither has heard of the other and neither loads the other's code. The page that embeds them makes a channel, gives each widget an end, and is finished. Pick a place in the list and the map moves, with nothing passing through the page.",
+    code: `const { port1, port2 } = new MessageChannel();
+listFrame.postMessage({ cmd: "port" }, "*", [port1]);
+mapFrame.postMessage({ cmd: "port" }, "*", [port2]);
+<span class="c">// that is all the integration code there is</span>`,
+    tour: { steps: [["Wire the two widgets together", "Each widget gets one end of a channel. This page keeps neither."], ["List: pick the next place", "The list tells the map directly. The map answers the list."], ["List: pick the next place", "Again. Nothing passes through the page in the middle."]] },
+    async setup(stage, ui) {
+      await stage.frame("list", {
+        title: "Places list, vendor A", color: "red",
+        script: () => {
+          const places = [["Kew Gardens", 51.478, -0.295], ["Columbia Road", 51.529, -0.07], ["Covent Garden", 51.512, -0.123]];
+          let port = null, i = -1;
+          on("port", (_, [p]) => { port = p; log("holding a line to something that shows places"); port.onmessage = ({ data }) => log("it says: " + data.shown); });
+          on("pick", () => { if (!port) return log("nobody to tell"); i = (i + 1) % places.length; log("picked " + places[i][0]); send(port, "wire", { name: places[i][0], lat: places[i][1], lon: places[i][2] }); });
+        },
+      });
+      const me = logBox(stage, "page", "This page embeds both");
+      await stage.frame("map", {
+        title: "Map, vendor B", color: "teal",
+        script: () => {
+          const pin = document.createElement("p");
+          pin.style.cssText = "font:800 1.1rem/1.2 system-ui;margin:0 0 .4rem";
+          pin.textContent = "No place yet";
+          document.getElementById("log").before(pin);
+          on("port", (_, [port]) => {
+            log("holding a line to something that picks places");
+            port.onmessage = ({ data }) => { pin.textContent = "● " + data.name; log(`moved to ${data.lat}, ${data.lon}`); send(port, "wire", { shown: "showing " + data.name }); };
+          });
+        },
+      });
+      const pick = ui.button("List: pick the next place", () => stage.post("list", { cmd: "pick" }), true);
+      ui.button("Wire the two widgets together", (btn) => {
+        const { port1, port2 } = new MessageChannel();
+        stage.post("list", { cmd: "port" }, [port1]);
+        stage.post("map", { cmd: "port" }, [port2]);
+        stage.cable("wire", "list", "map", "yellow");
+        me.say("gave each widget an end, and kept nothing");
+        btn.disabled = true; pick.disabled = false;
+      }, false, true);
+    },
+  },
+  {
+    pattern: "attenuate", use: [2], id: "built-chain",
+    title: "A chain of delegation, where each link gives away less",
+    blurb: "The owner lets an assistant read the diary and add to it. The assistant passes part of that on to an intern: reading only. The intern's port ends at the assistant, and the assistant's ends at the owner. Nobody in the chain can hand on more than they hold. When the owner cuts off the assistant, the intern is cut off too, without the owner knowing the intern exists.",
+    code: `<span class="c">// the assistant, passing on less than it was given</span>
+const { port1, port2 } = new MessageChannel();
+port1.onmessage = ({ data }) => {
+  if (data.do !== "read") return port1.postMessage({ refused: "read only" });
+  ownerPort.postMessage(data);            <span class="c">// forwarded up the chain</span>
+};
+give(intern, port2);`,
+    tour: { steps: [["Give the assistant read and add", "The assistant gets a port that reads and adds."], ["Assistant: pass on read only", "The assistant makes a weaker port and gives it to the intern."], ["Intern: read", "The intern's question goes to the assistant, then to the owner, and the answer comes back down."], ["Intern: try to add", "The assistant refuses. It never reaches the owner."], ["Owner: cut off the assistant", "The owner closes the assistant's port."], ["Intern: read", "The intern asks again. The chain is broken above it, and nothing comes back."]] },
+    async setup(stage, ui) {
+      const owner = logBox(stage, "page", "Owner of the diary", `<p class="small" style="margin:0 0 .4rem">Entries: <strong data-n>2</strong></p>`);
+      await stage.frame("assistant", {
+        title: "Assistant", color: "yellow",
+        script: () => {
+          let up = null, down = null;
+          on("port", (_, [p]) => { up = p; log("can read and add"); up.onmessage = ({ data }) => { if (data.from === "intern" && down) { send(down, "sub", data); } else log("owner says: " + data.text); }; });
+          on("add", () => { if (!up) return; log("adding an entry"); send(up, "main", { do: "add" }); });
+          on("delegate", () => {
+            const { port1, port2 } = new MessageChannel();
+            down = port1;
+            down.onmessage = ({ data }) => {
+              if (data.do !== "read") { log("refused the intern: " + data.do); return send(down, "sub", { refused: "this port is read only" }); }
+              log("passing the intern's question up");
+              send(up, "main", { do: "read", from: "intern" });
+            };
+            parent.postMessage({ wire: "forward" }, "*", [port2]);
+            log("made a read-only port for the intern");
+          });
+        },
+      });
+      await stage.frame("intern", {
+        title: "Intern", color: "teal",
+        script: () => {
+          let port = null, heard = false;
+          on("port", (_, [p]) => { port = p; log("given a port by the assistant"); port.onmessage = ({ data }) => { heard = true; log(data.refused ? "refused: " + data.refused : "read: " + data.text); }; });
+          on("ask", (data) => { if (!port) return log("I have no port"); heard = false; send(port, "sub", { do: data.what }); setTimeout(() => { if (!heard) log("asked, and heard nothing"); }, 800); });
+        },
+      });
+      const nEl = owner.node.querySelector("[data-n]");
+      let entries = 2, main = null;
+      stage.on((name, data, ports) => {
+        if (name !== "assistant" || data.wire !== "forward") return;
+        stage.post("intern", { cmd: "port" }, [ports[0]]);
+        stage.cable("sub", "assistant", "intern", "teal");
+        read.disabled = tryAdd.disabled = false;
+      });
+      const add = ui.button("Assistant: add an entry", () => stage.post("assistant", { cmd: "add" }), true);
+      const pass = ui.button("Assistant: pass on read only to the intern", (btn) => { stage.post("assistant", { cmd: "delegate" }); btn.disabled = true; }, true);
+      const read = ui.button("Intern: read", () => stage.post("intern", { cmd: "ask", what: "read" }), true);
+      const tryAdd = ui.button("Intern: try to add", () => stage.post("intern", { cmd: "ask", what: "add" }), true);
+      const cut = ui.button("Owner: cut off the assistant", (btn) => { main.close(); stage.cut("main"); btn.disabled = add.disabled = true; owner.say("closed the assistant's port. I never met the intern."); }, true);
+      ui.button("Give the assistant read and add", (btn) => {
+        const channel = new MessageChannel();
+        main = channel.port1;
+        main.onmessage = ({ data }) => {
+          if (data.do === "add") { nEl.textContent = ++entries; owner.say("the assistant added an entry"); }
+          else owner.say("answered a read");
+          main.postMessage({ text: `${entries} entries`, from: data.from }); stage.pulse("main", "page");
+        };
+        stage.post("assistant", { cmd: "port" }, [channel.port2]);
+        stage.cable("main", "page", "assistant", "yellow");
+        btn.disabled = true; add.disabled = pass.disabled = cut.disabled = false;
+      }, false, true);
+    },
+  },
+  {
+    pattern: "exchange", use: [1, 2], id: "built-leader",
+    title: "One tab does the background job, and another takes over when it closes",
+    blurb: "Three tabs of this site are open in the boxes below. A shared worker holds a port to each, keeps the list of who is here, and names one the leader. Only the leader runs the sync job. Close it, and the worker notices through a lock the tab was holding, promotes the tab that has been here longest, and tells everyone. The link opens a fourth tab for real.",
+    code: `<span class="c">// each tab</span>
+navigator.locks.request(myName, () => new Promise(() => {}));   <span class="c">// held until this tab dies</span>
+port.postMessage({ join: true, lock: myName });
+port.onmessage = ({ data }) => { iAmLeader = data.lead; };
+
+<span class="c">// the worker</span>
+navigator.locks.request(lock, () => leave(port));   <span class="c">// runs when the tab has gone</span>`,
+    tour: { steps: [["Close the leader", "The leading tab is destroyed. The worker gets its lock, and promotes the next tab.", 3000], ["Close the leader", "And again. The last tab left is the leader.", 3000]] },
+    async setup(stage, ui) {
+      const names = ["tab-a", "tab-b", "tab-c"];
+      const boxes = names.map((name) => stage.box(name, { src: "/patterns/crew.html" }));
+      if (!("SharedWorker" in self)) return;
+      let leader = null;
+      stage.on((name, data) => { if (data.wire === "crew" && data.lead) leader = name; });
+      await Promise.all(boxes.map((box) => box.whenReady));
+      ui.button("Close the leader", (btn) => {
+        if (!leader || !stage.boxes.get(leader)?.frame?.isConnected) return;
+        stage.remove(leader); leader = null;
+        if (names.filter((n) => stage.boxes.get(n).frame?.isConnected).length < 2) btn.disabled = true;
+      }, false, true);
+      ui.link("Open another tab for real", "/patterns/crew.html");
+    },
+  },
+  {
+    pattern: "filter", use: [0], id: "built-watermark",
+    title: "A captions and watermark plug-in that only ever sees pixels",
+    blurb: "The plug-in is a frame on another origin. Each frame of this page's video is handed to it, it draws a caption and a watermark on top, and hands the frame back. It has no access to the camera, the page or the network path the video came from. It is given a picture, and it returns a picture.",
+    code: `<span class="c">// the plug-in</span>
+port.onmessage = ({ data }) => {
+  ctx.drawImage(data.frame, 0, 0); data.frame.close();
+  ctx.fillText(caption, 12, height - 14);
+  const out = new VideoFrame(canvas, { timestamp: data.frame.timestamp });
+  port.postMessage({ frame: out }, [out]);
+};`,
+    tour: { steps: [["Start the video", "Frames go to the plug-in one at a time and come back with a caption and a watermark.", 3200], ["Change the caption", "This page sends new caption text. The next frame comes back with it."]] },
+    async setup(stage, ui) {
+      const src = stage.box("page", { html: `<canvas width="320" height="180" style="width:100%;height:100%;display:block" aria-label="The video before the plug-in"></canvas>` });
+      await stage.frame("plugin", {
+        title: "Captions plug-in, another origin", color: "yellow",
+        script: () => on("port", (_, [port]) => {
+          let canvas = null, ctx = null, caption = "Tulips are in season", done = 0;
+          log("waiting for frames");
+          port.onmessage = ({ data }) => {
+            if (data.caption) { caption = data.caption; return log("caption: " + caption); }
+            const frame = data.frame;
+            if (!canvas) { canvas = new OffscreenCanvas(frame.displayWidth, frame.displayHeight); ctx = canvas.getContext("2d"); }
+            const { width: w, height: h } = canvas;
+            ctx.drawImage(frame, 0, 0);
+            const timestamp = frame.timestamp;
+            frame.close();
+            ctx.fillStyle = "rgba(0,0,0,.65)"; ctx.fillRect(0, h - 38, w, 38);
+            ctx.fillStyle = "#fff"; ctx.font = "600 17px system-ui"; ctx.textAlign = "center"; ctx.fillText(caption, w / 2, h - 13);
+            ctx.textAlign = "right"; ctx.font = "700 12px system-ui"; ctx.fillStyle = "rgba(255,255,255,.8)"; ctx.fillText("PORT AUTHORITY", w - 10, 18);
+            const out = new VideoFrame(canvas, { timestamp });
+            send(port, "back", { frame: out }, [out]);
+            if (++done % 30 === 0) log(`captioned ${done} frames, kept none`);
+          };
+        }),
+      });
+      const out = stage.box("out", { html: `<canvas width="320" height="180" style="width:100%;height:100%;display:block" aria-label="The video after the plug-in"></canvas>` });
+      const source = src.node.querySelector("canvas"), sctx = source.getContext("2d");
+      const octx = out.node.querySelector("canvas").getContext("2d");
+      if (!("VideoFrame" in self)) { src.node.insertAdjacentHTML("beforeend", `<p class="small" style="position:absolute;inset:auto 0 0 0;padding:.5rem;background:var(--panel)">This browser has no VideoFrame.</p>`); return; }
+      let running = false, waiting = false, n = 0;
+      const paint = (t) => {
+        const { width: w, height: h } = source;
+        sctx.fillStyle = "#0e9f8e"; sctx.fillRect(0, 0, w, h);
+        for (let i = 0; i < 5; i++) { sctx.fillStyle = ["#f5b700", "#e0364c", "#fff"][i % 3]; sctx.beginPath(); sctx.arc(w / 2 + Math.cos(t / 700 + i * 1.3) * w * 0.36, h * 0.42 + Math.sin(t / 500 + i) * h * 0.26, 16, 0, 7); sctx.fill(); }
+      };
+      const channel = new MessageChannel();
+      const loop = (t) => {
+        if (!source.isConnected) return;
+        paint(t);
+        if (running && !waiting) {
+          const frame = new VideoFrame(source, { timestamp: Math.round(t * 1000) });
+          channel.port1.postMessage({ frame }, [frame]); frame.close();
+          waiting = true;
+          if (n++ % 8 === 0) stage.pulse("there", "page");
+        }
+        requestAnimationFrame(loop);
+      };
+      requestAnimationFrame(loop);
+      channel.port1.onmessage = ({ data }) => { octx.drawImage(data.frame, 0, 0); data.frame.close(); waiting = false; };
+      stage.post("plugin", { cmd: "port" }, [channel.port2]);
+      stage.cable("there", "page", "plugin", "yellow");
+      stage.cable("back", "plugin", "out", "yellow");
+      const captions = ["Roses arrive on Thursday", "Peonies: three left", "Tulips are in season"];
+      let c = 0;
+      const change = ui.button("Change the caption", () => channel.port1.postMessage({ caption: captions[c++ % captions.length] }), true);
+      ui.button("Start the video", (btn) => { running = true; btn.disabled = true; change.disabled = false; }, false, true);
+    },
+  },
+  {
+    pattern: "zerocopy", use: [0, 2], id: "built-pool",
+    title: "Two buffers that go back and forth all day, and are never copied",
+    blurb: "A worker needs somewhere to put each result, and making a fresh 8 MB buffer every time is wasteful. This page makes two, once. One goes to the worker, which fills it and sends it back, while the other is being read here. Then they swap. The counters show megabytes moved climbing and megabytes copied staying at zero.",
+    code: `const pool = [new ArrayBuffer(SIZE), new ArrayBuffer(SIZE)];
+worker.onmessage = ({ data }) => {
+  use(data.buffer);                            <span class="c">// read the result</span>
+  worker.postMessage({ buffer: data.buffer }, [data.buffer]);   <span class="c">// and send the same memory back</span>
+};
+for (const buffer of pool) worker.postMessage({ buffer }, [buffer]);`,
+    tour: { steps: [["Start the pool", "Two buffers are made once, and then only moved.", 3500], ["Stop", "The pool stops. Two buffers were ever made."]] },
+    async setup(stage, ui) {
+      const me = stage.box("page", { html: `<div class="here"><h4>This page</h4><p class="small" style="margin:0 0 .25rem">Buffers ever made: <strong data-made>0</strong></p><p class="small" style="margin:0 0 .25rem">Round trips: <strong data-trips>0</strong></p><p class="small" style="margin:0 0 .25rem">Moved: <strong data-moved>0</strong> MB</p><p class="small" style="margin:0 0 .25rem">Copied: <strong>0</strong> MB</p><p class="small" style="margin:0">Held here right now: <strong data-held>0</strong> MB</p></div>` });
+      const wbox = logBox(stage, "worker", "Worker");
+      const q = (name) => me.node.querySelector(`[data-${name}]`);
+      const SIZE = 8 * 1024 * 1024;
+      const worker = new Worker(URL.createObjectURL(new Blob([`onmessage = ({ data }) => { new Uint8Array(data.buffer).fill(data.n % 251); postMessage({ buffer: data.buffer, n: data.n }, [data.buffer]); };`], { type: "text/javascript" })));
+      let running = false, trips = 0, n = 0, held = 0;
+      const show = () => { q("trips").textContent = trips; q("moved").textContent = (trips * 2 * 8).toLocaleString(); q("held").textContent = held * 8; };
+      const send = (buffer) => { held--; worker.postMessage({ buffer, n: ++n }, [buffer]); stage.pulse("pool", "page"); show(); };
+      worker.onmessage = ({ data }) => {
+        held++; trips++;
+        if (trips % 10 === 0) wbox.say(`filled buffer ${trips} with ${new Uint8Array(data.buffer)[0]}s and sent it back`);
+        show();
+        if (!me.node.isConnected) return worker.terminate();
+        if (running) setTimeout(() => (running ? send(data.buffer) : null), 60);
+      };
+      const stop = ui.button("Stop", (btn) => { running = false; btn.disabled = true; }, true);
+      ui.button("Start the pool", (btn) => {
+        btn.disabled = true; stop.disabled = false; running = true;
+        const pool = [new ArrayBuffer(SIZE), new ArrayBuffer(SIZE)];
+        held = 2; q("made").textContent = 2;
+        stage.cable("pool", "page", "worker", "teal");
+        send(pool[0]); setTimeout(() => send(pool[1]), 30);
+      }, false, true);
+    },
+  },
+  {
+    pattern: "roundtrip", use: [0, 1], id: "built-cipher",
+    title: "An encryption service you pipe through, whose key you never hold",
+    blurb: "The cipher service makes a key that cannot be read, even by itself, and offers two pipes: one that seals and one that opens. This page writes a line into the first and gets back bytes it cannot read. It writes those bytes into the second and gets its line back. The key, and the code that uses it, stay on the service's origin. It could meter each line and charge for it, and this page would have no way around that.",
+    code: `<span class="c">// the service</span>
+const seal = new TransformStream({ async transform(text, out) {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  out.enqueue({ iv, data: await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, encode(text)) });
+} });
+parent.postMessage({ seal }, "*", [seal.readable, seal.writable]);
+
+<span class="c">// this page</span>
+lines.pipeThrough(seal).pipeTo(storage);`,
+    tour: { steps: [["Ask the cipher service for its pipes", "The service makes a key and hands over both ends of two transforms."], ["Seal a line, then open it", "A line goes into the sealing pipe and comes back as bytes. Those bytes go into the opening pipe and come back as the line.", 2600], ["Seal a line, then open it", "A second line. The key never left the service."]] },
+    async setup(stage, ui) {
+      const me = logBox(stage, "page", "This page has the lines");
+      await stage.frame("cipher", {
+        title: "Cipher service, another origin", color: "yellow",
+        script: () => on("offer", async () => {
+          let key;
+          try { key = await crypto.subtle.generateKey({ name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]); }
+          catch (err) { return log("no WebCrypto here: " + err.message); }
+          let sealed = 0, opened = 0;
+          const seal = new TransformStream({ async transform(text, out) {
+            const iv = crypto.getRandomValues(new Uint8Array(12));
+            out.enqueue({ iv, data: await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, new TextEncoder().encode(text)) });
+            log(`sealed line ${++sealed}`); tell("pulse", { cable: "seal" });
+          } });
+          const open = new TransformStream({ async transform(box, out) {
+            out.enqueue(new TextDecoder().decode(await crypto.subtle.decrypt({ name: "AES-GCM", iv: box.iv }, key, box.data)));
+            log(`opened line ${++opened}`); tell("pulse", { cable: "open" });
+          } });
+          log("made a key nobody can read, and two pipes");
+          parent.postMessage({ wire: "pipes", seal: { readable: seal.readable, writable: seal.writable }, open: { readable: open.readable, writable: open.writable } }, "*", [seal.readable, seal.writable, open.readable, open.writable]);
+        }),
+      });
+      const out = logBox(stage, "out", "What came back opened");
+      const lines = ["Deliver to 14 Mill Lane, back door", "The safe code is 4471", "Mum's birthday: peonies"];
+      let pipes = null, i = 0;
+      stage.on((name, data) => {
+        if (name !== "cipher" || data.wire !== "pipes") return;
+        pipes = { sealIn: data.seal.writable.getWriter(), sealOut: data.seal.readable.getReader(), openIn: data.open.writable.getWriter(), openOut: data.open.readable.getReader() };
+        stage.cable("seal", "page", "cipher", "yellow");
+        stage.cable("open", "cipher", "out", "teal");
+        me.say("holding both ends of two pipes");
+        go.disabled = false;
+      });
+      const go = ui.button("Seal a line, then open it", async () => {
+        const line = lines[i++ % lines.length];
+        pipes.sealIn.write(line); stage.pulse("seal", "page");
+        const { value: box } = await pipes.sealOut.read();
+        const hex = [...new Uint8Array(box.data).slice(0, 8)].map((b) => b.toString(16).padStart(2, "0")).join("");
+        me.say(`sealed: ${hex}… (${box.data.byteLength} bytes I cannot read)`);
+        pipes.openIn.write(box);
+        const { value: plain } = await pipes.openOut.read();
+        out.say(plain);
+      }, true);
+      ui.button("Ask the cipher service for its pipes", (btn) => { stage.post("cipher", { cmd: "offer" }); btn.disabled = true; }, false, true);
+    },
+  },
+  {
+    pattern: "stream", use: [0, 2], id: "built-bigfile",
+    title: "Hand a worker 64 MB without ever holding 64 MB",
+    blurb: "This page produces a large file a megabyte at a time and gives the worker a stream of it. The worker reads, adds up a checksum and asks for more. The page makes the next megabyte only when asked, so neither side ever holds more than a chunk or two. The progress bar needs no extra messages: the chunks arriving are the progress.",
+    code: `const file = new ReadableStream({ pull(controller) {
+  made < TOTAL ? controller.enqueue(nextMegabyte()) : controller.close();   <span class="c">// only when asked</span>
+} });
+worker.postMessage({ file }, [file]);
+
+<span class="c">// the worker</span>
+for await (const chunk of file) { sum = checksum(sum, chunk); postMessage({ read: chunk.length }); }`,
+    tour: { steps: [["Stream 64 MB to the worker", "The worker is handed a stream. Each megabyte is made when the worker asks for it, and checked as it lands.", 6000]] },
+    async setup(stage, ui) {
+      const me = stage.box("page", { html: `<div class="here"><h4>This page makes the file</h4><div style="height:.7rem;border:1.5px solid currentColor;border-radius:99px;overflow:hidden;margin:0 0 .5rem"><div data-bar style="height:100%;width:0;background:var(--teal)"></div></div><p class="small" style="margin:0 0 .25rem">Made so far: <strong data-made>0</strong> MB</p><p class="small" style="margin:0">Most held at once: <strong data-peak>0</strong> MB</p></div>` });
+      const wbox = logBox(stage, "worker", "Worker checks it");
+      const q = (name) => me.node.querySelector(`[data-${name}]`);
+      const worker = new Worker(URL.createObjectURL(new Blob([`onmessage = async ({ data }) => {
+        const reader = data.file.getReader(); let bytes = 0, sum = 0;
+        for (;;) { const { value, done } = await reader.read(); if (done) break; for (let i = 0; i < value.length; i += 4096) sum = (sum + value[i]) >>> 0; bytes += value.length; postMessage({ bytes }); await new Promise((r) => setTimeout(r, 25)); }
+        postMessage({ done: true, bytes, sum });
+      };`], { type: "text/javascript" })));
+      const MB = 1024 * 1024, TOTAL = 64;
+      let made = 0, read = 0, peak = 0;
+      const start = ui.button("Stream 64 MB to the worker", (btn) => {
+        btn.disabled = true; made = read = peak = 0;
+        const file = new ReadableStream({ pull(controller) {
+          if (made >= TOTAL) return controller.close();
+          const chunk = new Uint8Array(MB); chunk.fill(made % 251);
+          controller.enqueue(chunk); made++;
+          peak = Math.max(peak, made - read);
+          q("made").textContent = made; q("peak").textContent = peak;
+        } }, { highWaterMark: 1 });
+        worker.postMessage({ file }, [file]);
+        stage.cable("file", "page", "worker", "teal");
+        wbox.say("given a stream, reading");
+      }, false, true);
+      worker.onmessage = ({ data }) => {
+        if (!me.node.isConnected) return worker.terminate();
+        if (data.done) { wbox.say(`read all ${data.bytes / MB} MB. checksum ${data.sum}`); start.disabled = false; return; }
+        read = data.bytes / MB; q("bar").style.width = (read / TOTAL) * 100 + "%";
+        if (read % 8 === 0) { wbox.say(`${read} MB checked`); stage.pulse("file", "page"); }
+      };
+    },
+  },
+  {
+    pattern: "keycopy", use: [1], id: "built-keyworker",
+    title: "Make a key on the page, then keep it only in a worker",
+    blurb: "Giving a key away is permanent, and sometimes that is what you want. This page makes a signing key and posts it to its own worker, then drops its copy. From here on the page cannot sign anything by itself. A script injected into the page finds no key to use. It can only ask the worker, which can say no.",
+    code: `const { privateKey, publicKey } = await crypto.subtle.generateKey(ECDSA, false, ["sign", "verify"]);
+worker.postMessage({ key: privateKey });     <span class="c">// a copy goes to the worker</span>
+<span class="c">// let the page's copy go out of scope: the worker now holds the only one</span>
+
+worker.postMessage({ sign: "order 1" });     <span class="c">// the page can ask</span>`,
+    tour: { steps: [["Make a key and give it to the worker", "The page makes a key nobody can read, posts it to its worker and forgets it."], ["Ask the worker to sign", "The worker signs. This page checks the signature with the public half."], ["Page: try to sign by itself", "The page has no key any more."]] },
+    async setup(stage, ui) {
+      const me = logBox(stage, "page", "This page");
+      const wbox = logBox(stage, "worker", "This page's worker");
+      const ECDSA = { name: "ECDSA", namedCurve: "P-256" }, SIGN = { name: "ECDSA", hash: "SHA-256" };
+      const worker = new Worker(URL.createObjectURL(new Blob([`let key = null; onmessage = async ({ data }) => {
+        if (data.key) { key = data.key; return postMessage({ log: "holding the key. Nobody can read it, me included." }); }
+        const signature = await crypto.subtle.sign({ name: "ECDSA", hash: "SHA-256" }, key, new TextEncoder().encode(data.sign));
+        postMessage({ log: "signed: " + data.sign, text: data.sign, signature });
+      };`], { type: "text/javascript" })));
+      let mine = null, publicKey = null, n = 0;
+      worker.onmessage = async ({ data }) => {
+        if (!me.node.isConnected) return worker.terminate();
+        wbox.say(data.log); stage.pulse("key", "worker");
+        if (data.signature) me.say(`${(await crypto.subtle.verify(SIGN, publicKey, data.signature, new TextEncoder().encode(data.text))) ? "verified" : "NOT valid"}: "${data.text}"`);
+      };
+      const ask = ui.button("Ask the worker to sign", () => { worker.postMessage({ sign: `order ${++n}` }); stage.pulse("key", "page"); }, true);
+      const alone = ui.button("Page: try to sign by itself", async () => {
+        try { await crypto.subtle.sign(SIGN, mine, new TextEncoder().encode("x")); me.say("signed by myself"); }
+        catch { me.say("I cannot sign. I have no key to sign with."); }
+      }, true);
+      ui.button("Make a key and give it to the worker", async (btn) => {
+        btn.disabled = true;
+        try { const pair = await crypto.subtle.generateKey(ECDSA, false, ["sign", "verify"]); publicKey = pair.publicKey; mine = pair.privateKey; }
+        catch (err) { return me.say("no WebCrypto here: " + err.message); }
+        worker.postMessage({ key: mine });
+        mine = null;
+        stage.cable("key", "page", "worker", "red");
+        me.say("gave the key to my worker and dropped my copy");
+        ask.disabled = alone.disabled = false;
+      }, false, true);
+    },
+  },
+  {
+    pattern: "functions", use: [1], id: "built-method",
+    title: "Lend one method of an object, and not the object",
+    blurb: "This page has a cart with three methods: add, clear and total. A badge from another origin needs the total. It is given a port that calls <code>cart.total()</code> and nothing else. The badge can ask for the total as often as it likes. It cannot add, and it cannot clear, because those methods are not on the wire it holds.",
+    code: `const cart = { items: [], add(item) {…}, clear() {…}, total() {…} };
+const { port1, port2 } = new MessageChannel();
+port1.onmessage = ({ data }) =>
+  port1.postMessage(data.call === "total" ? { result: cart.total() } : { error: "not on this port" });
+badge.postMessage({ cmd: "port" }, "*", [port2]);`,
+    tour: { steps: [["Lend the badge cart.total", "The badge gets a port that reaches one method."], ["Add tulips to the cart", "This page uses its own cart, with all its methods."], ["Badge: ask for the total", "The badge calls total through its port."], ["Badge: try to clear the cart", "The badge asks for a method it was not lent."]] },
+    async setup(stage, ui) {
+      const me = logBox(stage, "page", "This page owns the cart", `<p class="small" style="margin:0 0 .4rem">In the cart: <strong data-items>nothing</strong></p>`);
+      await stage.frame("badge", {
+        title: "Cart badge, another origin", color: "teal",
+        script: () => {
+          let port = null;
+          on("port", (_, [p]) => { port = p; log("lent something I can call"); port.onmessage = ({ data }) => log(data.error ? `${data.call}(): ${data.error}` : `total() returned ${data.result}`); });
+          on("call", (data) => { if (!port) return log("I have nothing to call"); log(`calling ${data.name}()`); send(port, "lent", { call: data.name }); });
+        },
+      });
+      const itemsEl = me.node.querySelector("[data-items]");
+      const cart = { items: [], add(item) { this.items.push(item); }, clear() { this.items = []; }, total() { return this.items.length * 4.5; } };
+      ui.button("Add tulips to the cart", () => { cart.add("tulips"); itemsEl.textContent = `${cart.items.length} bunches`; me.say("cart.add(\"tulips\")"); });
+      const total = ui.button("Badge: ask for the total", () => stage.post("badge", { cmd: "call", name: "total" }), true);
+      const clear = ui.button("Badge: try to clear the cart", () => stage.post("badge", { cmd: "call", name: "clear" }), true);
+      ui.button("Lend the badge cart.total", (btn) => {
+        const { port1, port2 } = new MessageChannel();
+        port1.onmessage = ({ data }) => {
+          if (data.call === "total") { me.say("ran cart.total() for the badge"); port1.postMessage({ result: cart.total() }); }
+          else { me.say(`refused ${data.call}(): not lent`); port1.postMessage({ call: data.call, error: "not on this port" }); }
+          stage.pulse("lent", "page");
+        };
+        stage.post("badge", { cmd: "port" }, [port2]);
+        stage.cable("lent", "page", "badge", "teal");
+        btn.disabled = true; total.disabled = clear.disabled = false;
+      }, false, true);
+    },
+  },
+  {
+    pattern: "reply", use: [0], id: "built-rpc",
+    title: "Call a function on another origin and await the answer",
+    blurb: "Twelve lines turn the reply pattern into <code>await call(\"add\", 2, 3)</code>. Each call makes a channel, sends one end with the question, and returns a promise that settles when the other end speaks. Errors come back as rejections. Three calls made at once come back to the right callers, even when the slow one finishes last, because each has its own wire.",
+    code: `const call = (method, ...args) => new Promise((resolve, reject) => {
+  const { port1, port2 } = new MessageChannel();
+  port1.onmessage = ({ data }) => { "error" in data ? reject(new Error(data.error)) : resolve(data.result); port1.close(); };
+  service.postMessage({ method, args }, [port2]);
+});
+
+await call("add", 2, 3);       <span class="c">// 5, computed on another origin</span>`,
+    tour: { steps: [["await call(\"add\", 2, 3)", "A question goes out with a reply port. The promise resolves with the answer."], ["await call(\"divide\", 1, 0)", "The service refuses. The promise rejects with its message."], ["Three calls at once", "Three questions, three wires. The slow one comes back last and still reaches the right caller.", 3000]] },
+    async setup(stage, ui) {
+      const me = logBox(stage, "page", "This page calls");
+      await stage.frame("service", {
+        title: "Calculator, another origin", color: "teal",
+        script: () => on("port", (_, [port]) => {
+          const methods = {
+            add: (a, b) => a + b,
+            divide: (a, b) => { if (b === 0) throw new Error("cannot divide by zero"); return a / b; },
+            slow: (ms, value) => new Promise((r) => setTimeout(() => r(value), ms)),
+          };
+          port.onmessage = async (event) => {
+            const { method, args } = event.data, reply = event.ports[0];
+            log(`${method}(${args.join(", ")})`);
+            try { reply.postMessage({ result: await methods[method](...args) }); } catch (err) { reply.postMessage({ error: err.message }); }
+            tell("pulse", { cable: "calls" });
+          };
+        }),
+      });
+      const service = new MessageChannel();
+      stage.post("service", { cmd: "port" }, [service.port2]);
+      stage.cable("calls", "page", "service", "teal");
+      const call = (method, ...args) => new Promise((resolve, reject) => {
+        const { port1, port2 } = new MessageChannel();
+        port1.onmessage = ({ data }) => { "error" in data ? reject(new Error(data.error)) : resolve(data.result); port1.close(); };
+        service.port1.postMessage({ method, args }, [port2]);
+        stage.pulse("calls", "page");
+      });
+      ui.button(`await call("add", 2, 3)`, async () => me.say(`add(2, 3) resolved with ${await call("add", 2, 3)}`), false, true);
+      ui.button(`await call("divide", 1, 0)`, async () => { try { await call("divide", 1, 0); } catch (err) { me.say(`divide(1, 0) rejected: ${err.message}`); } });
+      ui.button("Three calls at once", async () => {
+        const [a, b, c] = await Promise.all([call("slow", 1200, "first asked, last back"), call("add", 20, 22), call("slow", 300, "third asked")]);
+        me.say(`all three back: "${a}", ${b}, "${c}"`);
+      });
+    },
+  },
 ];
+
+// Ideas that are already what a demo on the site does. key: "pattern:index".
+export const shown = {
+  "hello:1": ["/patterns/introduce/", "every other pattern starts this way"],
+  "introduce:0": ["/hub/", "the hub on this site"],
+  "functions:2": ["/comlink/", "the Comlink page"],
+  "canvas:2": ["#demo", "the demo at the top of this page"],
+  "tearoff:0": ["#demo", "the demo at the top of this page"],
+  "tabserver:0": ["#demo", "the demo at the top of this page"],
+  "stream-intro:0": ["#demo", "the demo at the top of this page"],
+  "pipeline:1": ["#demo", "the demo at the top of this page"],
+  "reload:1": ["#demo", "the demo at the top of this page"],
+  "signer:0": ["#demo", "the demo at the top of this page"],
+  "keycopy:0": ["#demo", "the demo at the top of this page"],
+  "keycopy:2": ["/patterns/signer/", "the signer, which sends a port instead"],
+  "halves:0": ["#demo", "the demo at the top of this page"],
+  "lend:0": ["#demo", "the demo at the top of this page"],
+  "far:0": ["#demo", "the demo at the top of this page"],
+  "mounted:0": ["#demo", "the demo at the top of this page"],
+  "socket:0": ["#demo", "the demo at the top of this page"],
+  "filter:1": ["/patterns/frozen/", "two workers that keep going while the page is frozen"],
+};
