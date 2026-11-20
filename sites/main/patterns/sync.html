@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>A shopping list in every tab | Port Authority</title>
+<style>
+  html{color-scheme:light dark}
+  body{margin:0;padding:.7rem .8rem;font:14px/1.4 system-ui,sans-serif;background:light-dark(#fff,#141f47);color:light-dark(#0f1c3f,#e9edfa)}
+  h1{font:800 1rem/1.1 system-ui,sans-serif;margin:0 0 .4rem}
+  ul{list-style:none;margin:0 0 .4rem;padding:0}
+  li label{display:flex;gap:.4rem;align-items:center;padding:.1rem 0}
+  li.done span{text-decoration:line-through;opacity:.6}
+  p{margin:0;font:12px/1.4 ui-monospace,Menlo,monospace}
+  button{font:inherit;padding:.15rem .6rem}
+</style>
+<h1>Shopping list</h1>
+<ul id="list"></ul>
+<p id="none">Nothing on the list.</p>
+<p><button id="add">Add an item</button></p>
+<script type="module">
+  const embedded = parent !== self;
+  const tell = (wire, data = {}) => embedded && parent.postMessage({ wire, ...data }, "*");
+  const $ = (id) => document.getElementById(id);
+  if (!("SharedWorker" in self)) $("none").textContent = "This browser has no SharedWorker.";
+  else {
+    const port = new SharedWorker("/patterns/sync-worker.js").port;
+    port.onmessage = ({ data }) => {
+      $("list").replaceChildren(...data.list.map((item) => {
+        const li = document.createElement("li");
+        li.className = item.done ? "done" : "";
+        const label = document.createElement("label"), box = document.createElement("input"), span = document.createElement("span");
+        box.type = "checkbox"; box.checked = item.done; box.onchange = () => port.postMessage({ tick: true, id: item.id });
+        span.textContent = item.text;
+        label.append(box, span); li.append(label);
+        return li;
+      }));
+      $("none").hidden = data.list.length > 0;
+      tell("sync", { items: data.list.length, done: data.list.filter((i) => i.done).length });
+    };
+    $("add").onclick = () => port.postMessage({ add: true });
+    addEventListener("message", ({ data, source }) => { if (source === parent && data && data.cmd) port.postMessage({ [data.cmd]: true }); });
+    addEventListener("pagehide", () => port.postMessage({ bye: true }));
+  }
+  tell("ready");
+</script>
+</html>

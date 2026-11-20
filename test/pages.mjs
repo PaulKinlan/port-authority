@@ -29,7 +29,7 @@ for (const [href, title] of links) {
     sections: [...document.querySelectorAll("#deep section")].map((s) => s.id),
     wide: document.documentElement.scrollWidth > innerWidth + 1,
   }));
-  const need = ["how", "code", "try", "uses", "traps", "related"];
+  const need = ["what", "code", "how", "uses", "try", "traps", "related"];
   if (!ok || got.title !== title || !got.tab.startsWith(title) || need.some((n) => !got.sections.includes(n)) || got.wide || errors.length > before) thin.push(`${href} ${JSON.stringify(got)} ${errors.slice(before).join("|")}`);
 }
 check("all 25 pages load their demo and every part of the explainer, with no sideways scroll on a phone", thin.length === 0, thin.join("\n"));
