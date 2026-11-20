@@ -37,7 +37,7 @@
       <h1>Pass the port.</h1>
       <p>A MessagePort can be handed to another window, another origin, a worker, and on again. Whoever holds it can talk, and nobody in between has to stay. These are experiments in how far that goes.</p>
       <div class="hero-demo">
-        <p>Three real origins. Site A and Site B have never met. Press <strong>Introduce them</strong>, let them talk, then remove the one in the middle.</p>
+        <p>Three real origins. Site A and Site B have never met. Press <strong>Next</strong> to introduce them, let them talk, then remove the one in the middle.</p>
         <div id="hero-demo"></div>
       </div>
     </section>
@@ -222,7 +222,7 @@ await line.call({ bouquet: "ember", recipient: "Ada" });</pre>
     import { introduce, mount } from "/patterns/demos.js";
     import { sites } from "/_sites.js";
     for (const a of document.querySelectorAll("a[data-site]")) a.href = sites[a.dataset.site] + "/";
-    mount(document.getElementById("hero-demo"), { setup: introduce });
+    mount(document.getElementById("hero-demo"), { id: "introduce", setup: introduce });
   </script>
 </body>
 </html>
