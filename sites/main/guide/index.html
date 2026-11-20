@@ -6,6 +6,7 @@
   <title>The guide to message ports | Port Authority</title>
   <meta name="description" content="A field guide to MessageChannel, MessagePort and postMessage: where a message can go, what can be sent, the patterns that matter, and what goes wrong.">
   <link rel="stylesheet" href="/base.css">
+  <link rel="stylesheet" href="/patterns/patterns.css">
   <script src="/errors.js"></script>
   <style>
     main { display: grid; gap: clamp(2.5rem, 6vw, 4rem); padding-block: 1rem 4rem; }
@@ -21,6 +22,10 @@
     thead th { border-top: 0; font-family: var(--display); font-size: var(--step-0); }
     td:first-child, tbody th { font-weight: 600; white-space: nowrap; }
     .see { font-size: var(--step--1); }
+    .live-set { display: grid; gap: 1.2rem; grid-template-columns: minmax(0, 1fr); margin-top: .6rem; }
+    .live { border: 2px solid var(--ink); border-radius: 18px; padding: clamp(.8rem, 3vw, 1.4rem); display: grid; gap: .8rem; grid-template-columns: minmax(0, 1fr); background: color-mix(in srgb, var(--yellow) 10%, var(--paper)); }
+    .live h4 { font: 800 var(--step-1)/1.1 var(--display); margin: 0; }
+    .live p { margin: 0; max-width: 70ch; }
     .measured { font-size: var(--step--1); background: var(--panel); border-radius: 12px; padding: 0.8rem 1rem; max-width: 66ch; }
   </style>
 </head>
@@ -32,7 +37,7 @@
     </header>
     <div class="stack" style="padding-block:2.5rem 1.5rem; --gap:1.1rem">
       <h1 style="font-size:var(--step-3)">The guide to message ports</h1>
-      <p>Everything this site has worked out about sending things between pages, frames, workers and origins. Each claim links to something running that shows it. Where a line says "measured", it came from <a href="/lab/">the lab</a>, in the Chromium this was built with. Other browsers are being filled in as people run it, and <a href="/lab/results/">the results page</a> shows where they differ.</p>
+      <p>Everything this site has worked out about sending things between pages, frames, workers and origins. Each section has its examples running in place, and each claim links to the full page on it. Where a line says "measured", it came from <a href="/lab/">the lab</a>, in the Chromium this was built with. Other browsers are being filled in as people run it, and <a href="/lab/results/">the results page</a> shows where they differ.</p>
       <ul class="toc">
         <li><a href="#model">1. The model in five sentences</a></li>
         <li><a href="#where">2. Where a message can go</a></li>
@@ -58,6 +63,7 @@
           <li>So holding a port is the permission to use it, and passing a port on is how permission is given.</li>
         </ol>
         <p class="see">Running: <a href="/patterns/hello/">a channel is two ends of one wire</a>, <a href="/patterns/introduce/">introduce two strangers, then leave</a>.</p>
+        <div class="live-set" data-demos="hello introduce"><h3>See it run</h3></div>
       </section>
 
       <section id="where">
@@ -82,6 +88,7 @@
         </ul>
         <p>Outside the browser's own pages, the same idea appears as real ports between an Android app and its WebView, between an extension's content script and the page it runs in, and between Electron's processes. This site has not tested those.</p>
         <p class="see">Running: <a href="/lab/">the lab</a> sends to thirteen of these places. <a href="/patterns/exchange/">A SharedWorker as the exchange</a>. <a href="/patterns/tabserver/">A tab that is a web server for other tabs</a>. <a href="/patterns/socket/">A shared worker holding the only socket</a>. <a href="/patterns/audio/">A worker sending notes to the audio thread</a>.</p>
+        <div class="live-set" data-demos="exchange socket tabserver"><h3>See it run</h3></div>
       </section>
 
       <section id="what">
@@ -108,6 +115,7 @@
           </tbody>
         </table></div>
         <p class="measured">The full table has 45 kinds against 13 destinations, and each test uses the thing where it lands, because arriving is not the same as working. <a href="/lab/">Run it in your browser</a> or <a href="/lab/results/">see what others reported</a>.</p>
+        <div class="live-set" data-demos="zerocopy built-chart"><h3>See it run</h3></div>
       </section>
 
       <section id="authority">
@@ -122,6 +130,7 @@
           <li><strong>Delegate along a chain</strong>: each holder passes on a narrower port of its own. <a href="/patterns/signer/">A signing port narrowed to three orders.</a></li>
         </ul>
         <p>There are no accounts, tokens or lists of who is allowed in any of these. What you hold is what you may do.</p>
+        <div class="live-set" data-demos="attenuate built-expiry built-cap built-sealed built-listener signer"><h3>Working examples</h3></div>
       </section>
 
       <section id="streams">
@@ -134,6 +143,7 @@
           <li>A network connection is two streams. Hand them to a context that has no network access and it can talk on that one connection and no other, until you close it. <a href="/patterns/lend/">Running.</a></li>
           <li>A stream does not survive the context it was passed through. If a middle party forwards a stream and then goes away, the reader stalls with no error. Send streams down a direct port. <a href="/patterns/stream-intro/">Running.</a></li>
         </ul>
+        <div class="live-set" data-demos="built-typing pipeline roundtrip built-tap"><h3>Working examples</h3></div>
       </section>
 
       <section id="threads">
@@ -147,6 +157,7 @@
           <li>The audio thread accepts a port. Give a worker the other end and it drives sound with no help from the page. Measured: 13 notes in a 3 second freeze, at one every 230 ms, so none were lost. <a href="/patterns/audio/">Running.</a></li>
           <li>A shared worker can hold the one connection a site needs, with a port to each tab. An answer goes back down the port of the tab that asked. <a href="/patterns/socket/">Running.</a></li>
         </ul>
+        <div class="live-set" data-demos="frozen audio mounted"><h3>Working examples</h3></div>
       </section>
 
       <section id="keys">
@@ -157,6 +168,7 @@
           <li><strong>Send a port that uses the key.</strong> The key stays where it was made. The port can be limited to certain messages, counted, passed on in a weaker form, and closed. <a href="/patterns/signer/">Running.</a></li>
         </ul>
         <p>For delegating authority you mean to be able to take back, send the port.</p>
+        <div class="live-set" data-demos="keycopy"><h3>Working example</h3></div>
       </section>
 
       <section id="lasting">
@@ -166,6 +178,7 @@
           <li>A port survives its page being torn off into a new window, if it is handed to that window. <a href="/patterns/tearoff/">Running.</a></li>
           <li>For anything that must outlive every tab, a port is the wrong tool. Keep the durable part on a server and make fresh ports when a page opens. This site's <a href="/hub/">hub</a> keeps its registry on a server for that reason.</li>
         </ul>
+        <div class="live-set" data-demos="reload tearoff"><h3>Working examples</h3></div>
       </section>
 
       <section id="far">
@@ -175,6 +188,7 @@
           <li>That bridge carries JSON only. Ports and streams cannot ride on it, where they can on a real port.</li>
           <li>The same bridge works between devices. A pairing code names a meeting place on the server, which passes the handful of messages WebRTC needs and then carries nothing. Each device holds a port, and can hand it on: a phone ends up pressing buttons in a sandboxed frame on a laptop that was given a port and nothing else. <a href="/patterns/far/">Running.</a> Measured between two pages on one computer. Between two networks it depends on both being able to reach each other, and there is no relay for when they cannot.</li>
         </ul>
+        <div class="live-set" data-demos="far built-approve"><h3>Working examples</h3></div>
       </section>
 
       <section id="bites">
@@ -191,6 +205,7 @@
           <li>A page that is cross-origin isolated cannot keep a reference to a window that is not. It gets shared memory and loses popups to other origins.</li>
           <li>A person who has asked for reduced motion still needs to see that something happened. This site skipped its animations for them and looked broken.</li>
         </ul>
+        <div class="live-set" data-demos="stream-intro"><h3>See one of them happen</h3></div>
       </section>
 
       <section id="open">
@@ -206,5 +221,25 @@
     </main>
     <footer class="small muted" style="padding-block:2rem 4rem">A working name and a work in progress.</footer>
   </div>
+  <script type="module">
+    // Every section has its examples running in place. Each is set up when it is about to be seen.
+    import { mount } from "/patterns/demos.js";
+    import { all } from "/patterns/all.js";
+    import { built } from "/patterns/built.js";
+    const find = (id) => all.find((d) => d.id === id) || built.find((d) => d.id === id);
+    for (const set of document.querySelectorAll(".live-set")) {
+      for (const id of set.dataset.demos.split(" ")) {
+        const demo = find(id);
+        if (!demo) continue;
+        const href = demo.pattern ? `/patterns/${demo.pattern}/#${demo.id}` : `/patterns/${demo.id}/`;
+        const card = document.createElement("article");
+        card.className = "live"; card.id = "live-" + id;
+        card.innerHTML = `<h4>${demo.title}</h4><div class="demo"></div><p>${demo.blurb}</p><p class="small"><a href="${href}">The code, and how it works \u203a</a></p>`;
+        set.append(card);
+        const el = card.querySelector(".demo");
+        new IntersectionObserver((entries, io) => { if (entries[0].isIntersecting) { io.disconnect(); mount(el, demo, undefined, { autoplay: true }); } }, { rootMargin: "300px" }).observe(el);
+      }
+    }
+  </script>
 </body>
 </html>

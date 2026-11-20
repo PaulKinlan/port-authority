@@ -311,13 +311,13 @@ export const TOURS = {
 // Next does the next step for you and says what it did. Back returns to the
 // step before, by starting over and redoing the steps up to it. The buttons
 // underneath are the same actions, for doing it in your own order.
-export function mount(container, demo, tours = TOURS) {
+export function mount(container, demo, tours = TOURS, { autoplay = false } = {}) {
   container.innerHTML = `<div class="stage-el"></div><div class="stepper"><p class="caption" aria-live="polite"></p><div class="steps" hidden><button class="tiny quiet back" type="button">‹ Back</button><button class="tiny accent fwd" type="button"></button></div></div><div class="controls"></div>`;
   const stage = new Stage(container.querySelector(".stage-el"));
   const controls = container.querySelector(".controls");
   const caption = container.querySelector(".caption");
   const back = container.querySelector(".back"), fwd = container.querySelector(".fwd");
-  const tour = tours[demo.id] || { steps: [] };
+  const tour = demo.tour || tours[demo.id] || { steps: [] };
   const total = tour.steps.length;
   let playing = 0;   // changes whenever something new takes over, which stops whatever was running
   let at = 0;        // how many steps have been done
@@ -417,9 +417,11 @@ export function mount(container, demo, tours = TOURS) {
     }
     busy = false; sync();
   };
-  // Set up now. ?play=1 plays it without being asked, when most of it is on screen.
+  // Set up now. A pattern's own page plays its demo when it comes into view, so
+  // that it is seen working. ?play=1 forces that anywhere and ?play=0 stops it.
   const ready = reset(false);
-  if (total && new URLSearchParams(location.search).get("play") === "1") {
+  const wish = new URLSearchParams(location.search).get("play");
+  if (total && wish !== "0" && (wish === "1" || (autoplay && !navigator.webdriver))) {
     new IntersectionObserver((entries, io) => {
       if (!entries[0].isIntersecting) return;
       io.disconnect();

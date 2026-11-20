@@ -40,6 +40,10 @@
         <p class="count"><span class="swatch" id="swatch"></span><span id="count">0</span></p>
         <div class="row"><button class="tiny accent" id="add">Add one</button><button class="tiny quiet" id="colour">Change the colour</button></div>
       </div>
+      <div id="asked" hidden>
+        <p id="question" style="font:800 1.15rem/1.2 var(--display);margin:.3rem 0 .6rem"></p>
+        <div class="row"><button class="tiny accent" id="approve">Approve</button><button class="tiny quiet" id="deny">Deny</button></div>
+      </div>
       <form id="join" hidden><input id="code" aria-label="Pairing code" placeholder="Pairing code" autocomplete="off" autocapitalize="none" spellcheck="false"><button class="tiny accent">Join</button></form>
     </main>
     <footer class="small muted" style="padding-block:2rem 4rem">A working name and a work in progress.</footer>
@@ -64,6 +68,8 @@
         onPort(p) {
           port = p;
           port.onmessage = ({ data }) => {
+            // A question from the other end, to be answered here.
+            if (data.ask) { $("live").hidden = true; $("asked").hidden = false; $("question").textContent = data.ask; $("approve").disabled = $("deny").disabled = false; tell("pulse", { cable: "air" }); return; }
             if (data.count === undefined) return;
             $("count").textContent = data.count; $("swatch").style.background = data.colour;
             tell("pulse", { cable: "air" });
@@ -73,7 +79,10 @@
         },
       });
     }
-    const act = (what) => { if (port) port.postMessage({ do: what }); };
+    const answer = (what) => { if (!port) return; port.postMessage({ answer: what }); $("question").textContent = what === "approve" ? "You approved it." : "You denied it."; $("approve").disabled = $("deny").disabled = true; };
+    $("approve").onclick = () => answer("approve");
+    $("deny").onclick = () => answer("deny");
+    const act = (what) => { if (what === "approve" || what === "deny") return answer(what); if (port) port.postMessage({ do: what }); };
     $("add").onclick = () => act("add");
     $("colour").onclick = () => act("colour");
     addEventListener("message", (event) => { if (embedded && event.source === parent && event.data?.cmd) act(event.data.cmd); });
