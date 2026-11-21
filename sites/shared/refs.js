@@ -254,7 +254,8 @@ function run(root) {
     const projects = all.filter((r) => r.by).map((r) => `<li>${link(r.url, r.name)}, by ${esc(r.by)}.</li>`);
     box.innerHTML = `<h2 id="refs-title">References</h2>
       ${features.length ? `<p>The web platform features this page mentions, with what each one is, its documentation on <a href="https://developer.mozilla.org/">MDN</a> and the specification that defines it.</p><dl class="refs-features">${features.join("")}</dl>` : ""}
-      ${projects.length ? `<p>Projects and documents this page draws on.</p><ul class="refs-projects">${projects.join("")}</ul>` : ""}`;
+      ${projects.length ? `<p>Projects and documents this page draws on.</p><ul class="refs-projects">${projects.join("")}</ul>` : ""}
+      ${location.pathname.startsWith("/reading/") ? "" : `<p class="refs-more">For more, see <a href="/reading/">Further reading</a>: articles, talks, papers, libraries and <a href="/reading/#specs">the specifications</a>, collected in one place.</p>`}`;
   }
 
   sweep();
