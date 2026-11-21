@@ -107,3 +107,15 @@ label { font-weight: 600; display: block; margin-bottom: 0.3rem; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }
+
+/* Links that refs.js adds to the names of platform features, and its list. */
+a.ref { text-decoration-thickness: 0.08em; }
+a.ref:hover { text-decoration-thickness: 0.2em; }
+.refs { border-top: 2px solid var(--ink); padding-block: clamp(1.6rem, 4vw, 2.6rem) 1rem; display: grid; gap: 1rem; }
+.refs h2 { font-size: var(--step-2); }
+.refs-features { margin: 0; columns: 2 20rem; column-gap: 3rem; font-size: var(--step--1); }
+.refs-features > div { break-inside: avoid; padding-block: 0.6rem; border-top: 1px solid var(--line); }
+.refs-features dt { font-family: var(--mono); font-weight: 600; }
+.refs-features dd { margin: 0.15rem 0 0; }
+.refs-links { display: inline-flex; flex-wrap: wrap; gap: 0 0.8rem; font-weight: 600; }
+.refs-projects { margin: 0; padding-left: 1.1rem; font-size: var(--step--1); }

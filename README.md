@@ -22,6 +22,7 @@ Live: https://port-authority.dev
 | `sites/shared/portwire.js` | A `MessagePort` over anything that carries bytes in order. Data, bytes, ports and streams posted into it are rebuilt on the other side. No dependencies |
 | `sites/shared/farport.js` | A `MessagePort` whose other end is on another device: a pairing code, a WebRTC data channel, and `portwire.js` on top. The page the other device opens is `sites/main/far/` |
 | `sites/shared/oneway.js` | `oneWay()`: two channels and a valve, for a port link that carries messages in one direction only |
+| `sites/shared/refs.js` | Links the first mention of a platform feature in each section to MDN, and adds a References list to the foot of the page with what each feature is, its MDN page and its specification. A page opts in with one script tag. `node scripts/check-refs.mjs` checks every address and spec anchor |
 | `sites/shared/qr.js` | A small QR encoder, for the link a phone scans |
 | `sites/shared/` | CSS and the patch-bay diagram component used by the demos |
 | `src/worker.js` | Cloudflare Worker: picks a site folder by hostname, and runs the hub (one Durable Object per person) |
