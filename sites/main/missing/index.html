@@ -6,6 +6,7 @@
   <title>What the web platform is missing | Port Authority</title>
   <meta name="description" content="A list of what I want browser vendors to build or fix around message ports, transferable objects and messaging between origins. Each item has the evidence, the reason, what it would let people build, and a check that runs in your browser.">
   <link rel="stylesheet" href="/base.css">
+  <link rel="stylesheet" href="/patterns/patterns.css">
   <script src="/errors.js"></script>
   <style>
     main { display: grid; gap: clamp(2.5rem, 6vw, 4rem); padding-block: 1rem 4rem; }
@@ -46,6 +47,21 @@
     .fx figcaption span { overflow-wrap: anywhere; }
     .fx figcaption [data-state="gap"] { color: var(--red); font-weight: 600; }
     .fx .controls { display: flex; flex-wrap: wrap; gap: .5rem; margin: 0; }
+    .fx iframe { aspect-ratio: auto; height: 9.5rem; }
+    .fx pre { margin: 0; min-height: 5rem; white-space: pre-wrap; font-size: var(--step--1); border: 2px solid var(--ink); }
+    .lanes { list-style: none; padding: 0; margin: 0; display: grid; gap: .45rem; font-size: var(--step--1); }
+    .lanes li { max-width: 76ch; padding-left: .7rem; border-left: 5px solid var(--line); }
+    .lanes li[data-state="gap"] { border-left-color: var(--red); }
+    .lanes li[data-state="works"] { border-left-color: var(--teal); }
+    .live-set { display: grid; gap: 1.2rem; grid-template-columns: minmax(0, 1fr); }
+    .live { border: 2px solid var(--ink); border-radius: 18px; padding: clamp(.8rem, 3vw, 1.4rem); display: grid; gap: .8rem; grid-template-columns: minmax(0, 1fr); background: color-mix(in srgb, var(--yellow) 10%, var(--paper)); }
+    .live h4 { font: 800 var(--step-1)/1.1 var(--display); letter-spacing: -0.01em; text-transform: none; color: inherit; margin: 0; }
+    .live p { margin: 0; max-width: 70ch; }
+    .usecases td:first-child { font-weight: 600; }
+    #census-table td, #census-table th { padding-right: 1rem; }
+    #census-table .no { color: var(--red); font-weight: 600; }
+    #census-table .yes { color: var(--teal); font-weight: 600; }
+    #census-table tr.group th { font-family: var(--display); font-size: var(--step-0); padding-top: 1.2rem; }
     #tally { font-weight: 600; }
   </style>
 </head>
@@ -93,6 +109,31 @@
             <li><a href="#isolated">Shared memory and popups on the same page</a></li>
           </ul>
         </li>
+        <li><a href="#unsendable">5. Things that should be sendable and are not</a>
+          <ul>
+            <li><a href="#writer">The writer for one file</a></li>
+            <li><a href="#http">Requests, responses and headers</a></li>
+            <li><a href="#wrappers">Streams the browser makes, and sockets</a></li>
+            <li><a href="#drawn">A canvas that has been drawn on</a></li>
+            <li><a href="#audiobuffer">Decoded audio</a></li>
+            <li><a href="#gpu">Anything from WebGPU</a></li>
+            <li><a href="#keymove">A key that is moved, not copied</a></li>
+            <li><a href="#classes">My own classes</a></li>
+          </ul>
+        </li>
+        <li><a href="#primitives">6. Primitives that are not there</a>
+          <ul>
+            <li><a href="#xworker">A worker from another origin's script</a></li>
+            <li><a href="#nonet">A worker with less than my page has</a></li>
+            <li><a href="#pressure">Back-pressure on a port</a></li>
+            <li><a href="#chunks">A stream that moves its chunks</a></li>
+            <li><a href="#sync">Waiting for an answer</a></li>
+            <li><a href="#code">Sending code</a></li>
+            <li><a href="#structs">Sharing objects</a></li>
+          </ul>
+        </li>
+        <li><a href="#usecases">What cannot be built today</a></li>
+        <li><a href="#census">Every kind of object I tried</a></li>
         <li><a href="#not">What I am not asking for</a></li>
         <li><a href="#how">How this list was made</a></li>
       </ul>
@@ -134,7 +175,7 @@
             <li><a href="/lab/">The lab</a> on this site sends 45 kinds of object to 13 places and records what happens. See <a href="/lab/results/">the results</a>.</li>
             <li>In the Chromium this site was built with, the frame fails to arrive even when the other origin is on the same site and in the same process. So it is a rule about origins, and not a limit of sending between processes.</li>
             <li>The shared browser tests expect it. <a href="https://wpt.live/webcodecs/videoFrame-serialization.crossAgentCluster.https.html">This web-platform-test</a> passes only if a frame can neither be copied nor moved to another origin.</li>
-            <li>The <a href="https://w3c.github.io/webcodecs/#videoframe-transfer-serialization">WebCodecs specification</a> does not state the rule in its transfer steps. There is an issue asking for it to be written down: <a href="https://github.com/w3c/webcodecs/issues/717">w3c/webcodecs #717</a>, "Specify cross-agent-cluster structured cloning for various Web Codecs API objects".</li>
+            <li>The <a href="https://w3c.github.io/webcodecs/#videoframe-transfer-serialization">WebCodecs specification</a> does not state the rule in its transfer steps. An issue opened in 2023 asked for it to be written down, and asked whether anyone had a use for sending these objects further: <a href="https://github.com/w3c/webcodecs/issues/717">w3c/webcodecs #717</a>, "Specify cross-agent-cluster structured cloning for various Web Codecs API objects". The latest comment there, from October 2026, says the limit has now been added to the specification. The use below is my answer to the question that issue asked.</li>
             <li>The same failure has been reported against Electron: <a href="https://github.com/electron/electron/issues/47705">electron #47705</a>.</li>
           </ul>
           <h4>Why I want it</h4>
@@ -167,6 +208,11 @@
             <b>In your browser, now</b>
             <span data-probe="track-worker"></span>
           </div>
+          <div class="fx demo" id="demo-track">
+            <h4>Running: a video track handed to a worker</h4>
+            <p>This page makes a video track and tries to hand it to a worker, which is the simplest case the specification allows. Then it does what works today in Chromium: it cuts the track into frames itself and sends the worker a stream of them.</p>
+            <div data-missing-demo="track"></div>
+          </div>
           <h4>How I know</h4>
           <ul>
             <li>The lab: refused with <code>DataCloneError</code> at every destination in Chromium 157 and Chrome 160.</li>
@@ -198,6 +244,16 @@
               </tbody>
             </table>
           </div>
+          <div class="fx demo" id="demo-editor">
+            <h4>Running: one file, opened by an editor on another origin</h4>
+            <p>Two copies of an editor run in frames on another origin. One is sent the handle for a file in this page's private file system. The other is sent a copy of the text, and has to ask this page to do the saving.</p>
+            <div data-missing-demo="editor"></div>
+          </div>
+          <div class="fx demo" id="demo-plugin">
+            <h4>Running: one network connection, lent to a plug-in on another origin</h4>
+            <p>This page opens a WebRTC connection. One plug-in is sent the data channel itself. The other is sent a port, and this page copies each message from the port onto the connection.</p>
+            <div data-missing-demo="plugin"></div>
+          </div>
           <p class="small muted">Hover over an answer for the full result. The third column is to the right on a small screen.</p>
           <h4>How I know</h4>
           <ul>
@@ -216,6 +272,11 @@
             <b>In your browser</b>
             <span>This check is not run for you, because it can end frames from <span data-host>the other origin</span> in this tab. <button class="tiny" id="run-canvas">Run it</button></span>
             <span data-probe="canvas-other" data-manual="1" hidden></span>
+          </div>
+          <div class="fx demo" id="demo-painter">
+            <h4>Running: a painter on another origin, drawing on this page</h4>
+            <p>A frame on another origin paints a picture. First it sends finished pictures back for this page to draw. Then, when you press the second button, it is given the canvas itself.</p>
+            <div data-missing-demo="painter"></div>
           </div>
           <h4>How I know</h4>
           <ul>
@@ -247,6 +308,7 @@
             <span data-probe="videoframe-other"></span>
             <span data-probe="datachannel-other"></span>
           </div>
+          <div class="live-set" data-demos="bite-unreadable"></div>
           <h4>How I know</h4>
           <p>Most of the failed cells in <a href="/lab/results/">the lab's results</a> are of this kind. <a href="/guide/#bites">The guide</a> has it running: a module sent to a shared worker disappears, and the sender waits for ever.</p>
           <h4>Why I want it</h4>
@@ -267,6 +329,7 @@
             <b>In your browser, now</b>
             <span data-probe="close-event"></span>
           </div>
+          <div class="live-set" data-demos="bite-gone alive-signals"></div>
           <h4>How I know</h4>
           <ul>
             <li>The check above, and the <a href="/guide/#bites">heartbeat example in the guide</a>.</li>
@@ -298,6 +361,7 @@
           <h3>There is no port that works in one direction</h3>
           <h4>What is missing</h4>
           <p>Both ends of a <code>MessageChannel</code> can send and receive. There is no way to make an end that can only send or only receive, and anything can ride back along a port, another port included.</p>
+          <div class="live-set" data-demos="oneway"></div>
           <h4>How I know</h4>
           <p>I had to build it: <a href="/patterns/oneway/">the one-way port</a> on this site is two channels and a piece of code in the middle that copies messages forward and drops what comes back. It works only while the page running that code stays alive, and it has to post each copy with no transfer list, or a port could ride forward and become a way to answer.</p>
           <h4>Why I want it</h4>
@@ -315,6 +379,7 @@
           <h3>A readable stream can signal back to its writer</h3>
           <h4>What is missing</h4>
           <p>Handing someone only the readable side of a stream looks like a one-way link, and it is not one. A stream asks its source for the next chunk when the reader takes one, so the writer can see the timing of every read, and a reader can send bits by choosing when to read.</p>
+          <div class="live-set" data-demos="built-covert"></div>
           <h4>How I know</h4>
           <p>Measured on this site: a sandboxed frame that held only a readable stream sent 16 bits to the writer by timing its reads, and all 16 were read correctly. <a href="/patterns/oneway/">It is running here.</a></p>
           <h4>What I am asking for</h4>
@@ -328,6 +393,11 @@
           <div class="now">
             <b>In your browser, now</b>
             <span data-probe="port-origin"></span>
+          </div>
+          <div class="fx demo" id="demo-identity">
+            <h4>Running: two senders that cannot be told apart</h4>
+            <p>Two frames on two different origins are each given a port and each post one message. This page looks at what the two events say about who sent them.</p>
+            <div data-missing-demo="identity"></div>
           </div>
           <h4>Why I want it</h4>
           <p>Not knowing is correct for many uses, because the port is the permission. But a service that hands out ports cannot keep a record of who used one, and cannot refuse a party it would not have given a port to.</p>
@@ -344,6 +414,7 @@
           <h3>A stream stops when the context it passed through goes away</h3>
           <h4>What is broken</h4>
           <p>If A sends a stream to B and B sends it on to C, the data still travels through B. When B closes, C's reader stalls and gets no error.</p>
+          <div class="live-set" data-demos="stream-intro"></div>
           <h4>How I know</h4>
           <p>It runs in <a href="/guide/#streams">the streams section of the guide</a>. It is a known problem with an issue open since 2020: <a href="https://github.com/whatwg/streams/issues/1063">whatwg/streams #1063</a>, "Transferable streams: the double transfer problem".</p>
           <h4>Why I want it</h4>
@@ -360,6 +431,11 @@
             <b>In your browser, now</b>
             <span data-probe="abortsignal-worker"></span>
           </div>
+          <div class="fx demo" id="demo-abort">
+            <h4>Running: cancelling a job in a worker</h4>
+            <p>Two workers each start a long job. One is sent an <code>AbortSignal</code> with the request, the way <code>fetch</code> takes one. The other is sent a port to listen on.</p>
+            <div data-missing-demo="abort"></div>
+          </div>
           <h4>How I know</h4>
           <p>The lab: refused everywhere. There is an open issue from 2021: <a href="https://github.com/whatwg/dom/issues/948">whatwg/dom #948</a>, "Allow postMessage-ing AbortSignal".</p>
           <h4>What it would enable</h4>
@@ -374,6 +450,7 @@
           <h3>A service worker loses its ports when it is stopped</h3>
           <h4>What is missing</h4>
           <p>The browser stops a service worker when it is idle. Every port it held is gone with it.</p>
+          <div class="live-set" data-demos="built-swroute"></div>
           <h4>How I know</h4>
           <p><a href="/patterns/mounted/">Mounting another site at a path</a> and <a href="/patterns/tabserver/">a tab that serves other tabs</a> both rely on a service worker holding a port. Both have to make the worker ask the open pages for a new port each time it wakes.</p>
           <h4>What I am asking for</h4>
@@ -386,6 +463,7 @@
           <h3>There is nowhere for two sites to meet</h3>
           <h4>What is missing</h4>
           <p>Two sites can pass a port only if one holds a reference to a window of the other: one it opened, its opener, or a frame. A hidden frame from a third origin used to work as a shared meeting point. Now its storage and its <code>SharedWorker</code> are separate for each top-level site, so it cannot be one.</p>
+          <div class="live-set" data-demos="built-picker"></div>
           <h4>How I know</h4>
           <p><a href="/hub/">The hub</a> on this site has to be a visible popup window, with its registry kept on a server, for this reason.</p>
           <h4>Why I want it</h4>
@@ -410,6 +488,224 @@
         </div>
       </section>
 
+      <section id="unsendable">
+        <h2>5. Things that should be sendable and are not</h2>
+        <p>I tried to send every kind of object I could think of. <a href="#census">The full table is below</a>, and you can run it in your browser. These are the ones where I think the answer should change, because each would be a narrow, useful thing to hand to someone else.</p>
+
+        <div class="item" id="writer">
+          <h3>The writer for one file cannot be moved</h3>
+          <h4>What is missing</h4>
+          <p><code>createWritable()</code> on a file handle gives a <code>WritableStream</code> for that one file. Every other <code>WritableStream</code> can be transferred, to another origin too. This one cannot.</p>
+          <div class="now"><b>In your browser, now</b><span data-probe="file-writer"></span></div>
+          <h4>How I know</h4>
+          <p>The check above. There is an open issue from 2023: <a href="https://github.com/whatwg/fs/issues/119">whatwg/fs #119</a>, "Allow transferring FileSystemWritableFileStream?".</p>
+          <h4>Why I want it</h4>
+          <p>It is the smallest possible grant over a file: write to this one file, until I close it. It gives away no handle, no folder and no permission to read. It would do most of what sending a file handle to another origin would do, with none of the questions about what the receiver can keep.</p>
+          <h4>What it would enable</h4>
+          <ul>
+            <li>A converter, a downloader or an exporter on another origin that writes its result straight into a file I chose.</li>
+            <li>A worker that writes a large file while the page that opened it stays responsive.</li>
+          </ul>
+        </div>
+
+        <div class="item" id="http">
+          <h3>A Request, a Response and their Headers cannot be copied</h3>
+          <h4>What is missing</h4>
+          <p>The objects that describe an HTTP exchange cannot be posted anywhere. A body stream can be moved, and the object around it cannot.</p>
+          <div class="now"><b>In your browser, now</b><span data-probe="request-copy"></span><span data-probe="response-copy"></span><span data-probe="headers-copy"></span></div>
+          <h4>How I know</h4>
+          <p>The checks above. <a href="/patterns/mounted/">Mounting another site at a path</a> and <a href="/patterns/tabserver/">a tab that serves other tabs</a> on this site both take each request apart into a method, an address, a list of headers and a body stream, post the parts, and build a <code>Response</code> again on the way back. There is an open issue from 2022: <a href="https://github.com/whatwg/fetch/issues/1399">whatwg/fetch #1399</a>, "make Response and Headers serializable".</p>
+          <h4>What it would enable</h4>
+          <p>A service worker that hands a request to another context in one line and gets a response back in one line. That makes a tab, a worker or another origin a server for part of a site with no custom wire format.</p>
+        </div>
+
+        <div class="item" id="wrappers">
+          <h3>Streams the browser makes are not all transferable</h3>
+          <h4>What is missing</h4>
+          <p>A <code>TransformStream</code> I make can be moved. A <code>CompressionStream</code> or a <code>TextDecoderStream</code>, which have the same two ends, cannot be moved as one object. A <code>WebSocket</code> cannot be moved at all.</p>
+          <div class="now"><b>In your browser, now</b><span data-probe="compression-move"></span><span data-probe="websocket-move"></span></div>
+          <h4>Why I want it</h4>
+          <p>The rule a developer has to learn is "anything that is a stream can be given away". The exceptions are found by trial. For a socket, the answer today is <code>WebSocketStream</code>, which only Chromium has, or a port with a copy loop behind it as in <a href="/patterns/socket/">the shared socket</a> on this site.</p>
+        </div>
+
+        <div class="item" id="drawn">
+          <h3>A canvas cannot be moved once it has been drawn on</h3>
+          <h4>What is missing</h4>
+          <p>An <code>OffscreenCanvas</code> can be transferred only until someone asks it for a drawing context. After that it is fixed to the thread it is on.</p>
+          <div class="now"><b>In your browser, now</b><span data-probe="canvas-drawn"></span></div>
+          <h4>How I know</h4>
+          <p>The check above. It has been asked for and closed: <a href="https://github.com/whatwg/html/issues/6615">whatwg/html #6615</a>, "Passing OffscreenCanvas (with its context) back to main thread (or another thread)".</p>
+          <h4>What it would enable</h4>
+          <p>Handing a picture that is half made from one worker to the next, or taking a canvas back from a worker that is being shut down, without copying it out as a bitmap.</p>
+        </div>
+
+        <div class="item" id="audiobuffer">
+          <h3>Decoded audio cannot be sent as it is</h3>
+          <h4>What is missing</h4>
+          <p>An <code>AudioBuffer</code> is what <code>decodeAudioData</code> returns, and it cannot be posted. Its samples have to be copied out one channel at a time and the buffer built again on the other side.</p>
+          <div class="now"><b>In your browser, now</b><span data-probe="audiobuffer-copy"></span></div>
+          <h4>How I know</h4>
+          <p>The check above. It was asked for and closed in 2023: <a href="https://github.com/WebAudio/web-audio-api/issues/2390">WebAudio/web-audio-api #2390</a>, "Make AudioBuffer Transferable".</p>
+        </div>
+
+        <div class="item" id="gpu">
+          <h3>Nothing from WebGPU can be sent</h3>
+          <h4>What is missing</h4>
+          <p>A graphics device, a buffer or a texture belongs to the thread that made it. Two workers cannot share one device, and a texture cannot be handed from the worker that made it to the worker that draws it.</p>
+          <div class="now"><b>In your browser, now</b><span data-probe="gpu-move"></span></div>
+          <h4>How I know</h4>
+          <p>The check above, where the browser has a graphics adapter. The WebGPU group has had an issue open since 2019: <a href="https://github.com/gpuweb/gpuweb/issues/354">gpuweb #354</a>, "Create a proposal for multi-worker".</p>
+          <h4>What it would enable</h4>
+          <p>Video effects and machine learning that keep their data on the graphics card from one stage to the next, when the stages are in different workers or come from different origins.</p>
+        </div>
+
+        <div class="item" id="keymove">
+          <h3>A key can be copied and cannot be moved</h3>
+          <h4>What is missing</h4>
+          <p>A <code>CryptoKey</code> that nobody can read can still be posted, and it is always a copy. The sender keeps its key, and the receiver can store its copy and use it for ever. There is no way to move the key so that only one holder exists, and no way to give a key that cannot be stored.</p>
+          <div class="now"><b>In your browser, now</b><span data-probe="key-move"></span></div>
+          <h4>How I know</h4>
+          <p><a href="/patterns/keycopy/">Running between two real sites</a>: the receiving site keeps the key in its own storage and goes on signing after the sender has destroyed its own.</p>
+          <h4>What it would enable</h4>
+          <p>Handing a signing key from an old device or tab to a new one with a guarantee that the old one no longer has it. Today the answer is to keep the key and <a href="/patterns/signer/">send a port that uses it</a>, which needs the page that holds the key to stay open.</p>
+        </div>
+
+        <div class="item" id="classes">
+          <h3>My own objects lose their class on the way</h3>
+          <h4>What is missing</h4>
+          <p>An instance of a class arrives as a plain object with no methods. An error arrives without any field the standard does not list. A class has no way to say how it should be copied or moved.</p>
+          <div class="now"><b>In your browser, now</b><span data-probe="class-copy"></span><span data-probe="error-copy"></span></div>
+          <h4>How I know</h4>
+          <p>The checks above. <a href="/comlink/">Hawser</a> on this site has to pack and rebuild errors itself. There is an open issue from 2021: <a href="https://github.com/whatwg/html/issues/7428">whatwg/html #7428</a>, "Allow objects to customize serialization / deserialization for structured clone".</p>
+          <h4>What it would enable</h4>
+          <p>A library type, such as a money amount, a date range or a handle that wraps a port, that crosses a port as itself. A type of my own that is moved, so that the sender's copy stops working, the way a buffer's does.</p>
+        </div>
+      </section>
+
+      <section id="primitives">
+        <h2>6. Primitives that are not there</h2>
+        <p>These are not types that fail to cross. They are pieces that messaging between processes has on other platforms, and that the web does without.</p>
+
+        <div class="item" id="xworker">
+          <h3>A worker cannot be started from another origin's script</h3>
+          <h4>What is missing</h4>
+          <p><code>new Worker()</code> takes only a script from my own origin. To run another origin's code off my thread and outside my origin, I have to add a hidden frame on that origin and have the frame start the worker.</p>
+          <div class="now"><b>In your browser, now</b><span data-probe="worker-other-origin"></span></div>
+          <h4>How I know</h4>
+          <p>The check above. The lab reaches "a worker on another origin" through a frame for this reason. The specification and browsers do not agree on the detail: <a href="https://github.com/whatwg/html/issues/12046">whatwg/html #12046</a>, "Worker constructor specification doesn't match browser behaviour for cross-origin URLs".</p>
+          <h4>Why I want it</h4>
+          <p>This is the cheapest form of the design at the top of this page. A worker that runs as the other origin has no document, no access to my page and none of my storage. I would give it a port and nothing else.</p>
+          <h4>What I am asking for</h4>
+          <p>A worker that runs with the origin of its script when that script's server opts in, with partitioned storage like a frame's. I did not find a proposal for it.</p>
+          <h4>What it would enable</h4>
+          <p>A third-party library shipped as a worker address: analytics, a search index, a spell checker, a codec. It does its job over a port and cannot see the page.</p>
+        </div>
+
+        <div class="item" id="nonet">
+          <h3>A worker cannot be started with less than my page has</h3>
+          <h4>What is missing</h4>
+          <p>A frame can be sandboxed: no origin, no storage, and with a content security policy, no network. A worker cannot. It always gets the origin, storage and network access of the page that started it.</p>
+          <h4>How I know</h4>
+          <p>Every demo on this site that says "this code has no network access" runs in a sandboxed frame, because there is no other way to make that true. In current Chrome each of those frames costs a process, and it is the kind of frame that <a href="#frames">video frames do not reach</a>.</p>
+          <h4>What I am asking for</h4>
+          <p>Options on <code>new Worker()</code> for an opaque origin and no network. <a href="https://github.com/tc39/proposal-shadowrealm">ShadowRealm</a>, at stage 2.7 in TC39, is a related idea that runs on the same thread and takes only plain values across its boundary.</p>
+          <h4>What it would enable</h4>
+          <p>Running code I did not write on data I must not leak, at the cost of a thread. For example a formula in a spreadsheet, a plug-in, or code written by an AI model.</p>
+        </div>
+
+        <div class="item" id="pressure">
+          <h3>A port does not say how much is waiting in it</h3>
+          <h4>What is missing</h4>
+          <p><code>postMessage</code> always returns at once. If the receiver is slow, messages pile up in memory and the sender has no way to see it. A <code>WebSocket</code> has <code>bufferedAmount</code>, and a stream has <code>desiredSize</code> and <code>ready</code>. A port has nothing.</p>
+          <div class="now"><b>In your browser, now</b><span data-probe="backpressure"></span></div>
+          <h4>How I know</h4>
+          <p>The check above. <a href="/patterns/far/">The port that crosses devices</a> on this site carries streams with a credit scheme of its own, one chunk at a time, and has nothing of the kind for plain messages. I did not find an issue asking for this.</p>
+          <h4>What I am asking for</h4>
+          <p>A count of messages or bytes not yet delivered, on the port, and an event when it falls to zero.</p>
+          <h4>What it would enable</h4>
+          <p>Sending frames, samples or log lines down a port at the rate the other side can take them, and dropping the right ones when it cannot.</p>
+        </div>
+
+        <div class="item" id="chunks">
+          <h3>A transferred stream copies every chunk</h3>
+          <h4>What is missing</h4>
+          <p>A stream is the web's answer to back-pressure between contexts. But what is written into a transferred stream is copied to the other side, never moved. There is no way to pass a transfer list with a chunk.</p>
+          <div class="now"><b>In your browser, now</b><span data-probe="stream-copy"></span></div>
+          <h4>How I know</h4>
+          <p>The check above. The nearest issue I found is <a href="https://github.com/whatwg/streams/issues/1187">whatwg/streams #1187</a>, "Should there be dedicated VideoFrame ReadableStream/WritableStream constructs", open since 2021.</p>
+          <h4>Why I want it</h4>
+          <p>So today I have to choose. A port moves large data for nothing and has no back-pressure. A stream has back-pressure and copies everything. Video needs both.</p>
+          <h4>What it would enable</h4>
+          <p>The webcam effects design as two streams: frames flow out and frames flow back, each one moved, at the rate the slower side sets.</p>
+        </div>
+
+        <div class="item" id="sync">
+          <h3>A worker cannot stop and wait for an answer</h3>
+          <h4>What is missing</h4>
+          <p>The only way for a worker to block until another context answers is <code>Atomics.wait</code> on a <code>SharedArrayBuffer</code>, which needs the whole page to be cross-origin isolated. There is no way to wait on a port. Node.js has one: <a href="https://nodejs.org/api/worker_threads.html#worker_threadsreceivemessageonportport">receiveMessageOnPort()</a>.</p>
+          <div class="now"><b>In your browser, now</b><span data-probe="sync-receive"></span></div>
+          <h4>How I know</h4>
+          <p>The demo of a blocking call on this site runs only in <a href="/isolated/">the isolated room</a>. I did not find an issue asking for this on the web.</p>
+          <h4>What it would enable</h4>
+          <p>Code that was written to be synchronous, such as a compiled C program, a Python interpreter or a database engine, calling out to a page, a file or a person without being rewritten.</p>
+        </div>
+
+        <div class="item" id="code">
+          <h3>Code cannot be sent</h3>
+          <h4>What is missing</h4>
+          <p>A function cannot be posted. To run a piece of my code in a worker I have to put it in a separate file, or turn it into text and a blob address, which a strict content security policy forbids.</p>
+          <h4>How I know</h4>
+          <p>The demos on this site build many of their workers from text for this reason. TC39 has a proposal: <a href="https://github.com/tc39/proposal-module-expressions">module expressions</a>, a block of code that can be posted and imported on the other side. Its part about starting a worker from one is on hold.</p>
+          <h4>What it would enable</h4>
+          <p>Moving a job to a worker by sending the job, with the code checked by the same tools as the rest of the program.</p>
+        </div>
+
+        <div class="item" id="structs">
+          <h3>Objects are always copied whole</h3>
+          <h4>What is missing</h4>
+          <p>Bytes can be moved or shared. A JavaScript object cannot: a large tree of objects is copied in full each time it is posted, on the sender's thread.</p>
+          <h4>How I know</h4>
+          <p>TC39 has a proposal at stage 2 for objects of fixed shape that can be shared between threads without copying: <a href="https://github.com/tc39/proposal-structs">JavaScript structs</a>.</p>
+          <h4>What it would enable</h4>
+          <p>A document model, a scene or a parsed file that the page and its workers all read, with no copy on every change.</p>
+        </div>
+      </section>
+
+      <section id="usecases">
+        <h2>What cannot be built today</h2>
+        <p>The same list from the other side. Each row is a thing I want to build, what stops it, and the nearest thing that works.</p>
+        <div class="scroll">
+          <table class="usecases">
+            <thead><tr><th>I want to</th><th>What stops it</th><th>The nearest thing today</th></tr></thead>
+            <tbody>
+              <tr><td>Use webcam effects from another origin</td><td><a href="#frames">Video frames stop at the origin</a></td><td>Send bitmaps, and lose what a frame carries</td></tr>
+              <tr><td>Get live captions from a service with no microphone access</td><td><a href="#frames">Audio data stops at the origin</a></td><td>Copy samples into buffers</td></tr>
+              <tr><td>Give a call widget one camera track</td><td><a href="#track">Tracks cannot be sent</a></td><td>Give the widget the camera permission</td></tr>
+              <tr><td>Let an editor on another origin edit one file</td><td><a href="#others">File handles</a> and <a href="#writer">file writers</a> cannot be sent</td><td>Send the text, take text back, and save it myself</td></tr>
+              <tr><td>Lend a plug-in one network connection</td><td><a href="#others">Data channels</a> and <a href="#wrappers">sockets</a> cannot be sent</td><td>A port, with my page copying every message</td></tr>
+              <tr><td>Let another origin draw a chart in my page</td><td><a href="#canvas">Chrome ends the frame</a></td><td>Take bitmaps and draw them myself</td></tr>
+              <tr><td>Feed private data to code that cannot leak it</td><td><a href="#oneway">No one-way port</a>, <a href="#timing">streams signal back</a>, <a href="#nonet">no worker without network</a></td><td>A sandboxed frame, two channels, and a page in the middle</td></tr>
+              <tr><td>Run a third-party library off my thread and outside my origin</td><td><a href="#xworker">No worker from another origin</a></td><td>A hidden frame that starts the worker</td></tr>
+              <tr><td>Make a call over a port that fails when the other side dies</td><td><a href="#gone">No close event</a></td><td>A heartbeat</td></tr>
+              <tr><td>Cancel a job in another context</td><td><a href="#abort">An AbortSignal cannot be sent</a></td><td>A message I define</td></tr>
+              <tr><td>Stream video between contexts with back-pressure and no copies</td><td><a href="#pressure">Ports have no back-pressure</a>, <a href="#chunks">streams copy</a></td><td>A port, with my own count of what is in flight</td></tr>
+              <tr><td>Serve part of my site from a tab or another origin</td><td><a href="#http">Requests and responses cannot be sent</a>, <a href="#sw">service workers lose ports</a></td><td>Take each request apart and ask for a new port on every wake</td></tr>
+              <tr><td>Let the person pick a site for a job, with no server</td><td><a href="#meeting">Nowhere for two sites to meet</a></td><td>A popup window and a registry on a server</td></tr>
+              <tr><td>Keep a record of which site used a port</td><td><a href="#identity">A port does not say who is at the other end</a></td><td>One port for each party, and trust that it is not passed on</td></tr>
+              <tr><td>Move a signing key to a new device and know the old one is gone</td><td><a href="#keymove">Keys are only copied</a></td><td>Keep the key and send a port</td></tr>
+              <tr><td>Run synchronous code that calls the page</td><td><a href="#sync">A worker cannot wait on a port</a>, <a href="#isolated">isolation cuts off popups</a></td><td>Cross-origin isolate the page</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="census">
+        <h2>Every kind of object I tried</h2>
+        <p>Three questions for each: can it be copied, can it be moved, and does it reach a frame on another origin. The answers are from the browser you are reading this in. <a href="/lab/">The lab</a> asks a harder question of fewer kinds: whether the thing still works where it lands, in thirteen places.</p>
+        <p><button id="run-census">Try them all in this browser</button> <span id="census-note" class="small muted"></span></p>
+        <div class="scroll"><table id="census-table" hidden><thead><tr><th>Kind</th><th>Copied</th><th>Moved</th><th>To another origin</th></tr></thead><tbody></tbody></table></div>
+      </section>
+
       <section id="not">
         <h2>What I am not asking for</h2>
         <ul>
@@ -430,7 +726,58 @@
   <script type="module">
     import { runAll, show, PROBES, otherHost } from "/missing/probes.js";
     import { mount } from "/missing/effects-demo.js";
+    import { mountAll } from "/missing/demos.js";
+    import { mount as mountStage } from "/patterns/demos.js";
+    import { all } from "/patterns/all.js";
+    import { built } from "/patterns/built.js";
+    import { bites } from "/patterns/bites.js";
     mount(document.getElementById("effects-demo"));
+    mountAll();
+    // Demos that already exist elsewhere on the site, running here beside the gap they show.
+    const find = (id) => all.find((d) => d.id === id) || built.find((d) => d.id === id) || bites.find((d) => d.id === id);
+    for (const set of document.querySelectorAll(".live-set")) {
+      for (const id of set.dataset.demos.split(" ")) {
+        const demo = find(id);
+        if (!demo) continue;
+        const href = demo.pattern ? `/patterns/${demo.pattern}/#${demo.id}` : `/patterns/${demo.id}/`;
+        const card = document.createElement("article");
+        card.className = "live"; card.id = "live-" + id;
+        card.innerHTML = `<h4>Running: ${demo.title}</h4><div class="demo"></div><p>${demo.blurb}</p>${demo.bite ? "" : `<p class="small"><a href="${href}">The code, and how it works \u203a</a></p>`}`;
+        set.append(card);
+        const el = card.querySelector(".demo");
+        new IntersectionObserver((entries, io) => { if (entries[0].isIntersecting) { io.disconnect(); mountStage(el, demo, undefined, { autoplay: false }); } }, { rootMargin: "300px" }).observe(el);
+      }
+    }
+    // The wide table, on a click.
+    document.getElementById("run-census").addEventListener("click", async (event) => {
+      event.target.disabled = true;
+      const { runCensus, TYPES } = await import("/missing/census.js");
+      const { sites } = await import("/_sites.js");
+      const table = document.getElementById("census-table"), body = table.tBodies[0], note = document.getElementById("census-note");
+      table.hidden = false;
+      const frame = Object.assign(document.createElement("iframe"), { hidden: true });
+      const ready = new Promise((r) => addEventListener("message", function on(e) { if (e.source === frame.contentWindow && e.data?.missing === "ready") { removeEventListener("message", on); r(); } }));
+      frame.src = sites.florist + "/missing-peer.html?role=census"; document.body.append(frame);
+      await ready;
+      const { port1, port2 } = new MessageChannel();
+      const hello = new Promise((r) => { port1.onmessage = r; });
+      frame.contentWindow.postMessage({ missing: true }, sites.florist, [port2]); await hello;
+      const peer = { post: (message, transfer) => new Promise((resolve) => {
+        const timer = setTimeout(() => resolve(null), 2000);
+        port1.onmessage = (e) => { clearTimeout(timer); resolve(e.data); };
+        try { port1.postMessage(message, transfer); } catch (err) { clearTimeout(timer); resolve({ threw: err.name }); }
+      }) };
+      const cell = (c) => !c ? "<td></td>" : c.ok === true ? `<td class="yes">Yes</td>` : c.ok === "lossy" ? `<td class="no">Yes, but ${c.note}</td>` : `<td class="no" title="${c.note}">No</td>`;
+      let group = "", n = 0;
+      const NAMES = { Messaging: "Messaging and plain objects", Memory: "Bytes and memory", Streams: "Streams", Network: "Network", Media: "Pictures, video and sound", Grants: "Keys, files and other grants" };
+      await runCensus(peer, (row) => {
+        if (row.group !== group) { group = row.group; body.insertAdjacentHTML("beforeend", `<tr class="group"><th colspan="4">${NAMES[group]}</th></tr>`); }
+        body.insertAdjacentHTML("beforeend", row.made ? `<tr><th>${row.name}</th>${cell(row.copy)}${cell(row.move)}${cell(row.other)}</tr>` : `<tr><th>${row.name}</th><td colspan="3" class="muted">This browser could not make one (${row.note}).</td></tr>`);
+        note.textContent = `${++n} of ${TYPES.length} tried.`;
+      });
+      frame.remove();
+      table.dataset.done = "1";
+    });
     for (const el of document.querySelectorAll("[data-host]")) el.textContent = otherHost;
     const tally = document.getElementById("tally");
     const count = () => {

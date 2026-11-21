@@ -22,8 +22,11 @@ for (const [label, args] of [["one process", []], ["isolated frames", isolate]])
   await page.goto(root + "/missing/");
   await page.waitForFunction(() => /This page ran \d+ checks/.test(document.getElementById("tally").textContent), null, { timeout: 30000 });
   const got = await page.evaluate(() => Object.fromEntries([...document.querySelectorAll("[data-probe]:not([data-manual])")].map((el) => [el.dataset.probe, el.dataset.state])));
-  const pending = Object.entries(got).filter(([, state]) => !state || state === "unknown");
+  // WebGPU needs a graphics adapter, which a headless browser may not have.
+  const pending = Object.entries(got).filter(([id, state]) => !state || (state === "unknown" && id !== "gpu-move"));
   check(`${label}: every check reported a result`, pending.length === 0, JSON.stringify(pending));
+  const more = ["file-writer", "request-copy", "response-copy", "headers-copy", "compression-move", "websocket-move", "canvas-drawn", "audiobuffer-copy", "key-move", "class-copy", "error-copy", "worker-other-origin", "backpressure", "stream-copy", "sync-receive"];
+  check(`${label}: the unsendable types and missing primitives are as the page says`, more.every((id) => got[id] === "gap"), JSON.stringify(more.filter((id) => got[id] !== "gap")));
   const gaps = ["videoframe-other", "audiodata-other", "chunk-other", "track-worker", "filehandle-other", "datachannel-other", "mediasource-other", "close-event", "port-origin", "abortsignal-worker"];
   check(`${label}: the gaps the page describes are there in this Chromium`, gaps.every((id) => got[id] === "gap"), JSON.stringify(gaps.filter((id) => got[id] !== "gap")));
   check(`${label}: a stream and a bitmap do reach the other origin`, got["stream-other"] === "works" && got["imagebitmap-other"] === "works");
@@ -35,6 +38,50 @@ for (const [label, args] of [["one process", []], ["isolated frames", isolate]])
   const lanes = await page.evaluate(() => ["bitmap", "frame"].map((k) => document.querySelector(`[data-note="${k}"]`).textContent));
   check(`${label}: effects come back from the other origin when sent as ImageBitmap`, /pictures back/.test(lanes[0]), lanes[0]);
   check(`${label}: the VideoFrame version fails on the first frame, and says how`, /messageerror event and no VideoFrame/.test(lanes[1]), lanes[1]);
+  // The other demos. Each has one line that fails and one that works.
+  const demo = async (id, buttons, ms = 2500) => {
+    for (const what of buttons) {
+      await page.evaluate((id) => document.querySelector(`#demo-${id}`).scrollIntoView(), id);
+      await page.waitForSelector(`#demo-${id} [data-do="${what}"]:not([disabled])`, { state: "attached", timeout: 15000 });
+      await page.evaluate(([id, what]) => { document.querySelector(`#demo-${id}`).scrollIntoView(); document.querySelector(`#demo-${id} [data-do="${what}"]`).click(); }, [id, what]);
+      await page.waitForTimeout(ms);
+    }
+    return page.evaluate((id) => [...document.querySelectorAll(`#demo-${id} .lanes li`)].map((li) => `[${li.dataset.state || "-"}] ${li.textContent}`), id);
+  };
+  for (const [id, buttons, want] of [
+    ["track", ["start"], [/\[gap\].*DataCloneError/, /\[works\].*read \d+ frames/]],
+    ["editor", ["start", "type"], [/\[gap\].*no file/, /\[works\].*this page wrote it/]],
+    ["plugin", ["start"], [/\[gap\].*no connection/, /\[works\].*\d+ messages from the plug-in/]],
+    ["identity", ["start"], [/\[gap\].*event.origin is ""/, /\[gap\].*event.origin is ""/]],
+    ["abort", ["start"], [/\[gap\].*DataCloneError/, /\[works\].*stopped \d+ ms/]],
+  ]) {
+    const lanes = await demo(id, buttons, id === "plugin" ? 4000 : 2500);
+    check(`${label}: the ${id} demo shows what fails and what works`, want.every((re, i) => re.test(lanes[i] || "")), JSON.stringify(lanes));
+  }
+  const painter = await demo("painter", ["start"], 1500);
+  check(`${label}: the painter sends pictures back`, /\[works\].*pictures drawn/.test(painter[0]), painter[0]);
+  if (!args.length) {
+    await page.evaluate(() => document.getElementById("run-census").click());
+    await page.waitForFunction(() => document.getElementById("census-table").dataset.done, null, { timeout: 90000 });
+    const census = await page.evaluate(() => Object.fromEntries([...document.querySelectorAll("#census-table tbody tr:not(.group)")].map((tr) => [tr.cells[0].textContent, [...tr.cells].slice(1).map((td) => td.textContent)])));
+    check("the full table runs", Object.keys(census).length > 55, String(Object.keys(census).length));
+    check("the full table: a port moves and crosses, a VideoFrame moves and does not cross, a Request does neither", census.MessagePort?.join() === "No,Yes,Yes" && census.VideoFrame?.join() === "Yes,Yes,No" && census.Request?.join() === "No,No,No", JSON.stringify([census.MessagePort, census.VideoFrame, census.Request]));
+    const cards = [];
+    for (const id of ["bite-unreadable", "bite-gone", "alive-signals", "oneway", "built-covert", "stream-intro", "built-swroute", "built-picker"]) {
+      await page.evaluate((id) => document.querySelector("#live-" + id)?.scrollIntoView(), id);
+      const ok = await page.waitForSelector(`#live-${id} .demo button`, { timeout: 15000 }).then(() => true, () => false);
+      if (!ok) cards.push(id);
+    }
+    check("the eight demos from elsewhere on the site are running on the page", cards.length === 0, cards.join(" "));
+  }
+  // Last, because in Chrome it ends the other origin's frames.
+  const given = await page.evaluate(async () => {
+    document.querySelector('#demo-painter [data-do="give"]').click();
+    const li = document.querySelectorAll("#demo-painter .lanes li")[1];
+    for (let i = 0; i < 100 && !li.dataset.state; i++) await new Promise((r) => setTimeout(r, 100));
+    return `[${li.dataset.state}] ${li.textContent}`;
+  });
+  check(`${label}: the painter given the canvas ${args.length ? "stops answering" : "draws on the page"}`, args.length ? /\[gap\].*stopped answering/.test(given) : /\[works\].*drawing straight/.test(given), given);
   // Waited for inside the page: when the frame's process dies, Playwright's own waits are rejected.
   const canvas = await page.evaluate(async () => {
     document.getElementById("run-canvas").click();
@@ -55,7 +102,15 @@ for (const [label, args] of [["one process", []], ["isolated frames", isolate]])
       const [path, hash] = href.split("#");
       // Fetched by the page, because Node does not resolve *.localhost.
       const { ok, body } = await page.evaluate((url) => fetch(url).then(async (r) => ({ ok: r.ok, body: await r.text() })), path);
-      if (!ok || (hash && !body.includes(`id="${hash}"`))) broken.push(href);
+      let found = !hash || body.includes(`id="${hash}"`);
+      // A pattern page builds its sections with script, so open it and look.
+      if (ok && !found && path.startsWith("/patterns/")) {
+        const other = await context.newPage();
+        await other.goto(root + path);
+        found = await other.waitForSelector("#" + hash, { state: "attached", timeout: 8000 }).then(() => true, () => false);
+        await other.close();
+      }
+      if (!ok || !found) broken.push(href);
     }
     check(`all ${inner.length} links into this site resolve`, broken.length === 0, broken.join(" "));
     if (shots) { await page.screenshot({ path: shots + "/missing-phone.png", fullPage: true }); }

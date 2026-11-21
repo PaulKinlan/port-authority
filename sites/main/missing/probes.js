@@ -150,6 +150,9 @@ export const PROBES = {
   },
 };
 
+import { MORE } from "/missing/more-probes.js";
+Object.assign(PROBES, MORE);
+
 // Fill every element that names a check. The canvas check waits for its button.
 export async function runAll(root = document) {
   const targets = [...root.querySelectorAll("[data-probe]")].filter((el) => !el.dataset.manual);
