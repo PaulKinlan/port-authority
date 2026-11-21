@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>A page whose service worker talks to another site's service worker</title>
+<style>
+  html{color-scheme:light dark}
+  body{margin:0;padding:.7rem .8rem;font:14px/1.4 system-ui,sans-serif;background:light-dark(#fff,#141f47);color:light-dark(#0f1c3f,#e9edfa)}
+  h1{font:800 1rem/1.1 system-ui,sans-serif;margin:0 0 .15rem;display:flex;align-items:center;gap:.45rem}
+  h1::before{content:"";width:.8em;height:.8em;border-radius:50%;background:var(--dot,#f5b700);flex:none}
+  p{margin:0 0 .45rem;font:11px/1.3 ui-monospace,Menlo,monospace;opacity:.75;overflow-wrap:anywhere}
+  ul{list-style:none;margin:0;padding:0;font:12px/1.45 ui-monospace,Menlo,monospace}
+  li{padding:.15rem 0;border-top:1px solid light-dark(#c9d1e0,#2b3970);overflow-wrap:anywhere}
+  li:first-child{border-top:0;font-weight:700}
+  /* Opened in a tab of its own, the page has its own buttons and shows its worker. */
+  .alone{max-width:44rem;margin:0 auto;padding:1.2rem 1rem 3rem;font-size:16px}
+  .alone h1{font-size:1.5rem;margin-bottom:.4rem}
+  .alone p{font:inherit;opacity:1;margin:0 0 .8rem}
+  .alone p#origin{font:13px/1.3 ui-monospace,Menlo,monospace;opacity:.75}
+  .alone ul{font-size:14px}
+  .alone li{padding:.35rem 0}
+  #buttons{display:flex;flex-wrap:wrap;gap:.5rem;margin:0 0 1rem}
+  button{font:600 15px/1.2 system-ui,sans-serif;padding:.6rem .8rem;border-radius:10px;border:2px solid currentColor;background:transparent;color:inherit;min-height:44px}
+  button:disabled{opacity:.4}
+  #worker{border:2px solid currentColor;border-radius:12px;padding:.7rem .8rem;margin:0 0 1rem}
+  #worker h2{font-size:1rem;margin:0 0 .3rem}
+  #worker p{margin:0 0 .2rem;font:13px/1.4 ui-monospace,Menlo,monospace}
+  [hidden]{display:none!important}
+</style>
+<h1 id="title"></h1>
+<p id="origin"></p>
+<div id="alone" hidden>
+  <p id="about"></p>
+  <div id="buttons"></div>
+  <div id="worker">
+    <h2>This site's service worker</h2>
+    <p>Run <strong id="run">not started</strong>, started <strong id="born"></strong></p>
+    <p>Port to the other site's worker: <strong id="peer">none</strong></p>
+    <p id="note"></p>
+  </div>
+</div>
+<ul id="log"></ul>
+<script type="module" src="/pair/pair.js"></script>
+</html>
