@@ -200,9 +200,9 @@ onfetch = (event) => event.respondWith(new Promise((resolve) => {
     async setup(stage, ui) {
       const box = stage.box("page", { html: `<div class="here" style="height:100%;display:grid;grid-template-rows:auto 1fr"><h4>This tab is the server</h4><textarea aria-label="HTML to serve" style="font:12px/1.4 var(--mono);resize:none;border-width:1px;padding:.4rem">&lt;h1&gt;Hello from another tab&lt;/h1&gt;\n&lt;p&gt;Edit me, then reload.&lt;/p&gt;</textarea></div>` });
       const source = box.node.querySelector("textarea");
-      const swBox = stage.box("sw", { html: `<div class="here"><h4>Service Worker</h4><ul class="log"><li>not registered</li></ul></div>` });
+      const swBox = stage.box("sw", { kind: "service", url: "/patterns/tabserver-sw.js", scope: "/patterns/served/", html: `<div class="here"><h4>Service Worker</h4><ul class="log"><li>not registered</li></ul></div>` });
       const swLog = (text) => { const ul = swBox.node.querySelector("ul"); const li = document.createElement("li"); li.textContent = text; ul.prepend(li); while (ul.children.length > 5) ul.lastChild.remove(); };
-      const served = stage.box("served", { html: `<div class="here"><h4>/patterns/served/</h4><p class="small muted">Nothing loaded yet.</p></div>` });
+      const served = stage.box("served", { kind: "iframe", html: `<div class="here"><h4>/patterns/served/</h4><p class="small muted">Nothing loaded yet.</p></div>` });
       if (!("serviceWorker" in navigator)) return swLog("no Service Worker support here");
 
       let hits = 0;
@@ -365,7 +365,7 @@ bank.port.onmessage = ({ ports }) => resume(ports[0]);`,
         title: "Feed on another origin", color: "teal",
         script: () => on("port", (_, [port]) => { let n = 0; log("ticking into one port"); setInterval(() => send(port, "line", ++n), 400); }),
       });
-      const bankBox = stage.box("bank", { html: `<div class="here"><h4>Port bank, a SharedWorker</h4><ul class="log"><li>empty</li></ul></div>` });
+      const bankBox = stage.box("bank", { kind: "shared", url: "/patterns/bank.js", html: `<div class="here"><h4>Port bank, a SharedWorker</h4><ul class="log"><li>empty</li></ul></div>` });
       const keeper = stage.box("keeper", { src: `/patterns/keeper.html?key=${key}` });
       let refusal = "";
       const note = (text) => { bankBox.node.querySelector("ul").innerHTML = `<li>${text}</li>${refusal}`; };

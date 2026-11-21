@@ -3,8 +3,8 @@
 import { sites } from "/_sites.js";
 import { far } from "/farport.js";
 
-const logBox = (stage, name, title, extra = "") => {
-  const box = stage.box(name, { html: `<div class="here"><h4>${title}</h4>${extra}<ul class="log"></ul></div>` });
+const logBox = (stage, name, title, extra = "", what = {}) => {
+  const box = stage.box(name, { html: `<div class="here"><h4>${title}</h4>${extra}<ul class="log"></ul></div>`, ...what });
   const ul = box.node.querySelector("ul");
   const say = (text) => { const li = document.createElement("li"); li.textContent = text; ul.prepend(li); while (ul.children.length > 6) ul.lastChild.remove(); };
   return { say, node: box.node, box };
@@ -181,8 +181,8 @@ return new Response(answer.body, answer);`,
     async setup(stage, ui) {
       const shelf = stage.box("shelf", { src: `${sites.florist}/actor.html?role=shelf&title=${encodeURIComponent("Florist, a real site")}&color=${encodeURIComponent("#e0364c")}` });
       shelf.frame.title = "Florist, a real site";
-      const sw = logBox(stage, "sw", "This site's service worker");
-      const view = stage.box("view", { html: `<div class="here"><h4>/patterns/mounted/florist/</h4><p class="small muted">Nothing is mounted here yet.</p></div>` });
+      const sw = logBox(stage, "sw", "This site's service worker", "", { kind: "service", url: "/patterns/mount-sw.js", scope: "/patterns/mounted/florist/" });
+      const view = stage.box("view", { kind: "iframe", html: `<div class="here"><h4>/patterns/mounted/florist/</h4><p class="small muted">Nothing is mounted here yet.</p></div>` });
       if (!("serviceWorker" in navigator)) return sw.say("no service worker support here");
       await shelf.whenReady;
       let registration = null, mounted = false;
@@ -232,9 +232,9 @@ port.onmessage = ({ data }) => show(data.answer);
 port.onmessage = ({ data }) => { asked.push(port); socket.send(data.say); };
 socket.onmessage = ({ data }) => asked.shift().postMessage({ answer: data });`,
     async setup(stage, ui) {
-      const one = stage.box("tab1", { html: "" });
-      const hub = stage.box("worker", { html: `<div class="here"><h4>Shared worker</h4><p class="small" style="margin:0 0 .3rem">Sockets it has opened: <strong data-opened>0</strong></p><p class="small" style="margin:0 0 .3rem">Open now: <strong data-open>0</strong></p><p class="small" style="margin:0">Tabs on it: <strong data-tabs>none</strong></p></div>` });
-      const two = stage.box("tab2", { html: "" });
+      const one = stage.box("tab1", { kind: "iframe" });
+      const hub = stage.box("worker", { kind: "shared", url: "/patterns/socket-worker.js", html: `<div class="here"><h4>Shared worker</h4><p class="small" style="margin:0 0 .3rem">Sockets it has opened: <strong data-opened>0</strong></p><p class="small" style="margin:0 0 .3rem">Open now: <strong data-open>0</strong></p><p class="small" style="margin:0">Tabs on it: <strong data-tabs>none</strong></p></div>` });
+      const two = stage.box("tab2", { kind: "iframe" });
       if (!("SharedWorker" in self)) { hub.node.querySelector(".here").insertAdjacentHTML("beforeend", `<p class="small muted">This browser has no SharedWorker.</p>`); return; }
       // This page only watches. It is not one of the tabs.
       const watch = new SharedWorker("/patterns/socket-worker.js").port;
@@ -268,8 +268,8 @@ node.port.postMessage({}, [port2]);        <span class="c">// the audio thread n
 port.postMessage({ freq: 440 });`,
     async setup(stage, ui) {
       const me = logBox(stage, "page", "This page", `<p class="small" style="margin:0 0 .4rem">Main thread ticks: <strong data-ticks>0</strong></p>`);
-      const box = stage.box("composer", { html: `<canvas style="width:100%;height:100%;display:block" aria-label="The composer worker, painted by the worker itself"></canvas>` });
-      stage.box("audio", { html: `<div class="here"><h4>The audio thread</h4><p class="small muted" style="margin:0">No DOM, no timers, no network. It turns numbers into sound 48,000 times a second, and it has one port.</p></div>` });
+      const box = stage.box("composer", { kind: "worker", url: "blob:", html: `<canvas style="width:100%;height:100%;display:block" aria-label="The composer worker, painted by the worker itself"></canvas>` });
+      stage.box("audio", { kind: "worklet", url: "blob:", html: `<div class="here"><h4>The audio thread</h4><p class="small muted" style="margin:0">No DOM, no timers, no network. It turns numbers into sound 48,000 times a second, and it has one port.</p></div>` });
       const ticks = me.node.querySelector("[data-ticks]");
       let n = 0, audio = null;
       if (!("AudioWorkletNode" in self) || !("OffscreenCanvas" in self)) return me.say("this browser lacks an audio worklet or an offscreen canvas");
