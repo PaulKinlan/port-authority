@@ -27,7 +27,7 @@ check("BroadcastChannel and IndexedDB refuse a port", (await cell("MessagePort",
 check("a function is refused everywhere", (await cell("Function", "worker")) === "refused" && (await cell("Function", "clone")) === "refused");
 check("shared memory cannot be made on an ordinary page", (await cell("SharedArrayBuffer", "worker")) === "cannot-make");
 await page.locator('#matrix td[data-k="Promise"][data-d="worker"] button').click();
-check("a mark explains itself when pressed", /Promise.*Worker.*empty object/s.test(await page.locator("#detail").innerText()), (await page.locator("#detail").innerText()).slice(0, 120));
+check("a mark explains itself when pressed", /Promise.*Worker.*refused.*DataCloneError/s.test(await page.locator("#detail").innerText()), (await page.locator("#detail").innerText()).slice(0, 120));
 if (shots) await page.screenshot({ path: shots + "/lab.png", fullPage: true });
 
 if (!LIVE) {

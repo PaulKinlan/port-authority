@@ -37,7 +37,7 @@
   <div class="wrap">
     <header class="site-bar">
       <a class="wordmark" href="/">Port Authority</a>
-      <nav><a href="/">Experiments</a><a href="/guide/" aria-current="page">The guide</a><a href="/patterns/">Port patterns</a><a href="/lab/">The lab</a><a href="/reading/">Further reading</a><a href="/hub/">Your hub</a></nav>
+      <nav><a href="/">Experiments</a><a href="/guide/" aria-current="page">The guide</a><a href="/patterns/">Port patterns</a><a href="/lab/">The lab</a><a href="/missing/">What is missing</a><a href="/reading/">Further reading</a><a href="/hub/">Your hub</a></nav>
     </header>
     <div class="stack" style="padding-block:2.5rem 1.5rem; --gap:1.1rem">
       <h1 style="font-size:var(--step-3)">The guide to message ports</h1>
@@ -119,8 +119,7 @@
             <tr><td><code>RTCCertificate</code>, <code>CropTarget</code></td><td>Copied</td><td>Work.</td></tr>
             <tr><td>File system handles</td><td>Copied</td><td>Arrive unreadable. They work within the origin.</td></tr>
             <tr><td><code>SharedArrayBuffer</code>, <code>WebAssembly.Module</code>, shared <code>WebAssembly.Memory</code></td><td>Shared, or copied</td><td>Stay within the origin. Shared memory also needs <a href="/isolated/">a cross-origin isolated page</a>.</td></tr>
-            <tr><td><code>Promise</code></td><td>Neither</td><td>Not refused. It arrives as an empty object, silently.</td></tr>
-            <tr><td>Functions, DOM nodes, symbols, proxies, <code>URL</code>, <code>Response</code>, <code>MediaStream</code>, <code>AbortSignal</code>, workers</td><td>Neither</td><td>Refused with <code>DataCloneError</code>. <a href="/patterns/functions/">A port can stand in for a function.</a></td></tr>
+            <tr><td>Functions, promises, DOM nodes, symbols, proxies, <code>URL</code>, <code>Response</code>, <code>MediaStream</code>, <code>AbortSignal</code>, workers</td><td>Neither</td><td>Refused with <code>DataCloneError</code>. <a href="/patterns/functions/">A port can stand in for a function.</a></td></tr>
           </tbody>
         </table></div>
         <p class="measured">The full table has 45 kinds against 13 destinations, and each test uses the thing where it lands, because arriving is not the same as working. <a href="/lab/">Run it in your browser</a> or <a href="/lab/results/">see what others reported</a>.</p>
@@ -238,7 +237,7 @@ const crosses = await send(sample).then(() =&gt; true, () =&gt; false);</pre>
         </article>
         <article class="bite">
           <h3>Nothing tells you the other end has gone</h3>
-          <p>Close a tab, remove a frame or stop a worker, and the port on your side looks the same as before. A <code>close</code> event is specified, and the Chromium this was built with does not fire it. Posting to a dead port throws nothing.</p>
+          <p>Close a tab, remove a frame or stop a worker, and the port on your side looks the same as before. A <code>close</code> event was in the HTML Standard from January 2024 and was taken out again in October 2026. The Chromium this was built with does not fire one. <a href="/missing/#gone">What happened to it.</a> Posting to a dead port throws nothing.</p>
           <p class="do"><strong>What to do.</strong> Across origins, send a ping on a timer and treat silence as the end. On one origin there is something exact: the other side takes a Web Lock and never releases it, and you queue for the same lock. The browser grants it to you at the moment they die, however they died. Listen for <code>close</code> as well, for the browsers that do fire it.</p>
           <pre><span class="c">// across origins: ask, and time the answer</span>
 let alive = true;
@@ -315,7 +314,7 @@ else travel(dot, cable);</pre>
         <ul>
           <li>Safari and Firefox. Everything marked "measured" is Chromium until <a href="/lab/results/">the results page</a> says otherwise.</li>
           <li>WebTransport streams. They are ordinary streams and should move like any other, which would let one origin open a session and lend another a single stream of it. Not measured: it needs a server this site does not have yet. The WebSocket version is <a href="/patterns/lend/">running</a>.</li>
-          <li>Why video frames and data channels reach a sandboxed frame and not a frame on a real second origin.</li>
+          <li>Video frames and data channels do not reach a frame on a second origin, and in Chrome 160 they do not reach a sandboxed frame either. The tests browsers share expect that for video frames. <a href="/missing/#frames">What I would like instead.</a></li>
           <li>Why the shared worker stops answering part-way through the isolated lab.</li>
           <li>Ports to a native app and to an extension. A port to another machine is <a href="/patterns/far/">running</a>, tested between two pages on one computer and not yet between two networks.</li>
         </ul>

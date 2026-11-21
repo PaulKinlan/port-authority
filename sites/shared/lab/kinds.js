@@ -137,7 +137,8 @@
     { name: "Symbol", group: "Refused by design", how: "copy", make: () => Symbol("lab"), use: (v) => String(v) },
     { name: "DOM node", group: "Refused by design", how: "copy", make: () => document.createElement("p"), use: (v) => v.nodeName },
     { name: "Proxy", group: "Refused by design", how: "copy", make: () => new Proxy({}, {}), use: () => "arrived" },
-    { name: "Promise", group: "Refused by design", how: "copy", make: () => Promise.resolve(1), use: (v) => { need(v && typeof v.then === "function", "arrived as an empty object, not a promise"); return "a promise arrived"; } },
+    { name: "Promise", group: "Refused by design", how: "copy", // Wrapped in an object, because the lab awaits make() and would send what the promise resolved to.
+      make: () => ({ promise: Promise.resolve(1) }), use: (v) => { need(v.promise && typeof v.promise.then === "function", "arrived as an empty object, not a promise"); return "a promise arrived"; } },
     { name: "URL", group: "Refused by design", how: "copy", make: () => new URL("https://example.com/"), use: (v) => v.href },
     { name: "Response", group: "Refused by design", how: "copy", make: () => new Response("lab"), use: async (v) => v.text() },
     { name: "MediaStream", group: "Refused by design", how: "copy", make: () => canvas().captureStream(), use: (v) => v.id },
