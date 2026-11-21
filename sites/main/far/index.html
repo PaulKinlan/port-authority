@@ -19,6 +19,14 @@
     .swatch { width: .6em; height: .6em; border-radius: 50%; border: 2px solid var(--ink); background: transparent; }
     .row { display: flex; flex-wrap: wrap; gap: .5rem; }
     #state { margin: 0 0 .3rem; }
+    .pick { display: inline-flex; align-items: center; cursor: pointer; border: 1.5px solid var(--ink); border-radius: 999px; padding: .45rem .9rem; background: var(--yellow, #f5b700); color: #0f1c3f; font-weight: 700; }
+    .pick:focus-within { outline: 3px solid var(--ink); outline-offset: 2px; }
+    body.embed #file > p:first-child, body.embed #lent > p:first-child, body.embed .pick { display: none; }
+    .card { border: 1.5px solid var(--ink); border-radius: 10px; padding: .5rem .6rem; margin: 0 0 .5rem; }
+    .card h3 { font: 800 1rem/1.1 var(--display); margin: 0 0 .35rem; }
+    .card p { margin: .35rem 0 0; font: 12px/1.4 var(--mono); }
+    .card.taken { border-style: dashed; opacity: .7; }
+    body.embed .card { padding: .35rem .5rem; margin-bottom: .35rem; }
     form { display: flex; gap: .5rem; flex-wrap: wrap; margin-top: .6rem; }
     form input { flex: 1 1 8rem; font: inherit; padding: .5rem .6rem; }
   </style>
@@ -31,7 +39,7 @@
     </header>
     <div class="stack intro" style="padding-block:2rem 1.2rem; --gap:1rem">
       <h1 style="font-size:var(--step-3)">The far end</h1>
-      <p>This page holds one end of a <code>MessagePort</code>. The other end is in a frame on another device. The code below is all that joins them.</p>
+      <p>This page holds one end of a <code>MessagePort</code>. The other end is on another device. The pairing code is all that joins them.</p>
     </div>
     <main class="panel">
       <h2 id="title">Another device</h2>
@@ -48,6 +56,15 @@
         <p class="small" style="margin:.3rem 0 .5rem">The other browser offers these tools. On a real setup an agent would choose which to call. Here the buttons are yours.</p>
         <div class="row" id="toolButtons" style="flex-wrap:wrap"></div>
         <ul id="results" class="small" style="list-style:none;padding:0;margin:.6rem 0 0;font-family:var(--mono)"></ul>
+      </div>
+      <div id="file" hidden>
+        <p class="small" style="margin:.3rem 0 .5rem">Pick a picture. Its bytes go down the port as a stream, straight to the other device. Nothing is uploaded to a server.</p>
+        <div class="row"><label class="pick">Choose a picture<input type="file" id="pick" accept="image/*" style="position:absolute;opacity:0;width:1px;height:1px"></label><button class="tiny quiet" id="sample">Send a sample picture</button></div>
+        <p class="small" id="sent" style="font-family:var(--mono);margin:.6rem 0 0"></p>
+      </div>
+      <div id="lent" hidden>
+        <p class="small" style="margin:.3rem 0 .5rem">Each card is a port the other device sent down the line. Its buttons post into that port and nothing else.</p>
+        <div id="cards"></div>
       </div>
       <form id="join" hidden><input id="code" aria-label="Pairing code" placeholder="Pairing code" autocomplete="off" autocapitalize="none" spellcheck="false"><button class="tiny accent">Join</button></form>
     </main>
@@ -68,11 +85,16 @@
       $("state").textContent = "Joining " + code + ".";
       far({
         code,
-        onState(state) { $("state").textContent = WORDS[state] || state; if (state === "gone") { port = null; $("add").disabled = $("colour").disabled = true; } tell("far", { state }); },
+        onState(state) { $("state").textContent = WORDS[state] || state; if (state === "gone") { port = null; $("add").disabled = $("colour").disabled = true; for (const b of document.querySelectorAll("#file button, #lent button")) b.disabled = true; } tell("far", { state }); },
         // From here on this is ordinary port code. It has no idea how far away the other end is.
         onPort(p) {
           port = p;
           port.onmessage = ({ data }) => {
+            // The other end wants a file. Show the picker.
+            if (data.want === "file") { $("live").hidden = true; $("file").hidden = false; $("title").textContent = "Send a picture"; return; }
+            // A port to one thing on the other device. It arrived inside this message.
+            if (data.lent) return lent(data.lent, data.port);
+            if (data.taken) return taken(data.taken);
             // A question from the other end, to be answered here.
             if (data.ask) { $("live").hidden = true; $("asked").hidden = false; $("question").textContent = data.ask; $("approve").disabled = $("deny").disabled = false; tell("pulse", { cable: "air" }); return; }
             // A list of tools the other end will run for whoever holds this port.
@@ -91,10 +113,61 @@
         },
       });
     }
+    // ---- sending a file as a stream. The stream is transferred into the port like any other.
+    const size = (n) => n > 1e6 ? (n / 1e6).toFixed(1) + " MB" : Math.round(n / 1e3) + " kB";
+    function sendFile(blob, name) {
+      if (!port) return;
+      let gone = 0;
+      const counted = blob.stream().pipeThrough(new TransformStream({
+        // Hand the file over in pieces of 64 kB, so the other end can show how far it has got
+        // and so this side is asked for the next piece only when the last has been taken.
+        transform(chunk, controller) {
+          for (let i = 0; i < chunk.byteLength; i += 65536) controller.enqueue(chunk.subarray(i, i + 65536));
+          gone += chunk.byteLength; $("sent").textContent = `${name}: read ${size(gone)} of ${size(blob.size)} for the other device`; tell("pulse", { cable: "air" });
+        },
+        flush() { $("sent").textContent = `${name}: all ${size(blob.size)} handed to the port`; },
+      }));
+      port.postMessage({ file: { name, type: blob.type, size: blob.size }, body: counted }, [counted]);
+    }
+    $("pick").onchange = () => { const file = $("pick").files[0]; if (file) sendFile(file, file.name); };
+    // A picture made here, for when there is no photo to hand. The noise keeps it from compressing to nothing.
+    async function sample() {
+      const canvas = document.createElement("canvas"); canvas.width = 640; canvas.height = 400;
+      const c = canvas.getContext("2d");
+      const sky = c.createLinearGradient(0, 0, 0, 400); sky.addColorStop(0, "#1c2f6b"); sky.addColorStop(1, "#f5b700");
+      c.fillStyle = sky; c.fillRect(0, 0, 640, 400);
+      c.fillStyle = "#e0364c"; c.beginPath(); c.arc(470, 250, 90, 0, 7); c.fill();
+      c.fillStyle = "#0e9f8e"; c.beginPath(); c.moveTo(0, 400); c.lineTo(220, 170); c.lineTo(420, 400); c.fill();
+      const pixels = c.getImageData(0, 0, 640, 400);
+      for (let i = 0; i < pixels.data.length; i += 4) for (let k = 0; k < 3; k++) pixels.data[i + k] = Math.max(0, Math.min(255, pixels.data[i + k] + Math.random() * 36 - 18));
+      c.putImageData(pixels, 0, 0);
+      c.fillStyle = "#fff"; c.font = "800 34px system-ui, sans-serif"; c.fillText("Made on the other device", 28, 56);
+      c.font = "20px ui-monospace, monospace"; c.fillText(new Date().toLocaleTimeString(), 28, 88);
+      sendFile(await new Promise((resolve) => canvas.toBlob(resolve, "image/png")), "sample.png");
+    }
+    $("sample").onclick = sample;
+
+    // ---- ports that were lent to this device, one card each
+    const cards = new Map();
+    function lent(tool, toolPort) {
+      $("live").hidden = true; $("lent").hidden = false; $("title").textContent = "Lent to this device";
+      const card = document.createElement("div"); card.className = "card";
+      card.innerHTML = `<h3></h3><div class="row"></div><p>nothing heard yet</p>`;
+      card.querySelector("h3").textContent = tool.title;
+      for (const b of tool.buttons) { const button = document.createElement("button"); button.className = "tiny quiet"; button.textContent = b.label; button.onclick = () => use(tool.name, b.do); card.querySelector(".row").append(button); }
+      // Ordinary port code. This port was made on this device to stand for one on the other.
+      toolPort.onmessage = ({ data }) => { card.querySelector("p").textContent = data.show; tell("pulse", { cable: "air" }); };
+      cards.get(tool.name)?.card.remove();
+      cards.set(tool.name, { card, port: toolPort });
+      $("cards").append(card);
+    }
+    function use(name, what) { const entry = cards.get(name); if (!entry) return; entry.port.postMessage({ do: what }); if (entry.taken) entry.card.querySelector("p").textContent = "posted, and nothing came back"; }
+    function taken(name) { const entry = cards.get(name); if (!entry) return; entry.taken = true; entry.card.classList.add("taken"); entry.card.querySelector("p").textContent = "the other device says it took this port back"; }
+
     const answer = (what) => { if (!port) return; port.postMessage({ answer: what }); $("question").textContent = what === "approve" ? "You approved it." : "You denied it."; $("approve").disabled = $("deny").disabled = true; };
     $("approve").onclick = () => answer("approve");
     $("deny").onclick = () => answer("deny");
-    const act = (what) => { if (what === "approve" || what === "deny") return answer(what); if (what.startsWith("call:")) return void port?.postMessage({ call: what.slice(5) }); if (port) port.postMessage({ do: what }); };
+    const act = (what) => { if (what === "approve" || what === "deny") return answer(what); if (what === "sample") return sample(); if (what.startsWith("use:")) { const [, name, verb] = what.split(":"); return use(name, verb); } if (what.startsWith("call:")) return void port?.postMessage({ call: what.slice(5) }); if (port) port.postMessage({ do: what }); };
     $("add").onclick = () => act("add");
     $("colour").onclick = () => act("colour");
     addEventListener("message", (event) => { if (embedded && event.source === parent && event.data?.cmd) act(event.data.cmd); });

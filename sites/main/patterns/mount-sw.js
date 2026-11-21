@@ -1,7 +1,9 @@
-// Mounts another origin at a path on this one. Every request under
-// /patterns/mounted/florist/ is answered by asking a port whose other end is
-// on the florist's site. The body comes back as a stream.
-const BASE = "/patterns/mounted/florist/";
+// Mounts another origin at a path on this one. This script is registered once
+// for each mounted site, with that site's path as its scope, for example
+// /patterns/mounted/florist/. Every request under the scope is answered by
+// asking a port whose other end is on that site. The body comes back as a stream.
+const BASE = new URL(self.registration.scope).pathname;
+const NAME = BASE.split("/").filter(Boolean).pop();
 let origin = null;      // the port to the other site
 let unmounted = false;
 let waiting = [];
@@ -25,7 +27,7 @@ const pages = () => self.clients.matchAll({ type: "window", includeUncontrolled:
 async function needPort() {
   if (origin) return true;
   if (unmounted) return false;
-  for (const client of await pages()) client.postMessage("need-mount");
+  for (const client of await pages()) client.postMessage({ needMount: NAME });
   return new Promise((resolve) => {
     const timer = setTimeout(() => resolve(false), 1500);
     waiting.push(() => { clearTimeout(timer); resolve(true); });
@@ -48,7 +50,7 @@ self.addEventListener("fetch", (event) => {
   event.respondWith((async () => {
     const path = url.pathname.slice(BASE.length) || "index.html";
     const answer = (await needPort()) && (await ask(path));
-    for (const client of await pages()) client.postMessage({ mounted: path, status: answer ? answer.status : 503 });
+    for (const client of await pages()) client.postMessage({ mounted: path, site: NAME, status: answer ? answer.status : 503 });
     if (!answer) return new Response("Nothing is mounted here right now.", { status: 503, headers: { "content-type": "text/plain; charset=utf-8" } });
     return new Response(answer.body, { status: answer.status, headers: answer.headers });
   })());

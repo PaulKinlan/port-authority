@@ -44,7 +44,7 @@ if (shots) await page.locator("#far").screenshot({ path: shots + "/tour-far.png"
 await go("mounted");
 check("mounted: the tour mounts, loads and unmounts", (await finished("mounted", 40000)) && /Nothing is mounted here/.test(await frameText("#mounted", "view")), (await caption("mounted")).slice(0, 80));
 await go("socket");
-check("socket: the tour runs to the end on one socket", (await finished("socket", 40000)) && /says hello 2/.test(await frameText("#socket", "tab2")), (await caption("socket")).slice(0, 80));
+check("socket: the tour runs to the end, through a dropped connection", (await finished("socket", 40000)) && /says hello 2/.test(await frameText("#socket", "tab2")), (await caption("socket")).slice(0, 80));
 if (shots) await page.locator("#socket").screenshot({ path: shots + "/tour-socket.png" });
 
 // Without ?play=1 nothing moves until Next is pressed. Next does one step, Back undoes one.

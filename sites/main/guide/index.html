@@ -135,11 +135,12 @@
           <li><strong>Introduce</strong>: make a channel, send one end to each of two parties, and keep nothing. They now talk without you, and removing you changes nothing. <a href="/patterns/introduce/">Running.</a></li>
           <li><strong>Reply to exactly one asker</strong>: send a fresh port with each question, and answer on it. No request ids, and no way to answer the wrong party. <a href="/patterns/reply/">Running.</a></li>
           <li><strong>Give less than you have</strong>: do not pass on your own port. Make a new channel, keep one end, and forward only what you choose to. The limit lives with you and the holder cannot widen it. <a href="/patterns/attenuate/">Running.</a></li>
+          <li><strong>Allow one direction only</strong>: a port always works both ways, so make two channels and stand between them. Copy messages from the first to the second and drop whatever comes back. Post the copy with no transfer list, so that a port cannot ride forward and become a way to answer. <a href="/patterns/oneway/">Running, between two real sites.</a></li>
           <li><strong>Revoke</strong>: close your end. The other side is not told, so a client should treat silence as the answer.</li>
           <li><strong>Delegate along a chain</strong>: each holder passes on a narrower port of its own. <a href="/patterns/signer/">A signing port narrowed to three orders.</a></li>
         </ul>
         <p>There are no accounts, tokens or lists of who is allowed in any of these. What you hold is what you may do.</p>
-        <div class="live-set" data-demos="attenuate built-narrow built-expiry built-chain built-cap built-quota built-method built-sealed built-roles built-listener signer"><h3>Working examples</h3></div>
+        <div class="live-set" data-demos="attenuate built-narrow built-expiry built-chain built-cap built-quota built-method built-sealed built-roles built-listener oneway built-figures signer"><h3>Working examples</h3></div>
       </section>
 
       <section id="streams">
@@ -148,6 +149,7 @@
           <li>A stream sent down a port is read on the far side while the near side is still producing it, with back-pressure: a slow reader slows the source. <a href="/patterns/stream/">Running</a>, and <a href="/patterns/pipeline/">across three origins</a>.</li>
           <li>A stream has a direction, and each direction can be given away separately. A readable alone is permission to listen. A writable alone is permission to speak. <a href="/patterns/halves/">Running, between real sites.</a></li>
           <li>The owner keeps the switch. Close the controller and the listener is told the feed has ended. Error the sink and the next write fails.</li>
+          <li>A readable stream is not a one-way link. A stream asks its source for a chunk only when the reader wants one, so the writer can see when each read happens. Measured: a sandboxed frame holding only a readable sent 16 bits to the writer by timing its reads, and all 16 were read correctly. <a href="/patterns/oneway/#built-covert">Running.</a> Where nothing may come back, use <a href="/patterns/oneway/">a one-way port</a>.</li>
           <li>A transform has two ends and both can be given away, which makes a transform a service: <code>mine.pipeThrough(theirs)</code>, where <code>theirs</code> runs on another origin. <a href="/patterns/roundtrip/">Running.</a></li>
           <li>A network connection is two streams. Hand them to a context that has no network access and it can talk on that one connection and no other, until you close it. <a href="/patterns/lend/">Running.</a></li>
           <li>A stream does not survive the context it was passed through. If a middle party forwards a stream and then goes away, the reader stalls with no error. Send streams down a direct port. <a href="/patterns/stream-intro/">Running.</a></li>
@@ -194,10 +196,11 @@
         <h2>9. Further than one browser</h2>
         <ul>
           <li>Two tabs that are not related cannot pass a port: neither has a reference to the other. A server can introduce them, and they can then open a WebRTC data channel between themselves. Wrap each end in a <code>MessageChannel</code> and both sides hold what looks like an ordinary port. <a href="/hub/">The hub does this</a> when a tool's site is already open.</li>
-          <li>That bridge carries JSON only. Ports and streams cannot ride on it, where they can on a real port.</li>
+          <li>The hub's bridge carries JSON only. The bridge between devices below carries more.</li>
           <li>The same bridge works between devices. A pairing code names a meeting place on the server, which passes the handful of messages WebRTC needs and then carries nothing. Each device holds a port, and can hand it on: a phone ends up pressing buttons in a sandboxed frame on a laptop that was given a port and nothing else. <a href="/patterns/far/">Running.</a> Measured between two pages on one computer. Between two networks it depends on both being able to reach each other, and there is no relay for when they cannot.</li>
+          <li>A port or a stream cannot be moved to another machine, and it can be rebuilt there. When a message posted into the cross-device port contains a <code>MessagePort</code>, the other device is handed a new port and the two sides carry its messages along the same connection. A <code>ReadableStream</code> becomes a stream on the other device that asks for one chunk at a time, so a file is read only as fast as the far side takes it. Bytes travel as bytes. <a href="/patterns/far/#built-farfile">A photo sent from a phone as a stream</a>, and <a href="/patterns/far/#built-farports">a port lent to another device and taken back</a>. The code is one file, <a href="/portwire.js"><code>portwire.js</code></a>, and it works over anything that carries bytes in order.</li>
         </ul>
-        <div class="live-set" data-demos="far built-approve built-agent"><h3>Working examples</h3></div>
+        <div class="live-set" data-demos="far built-farfile built-farports built-approve built-agent"><h3>Working examples</h3></div>
       </section>
 
       <section id="bites">

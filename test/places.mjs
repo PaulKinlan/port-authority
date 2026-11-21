@@ -70,10 +70,21 @@ check("mounted: the florist saw each request", /200 stock.txt/.test(await frameT
 const tab = await context.newPage();
 const res = await tab.goto(root + "/patterns/mounted/florist/nothing.html");
 check("mounted: a real tab gets the florist's own 404", res.status() === 404 && /The florist has no nothing.html/.test(await tab.locator("body").innerText()), String(res.status()));
+// A second site, mounted beside the first by the same worker script.
+await click("#mounted", "Mount the library");
+await until(async () => !(await page.locator("#mounted .controls button", { hasText: "Open the library's catalogue" }).isDisabled()));
+await click("#mounted", "Open the library's catalogue");
+await until(async () => /Beloved: on the shelf/.test(await frameText("#mounted", "view")), 10000);
+t = await frameText("#mounted", "view");
+const shelf2 = await page.locator('#mounted .box[data-name="shelf2"] iframe').getAttribute("src");
+check("mounted: a second site is mounted at a second path", /The library's catalogue/.test(t) && t.includes(new URL(shelf2).host) && t.includes("/patterns/mounted/library/catalogue.html") && new URL(shelf2).origin !== new URL(shelf).origin, flat(t));
+check("mounted: each path is answered by its own site", /200 stock.txt/.test(await frameText("#mounted", "shelf2")) && !/book.svg/.test(await frameText("#mounted", "shelf")), flat(await frameText("#mounted", "shelf2")));
 if (shots) await page.locator("#mounted .demo").screenshot({ path: shots + "/mounted.png" });
 await click("#mounted", "Unmount"); await wait(1200);
 const after = await tab.goto(root + "/patterns/mounted/florist/catalogue.html");
 check("mounted: unmounted, the same address has nothing behind it", after.status() === 503, String(after.status()));
+const still = await tab.goto(root + "/patterns/mounted/library/catalogue.html");
+check("mounted: and the other site's path still works", still.status() === 200 && /The library's catalogue/.test(await tab.locator("body").innerText()), String(still.status()));
 await tab.close();
 
 // ---- one socket for every tab
@@ -96,6 +107,14 @@ await click("#socket", "Close tab one");
 await until(async () => !(await page.locator("#socket [data-tabs]").innerText()).includes(me1), 8000);
 await click("#socket", "Tab two: say hello"); await wait(1200);
 check("socket: a tab closes, the socket stays for the rest", (await opened()) === first && /says hello 2/.test(await frameText("#socket", "tab2")) && !(await page.locator("#socket [data-tabs]").innerText()).includes(me1), flat(await boxText("#socket", "worker")));
+// The connection drops. The worker opens another, and the tab's port is the same port.
+await click("#socket", "Drop the connection");
+check("socket: after a drop the worker opens a second socket by itself", !!(await until(async () => (await opened()) === first + 1 && (await page.locator("#socket [data-open]").innerText()) === "1", 8000)), flat(await boxText("#socket", "worker")));
+await click("#socket", "Tab two: say hello");
+check("socket: the tab's next question is answered over the new socket", !!(await until(async () => /says hello 3/.test(await frameText("#socket", "tab2")))), flat(await frameText("#socket", "tab2")));
+// A question asked while the socket is down is asked again when it is back.
+await click("#socket", "Drop the connection"); await click("#socket", "Tab two: say hello");
+check("socket: a question asked during the drop is still answered", !!(await until(async () => /says hello 4/.test(await frameText("#socket", "tab2")))), flat(await frameText("#socket", "tab2")));
 if (shots) await page.locator("#socket .demo").screenshot({ path: shots + "/socket.png" });
 
 // ---- the audio thread

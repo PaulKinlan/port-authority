@@ -4,6 +4,7 @@
 import { far } from "/farport.js";
 import { swRouter } from "/patterns/router.js";
 import { built2 } from "/patterns/built2.js";
+import { further } from "/patterns/further.js";
 
 const logBox = (stage, name, title, extra = "", what = {}) => {
   const box = stage.box(name, { html: `<div class="here"><h4>${title}</h4>${extra}<ul class="log"></ul></div>`, ...what });
@@ -2093,6 +2094,7 @@ process([input]) {
   },
   swRouter,
   ...built2,
+  ...further,
 ];
 
 // Ideas that are already what a demo on the site does. key: "pattern:index".
@@ -2113,4 +2115,5 @@ export const shown = {
   "socket:0": ["#demo", "the demo at the top of this page"],
   "frozen:2": ["/patterns/frozen/#built-relay", "a decoder worker handing frames to a renderer worker"],
   "audio:0": ["#demo", "the demo at the top of this page"],
+  "oneway:0": ["#demo", "the demo at the top of this page"],
 };

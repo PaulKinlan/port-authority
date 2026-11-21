@@ -83,6 +83,7 @@
     import { more } from "/patterns/more.js";
     import { threads } from "/patterns/threads.js";
     import { origins } from "/patterns/origins.js";
+    import { oneway } from "/patterns/oneway.js";
     import { places } from "/patterns/places.js";
     import { groups } from "/patterns/all.js";
     import { legend } from "/wire.js";
@@ -92,7 +93,7 @@
     import { runCensus } from "/patterns/census.js";
     const census = document.querySelector("table.census");
     new IntersectionObserver((entries, io) => { if (entries[0].isIntersecting) { io.disconnect(); runCensus(census); } }, { rootMargin: "200px" }).observe(census);
-    for (const [demo, main] of [...demos.map((d) => [d, document.getElementById("patterns")]), ...more.map((d) => [d, document.getElementById("more")]), ...threads.map((d) => [d, document.getElementById("threads")]), ...origins.map((d) => [d, document.getElementById("origins")]), ...places.map((d) => [d, document.getElementById("places")])]) {
+    for (const [demo, main] of [...demos.map((d) => [d, document.getElementById("patterns")]), ...more.map((d) => [d, document.getElementById("more")]), ...threads.map((d) => [d, document.getElementById("threads")]), ...[...origins, oneway].map((d) => [d, document.getElementById("origins")]), ...places.map((d) => [d, document.getElementById("places")])]) {
       const section = document.createElement("section");
       section.className = "pattern";
       section.id = demo.id;
