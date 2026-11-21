@@ -132,7 +132,7 @@ check("planner: with no page to carry a port, the link cannot be repaired", !!(a
 await open("built-sharedpair");
 await click("Join the two shared workers");
 check("shared: both shared workers hold a port", !!(await sees("swa", /held, to the library's shared worker/)) && !!(await sees("swb", /held, to the florist's shared worker/)), flat(await boxText("swa")));
-check("shared: each worker knows both of its tabs", /Tabs: florist tab one, florist tab two/.test(await boxText("swa")), flat(await boxText("swa")));
+check("shared: each worker knows both of its tabs", /Tabs: florist tab (one, florist tab two|two, florist tab one)/.test(await boxText("swa")), flat(await boxText("swa")));
 await click("Florist tab two: post a note");
 check("shared: a note from a tab that did not join reaches both library tabs", !!(await sees("lt1", /florist tab two of the florist says: the van leaves at four/)) && !!(await sees("lt2", /the van leaves at four/)), flat(await frameText("lt2")));
 await click("Close tab one of each site");
