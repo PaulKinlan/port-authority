@@ -28,6 +28,13 @@ for (const [label, args] of [["one process", []], ["isolated frames", isolate]])
   check(`${label}: the gaps the page describes are there in this Chromium`, gaps.every((id) => got[id] === "gap"), JSON.stringify(gaps.filter((id) => got[id] !== "gap")));
   check(`${label}: a stream and a bitmap do reach the other origin`, got["stream-other"] === "works" && got["imagebitmap-other"] === "works");
   check(`${label}: a video frame ${args.length ? "does not reach" : "reaches"} a sandboxed frame`, got["videoframe-sandbox"] === (args.length ? "gap" : "works"), got["videoframe-sandbox"]);
+  // The effects demo, before the canvas check, which can end the other origin's frames.
+  // The effects demo: the same pictures to another origin as ImageBitmap and as VideoFrame.
+  await page.locator("#effects [data-start]").click();
+  await page.waitForFunction(() => document.querySelector('[data-note="frame"]').dataset.state && /\d+ pictures back/.test(document.querySelector('[data-note="bitmap"]').textContent), null, { timeout: 15000 });
+  const lanes = await page.evaluate(() => ["bitmap", "frame"].map((k) => document.querySelector(`[data-note="${k}"]`).textContent));
+  check(`${label}: effects come back from the other origin when sent as ImageBitmap`, /pictures back/.test(lanes[0]), lanes[0]);
+  check(`${label}: the VideoFrame version fails on the first frame, and says how`, /messageerror event and no VideoFrame/.test(lanes[1]), lanes[1]);
   // Waited for inside the page: when the frame's process dies, Playwright's own waits are rejected.
   const canvas = await page.evaluate(async () => {
     document.getElementById("run-canvas").click();
@@ -36,12 +43,6 @@ for (const [label, args] of [["one process", []], ["isolated frames", isolate]])
     return out.textContent;
   });
   check(`${label}: the canvas check ${args.length ? "finds the frame dead" : "draws"}`, args.length ? /stopped answering for good/.test(canvas) : /worked there/.test(canvas), canvas);
-  // The effects demo: the same pictures to another origin as ImageBitmap and as VideoFrame.
-  await page.locator("#effects [data-start]").click();
-  await page.waitForFunction(() => document.querySelector('[data-note="frame"]').dataset.state && /\d+ pictures back/.test(document.querySelector('[data-note="bitmap"]').textContent), null, { timeout: 15000 });
-  const lanes = await page.evaluate(() => ["bitmap", "frame"].map((k) => document.querySelector(`[data-note="${k}"]`).textContent));
-  check(`${label}: effects come back from the other origin when sent as ImageBitmap`, /pictures back/.test(lanes[0]), lanes[0]);
-  check(`${label}: the VideoFrame version fails on the first frame, and says how`, /messageerror event and no VideoFrame/.test(lanes[1]), lanes[1]);
   if (!args.length) {
     check("no sideways scroll on a phone", await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
     await page.waitForSelector("#references, .references, footer", { timeout: 5000 });
