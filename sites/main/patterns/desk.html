@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>A window of one app | Port Authority</title>
+<style>
+  html{color-scheme:light dark}
+  body{margin:0;padding:.7rem .8rem;font:14px/1.4 system-ui,sans-serif;background:light-dark(#fff,#141f47);color:light-dark(#0f1c3f,#e9edfa)}
+  h1{font:800 1rem/1.1 system-ui,sans-serif;margin:0 0 .15rem}
+  p{margin:0 0 .35rem;font-size:12px;opacity:.75}
+  ul{list-style:none;margin:0;padding:0;font:12px/1.45 ui-monospace,Menlo,monospace}
+  li{padding:.15rem 0;border-top:1px solid light-dark(#c9d1e0,#2b3970);overflow-wrap:anywhere}
+  li:first-child{border-top:0;font-weight:700}
+</style>
+<h1 id="title"></h1>
+<p id="about"></p>
+<ul id="log"></ul>
+<script type="module">
+  // One window of an app. It knows its own name, perhaps a role or a tool it
+  // offers, and the shared worker in the middle. It has no reference to any
+  // other window.
+  const params = new URLSearchParams(location.search);
+  const name = params.get("name") || "window-" + Math.random().toString(36).slice(2, 5);
+  const role = params.get("role"), tool = params.get("tool");
+  const embedded = parent !== self;
+  const tell = (wire, data = {}) => embedded && parent.postMessage({ wire, ...data }, "*");
+  const $ = (id) => document.getElementById(id);
+  const log = (text) => { const li = document.createElement("li"); li.textContent = text; $("log").prepend(li); while ($("log").children.length > 5) $("log").lastChild.remove(); };
+  $("title").textContent = name;
+  $("about").textContent = tool ? `I offer the tool "${tool}".` : role ? `My role is "${role}".` : "I know my name and the worker.";
+
+  // What each tool does with a request.
+  const tools = {
+    "print-label": (text) => `label printed for ${text}`,
+    "find-route": (text) => `route for ${text}: 14 minutes`,
+  };
+
+  if (!("SharedWorker" in self)) log("This browser has no SharedWorker.");
+  else {
+    const port = new SharedWorker("/patterns/post-worker.js", { name: "pa-post-" + (params.get("room") || "open") }).port;
+    port.onmessage = ({ data }) => {
+      if (data.job) { log(`asked by ${data.from}: ${data.job} for ${data.text}`); tell("got"); port.postMessage({ to: data.from, text: tools[data.job](data.text) }); return tell("sent"); }
+      if (data.text) { log(`from ${data.from}: ${data.text}${data.wasHeld ? " (was held)" : ""}`); tell("got"); }
+      if (data.held) log(`${data.held} is not open. The worker is holding it.`);
+      if (data.reached) log(data.reached.length ? `reached ${data.reached.join(", ")}` : `no window has the role ${data.role}`);
+      if (data.nobody) log(`no open window offers ${data.nobody}`);
+    };
+    const lock = "pa-desk-" + Math.random().toString(36).slice(2);
+    const join = () => port.postMessage({ iam: name, role, tool, lock });
+    navigator.locks ? navigator.locks.request(lock, () => { join(); return new Promise(() => {}); }) : join();
+
+    addEventListener("message", (event) => {
+      const data = event.data;
+      if (event.source !== parent || !data?.cmd) return;
+      if (data.cmd === "send") { log(`to ${data.to}: ${data.text}`); port.postMessage({ to: data.to, text: data.text }); }
+      if (data.cmd === "all") { log(`to every ${data.role}: ${data.text}`); port.postMessage({ toRole: data.role, text: data.text }); }
+      if (data.cmd === "need") { log(`I need ${data.tool} for ${data.text}`); port.postMessage({ need: data.tool, text: data.text }); }
+      tell("sent");
+    });
+  }
+  tell("ready");
+</script>
+</html>
