@@ -4,7 +4,7 @@ Experiments in what the web can do when sites hand each other `MessagePort`s:
 Web Intents for the agent era, a registry of WebMCP-style tools, and the
 user's own agent on any site over the Agent Client Protocol.
 
-Live (interim): https://portauthority.kinlan-test.workers.dev
+Live: https://port-authority.dev
 
 ## What is here
 
@@ -17,6 +17,7 @@ Live (interim): https://portauthority.kinlan-test.workers.dev
 | `sites/florist`, `library`, `planner` | Three demo sites, each served on its own origin |
 | `sites/router/` | The AI router, on its own origin. `router.js` is what a site loads (`connect()`, `fromPort()`), `frame.html` is the hidden frame that holds a site's grant and calls the model provider, `pick.html` is the window where the person chooses an account, `index.html` lists accounts and grants. Explained at `sites/main/ai-router/`; used by `sites/florist/card/` and `sites/library/digest/` |
 | `sites/shared/hawser.js` | Hawser (working name): Comlink's idea rebuilt on today's platform. One file, no dependencies, served on every origin |
+| `sites/main/reading/` | Further reading: links to reference pages, specifications, articles, libraries, talks and papers. Edit `links.json`, then run `node scripts/reading.mjs` to rebuild `index.html`. `node scripts/reading.mjs --check` fetches every link |
 | `sites/main/comlink/` | The Comlink chapter. Three demos that do real work, each with Comlink 4.4.2 beside Hawser: a fractal on two workers (`render-worker.js`), a third-party widget on another origin (`sites/shared/comlink/widget.html`), and a journal in a locked OPFS file (`journal-worker.js`). Then how Comlink works and what has changed |
 | `sites/shared/portwire.js` | A `MessagePort` over anything that carries bytes in order. Data, bytes, ports and streams posted into it are rebuilt on the other side. No dependencies |
 | `sites/shared/farport.js` | A `MessagePort` whose other end is on another device: a pairing code, a WebRTC data channel, and `portwire.js` on top. The page the other device opens is `sites/main/far/` |
@@ -105,10 +106,24 @@ LIVE=kinlan-test.workers.dev ...                 # same tests against the deploy
 
 ## Deploy
 
-The same script is deployed under four Worker names (`portauthority`,
-`pa-florist`, `pa-library`, `pa-planner`) so each demo has a real origin.
-For now files are pushed into KV with `scripts/upload.sh`; moving to
-`wrangler deploy` with static assets is the next step once this is in a repo.
+Merging to `main` deploys. Cloudflare Workers Builds is connected to this
+repository and runs one deploy per Worker on every push to `main`:
+
+| Worker | Address | Deploy command |
+| --- | --- | --- |
+| `portauthority` | https://port-authority.dev | `npx wrangler deploy` |
+| `pa-florist` | https://pa-florist.kinlan-test.workers.dev | `npx wrangler deploy -c deploy/florist.jsonc` |
+| `pa-library` | https://pa-library.kinlan-test.workers.dev | `npx wrangler deploy -c deploy/library.jsonc` |
+| `pa-planner` | https://pa-planner.kinlan-test.workers.dev | `npx wrangler deploy -c deploy/planner.jsonc` |
+| `pa-router` | https://pa-router.kinlan-test.workers.dev | `npx wrangler deploy -c deploy/router.jsonc` |
+
+All five run `src/worker.js` and carry the whole `sites/` folder as static
+assets; the script picks the folder by hostname. The three demo sites use the
+main Worker's Durable Objects (hub, lab, meeting point), so `portauthority`
+has to exist before they deploy. `pa-router` has a Router class of its own.
+
+A build's log is in the Cloudflare dashboard under the Worker, in Deployments.
+A new Worker name needs a file in `deploy/` and a build trigger on Cloudflare.
 
 ## Known limits
 

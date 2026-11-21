@@ -1,0 +1,19 @@
+{
+  // The AI router's origin: the same script and files as the main site, under
+  // its own Worker name. It keeps the list of grants in a Router class of its own.
+  "name": "pa-router",
+  "main": "../src/worker.js",
+  "compatibility_date": "2026-10-01",
+  "workers_dev": true,
+  "preview_urls": false,
+  "assets": {
+    "directory": "../sites",
+    "binding": "ASSETS",
+    "run_worker_first": true,
+    "html_handling": "none",
+    "not_found_handling": "none"
+  },
+  "vars": { "MAIN_HOST": "port-authority.dev", "DEMO_SUFFIX": ".kinlan-test.workers.dev" },
+  "durable_objects": { "bindings": [{ "name": "ROUTER", "class_name": "Router" }] },
+  "migrations": [{ "tag": "r1", "new_sqlite_classes": ["Router"] }]
+}

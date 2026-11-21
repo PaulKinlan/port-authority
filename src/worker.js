@@ -52,12 +52,8 @@ function siteOrigins(url, env) {
 }
 
 async function readAsset(env, key) {
-  if (env.ASSETS) {
-    const res = await env.ASSETS.fetch(new Request("https://assets.local/" + key));
-    return res.ok ? res.body : null;
-  }
-  if (env.FILES) return env.FILES.get(key, "stream");
-  return null;
+  const res = await env.ASSETS.fetch(new Request("https://assets.local/" + key));
+  return res.ok ? res.body : null;
 }
 
 async function serve(env, site, pathname) {
@@ -191,15 +187,6 @@ export default {
     if (url.pathname === "/_sites.js") {
       const body = "export const sites = " + JSON.stringify(siteOrigins(url, env)) + ";\nexport const site = " + JSON.stringify(site) + ";\n";
       return new Response(body, { headers: { "content-type": TYPES.js, "access-control-allow-origin": "*", "cache-control": "no-cache" } });
-    }
-
-    // Interim deploy path: files are pushed into KV until the repository has a
-    // normal wrangler deploy with static assets.
-    if (url.pathname.startsWith("/_upload/") && request.method === "PUT") {
-      if (!env.UPLOAD_TOKEN || !env.FILES) return new Response("uploads are off", { status: 404 });
-      if (request.headers.get("authorization") !== "Bearer " + env.UPLOAD_TOKEN) return new Response("no", { status: 401 });
-      await env.FILES.put(url.pathname.slice(9), await request.arrayBuffer());
-      return new Response("ok");
     }
 
     if (request.method !== "GET" && request.method !== "HEAD") return new Response("method not allowed", { status: 405 });
