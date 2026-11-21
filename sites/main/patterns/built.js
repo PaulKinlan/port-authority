@@ -3,6 +3,7 @@
 // ideas it covers (by position in deep.js). Same stage as the patterns.
 import { far } from "/farport.js";
 import { swRouter } from "/patterns/router.js";
+import { further } from "/patterns/further.js";
 
 const logBox = (stage, name, title, extra = "") => {
   const box = stage.box(name, { html: `<div class="here"><h4>${title}</h4>${extra}<ul class="log"></ul></div>` });
@@ -2089,6 +2090,7 @@ process([input]) {
     },
   },
   swRouter,
+  ...further,
 ];
 
 // Ideas that are already what a demo on the site does. key: "pattern:index".
@@ -2114,6 +2116,7 @@ export const shown = {
   "frozen:2": ["/patterns/frozen/#built-relay", "a decoder worker handing frames to a renderer worker"],
   "reload:2": ["/patterns/tearoff/#built-upgrade", "version 1 of a widget handing its port to version 2"],
   "audio:0": ["#demo", "the demo at the top of this page"],
+  "oneway:0": ["#demo", "the demo at the top of this page"],
   "router:1": ["/hub/", "the hub on this site, which routes calls to whichever site has the tool"],
   "filter:1": ["/patterns/frozen/", "two workers that keep going while the page is frozen"],
 };

@@ -101,10 +101,19 @@ const ROLES = {
         },
       });
     };
+    // What this site has on its shelf. The florist and the library serve different things.
+    const SHELVES = {
+      florist: { heading: "The florist's catalogue", icon: "tulip.svg", lines: ["tulips: 24", "roses: 9", "peonies: 3"],
+        svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><path d="M16 30V17" stroke="#0e9f8e" stroke-width="3" stroke-linecap="round"/><path d="M8 4c0 9 3 14 8 14s8-5 8-14l-4 4-4-6-4 6z" fill="#e0364c"/></svg>` },
+      library: { heading: "The library's catalogue", icon: "book.svg", lines: ["Middlemarch: on the shelf", "Dune: out until Friday", "Beloved: on the shelf"],
+        svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><path d="M5 6h10a3 3 0 0 1 3 3v19a3 3 0 0 0-3-3H5z" fill="#0e9f8e"/><path d="M27 6H17a3 3 0 0 0-3 3v19a3 3 0 0 1 3-3h10z" fill="#f5b700"/></svg>` },
+    };
+    const who = SHELVES[params.get("shelf")] ? params.get("shelf") : "florist";
+    const shelf = SHELVES[who];
     const FILES = {
       "catalogue.html": () => text(`<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width">
 <style>html{color-scheme:light dark}body{font:14px/1.4 system-ui,sans-serif;margin:.7rem .8rem}h1{font-size:1rem;margin:0 0 .3rem;display:flex;gap:.4rem;align-items:center}img{width:1.6rem;height:1.6rem}p,li{font:12px/1.45 ui-monospace,Menlo,monospace;margin:0;overflow-wrap:anywhere}ul{list-style:none;padding:0;margin:.3rem 0 0}</style>
-<h1><img src="tulip.svg" alt="">The florist's catalogue</h1>
+<h1><img src="${shelf.icon}" alt="">${shelf.heading}</h1>
 <p>Written by ${location.host}. My address is <span id="where"></span>.</p>
 <ul id="stock"></ul>
 <script>
@@ -120,21 +129,72 @@ const ROLES = {
     }
   });
 <\/script>`, "text/html"),
-      "tulip.svg": () => text(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><path d="M16 30V17" stroke="#0e9f8e" stroke-width="3" stroke-linecap="round"/><path d="M8 4c0 9 3 14 8 14s8-5 8-14l-4 4-4-6-4 6z" fill="#e0364c"/></svg>`, "image/svg+xml"),
-      "stock.txt": () => ({ status: 200, headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" }, body: slowly(["tulips: 24", "roses: 9", "peonies: 3"]) }),
+      [shelf.icon]: () => text(shelf.svg, "image/svg+xml"),
+      "stock.txt": () => ({ status: 200, headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" }, body: slowly(shelf.lines) }),
     };
     on("serve", (data, ports) => {
       log("given a port. I will answer what comes down it.");
       ports[0].onmessage = (event) => {
         const { path } = event.data, reply = event.ports[0];
         const make = FILES[path];
-        const answer = make ? make() : text("The florist has no " + path, "text/plain", 404);
+        const answer = make ? make() : text(`The ${who} has no ${path}`, "text/plain", 404);
         log(`${answer.status} ${path}`); served++;
         tell("pulse", { cable: "mount" });
         // The body is transferred when it is a stream: the far side reads it as it is produced.
         try { reply.postMessage(answer, answer.body instanceof ReadableStream ? [answer.body] : []); }
         catch (err) { reply.postMessage(text("could not send: " + err.message, "text/plain", 500)); }
       };
+    });
+  },
+
+  // Is handed a port to post prices into. It also listens on that port, to
+  // show whether anything ever comes back.
+  publisher() {
+    let port = null, n = 0;
+    on("feed", (data, ports) => {
+      port = ports[0];
+      log("given a port to publish on");
+      port.onmessage = (event) => { log("heard back: " + JSON.stringify(event.data)); tell("heard"); };
+    });
+    on("publish", () => {
+      if (!port) return log("I have nowhere to publish");
+      const price = (4 + Math.sin(++n) * 0.6).toFixed(2);
+      port.postMessage({ tulips: price });
+      log(`published tulips at ${price}`); tell("pulse", { cable: "in" });
+    });
+    // Try to give the other side a private line by sending a port forward.
+    on("smuggle", () => {
+      if (!port) return;
+      const { port1, port2 } = new MessageChannel();
+      port1.onmessage = (event) => { log("the private line works: " + event.data); tell("leak"); };
+      port.postMessage({ line: port2 }, [port2]);
+      log("sent a message with a port in it"); tell("pulse", { cable: "in" });
+    });
+  },
+
+  // Is handed a port to hear prices on. It tries to answer on it.
+  subscriber() {
+    let port = null, n = 0;
+    on("feed", (data, ports) => {
+      port = ports[0];
+      log(`given a ${port.constructor.name}. It has postMessage like any other.`);
+      port.onmessage = (event) => {
+        if (event.data.line) { event.data.line.postMessage("hello from " + location.host); return log("got a port. Answered on it."); }
+        log("heard: tulips at " + event.data.tulips); tell("got");
+      };
+    });
+    on("answer", () => {
+      if (!port) return log("I have no port");
+      port.postMessage({ order: `${++n} tulips, from ${location.host}` });
+      log(`posted an order into the port (${n})`); tell("pulse", { cable: "out" });
+    });
+    // Try to open a way back by posting a port.
+    on("smuggle", () => {
+      if (!port) return;
+      const { port1, port2 } = new MessageChannel();
+      port1.onmessage = () => log("someone used the port I sent");
+      port.postMessage({ reply: port2 }, [port2]);
+      log("posted a port into the port"); tell("pulse", { cable: "out" });
     });
   },
 

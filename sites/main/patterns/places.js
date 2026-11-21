@@ -2,6 +2,7 @@
 // every tab at once, and the audio thread. Same stage as demos.js.
 import { sites } from "/_sites.js";
 import { far } from "/farport.js";
+import { qrSvg } from "/qr.js";
 
 const logBox = (stage, name, title, extra = "") => {
   const box = stage.box(name, { html: `<div class="here"><h4>${title}</h4>${extra}<ul class="log"></ul></div>` });
@@ -88,7 +89,7 @@ export const places = [
   {
     id: "far",
     title: "A port whose other end is on another device",
-    blurb: "A port does not have to end in this browser. This page meets another device through a pairing code, the two connect directly with WebRTC, and each side wraps its end of that connection in a <code>MessagePort</code>. Then this page does what it does everywhere else on this site: it hands its port to someone. The counter at the end of the yellow cable is a sandboxed frame that was given a port and knows nothing more. Your phone is now pressing its buttons. The server carried a few messages so the two could find each other, and nothing since. Only data crosses: a port cannot carry a port to another machine.",
+    blurb: "A port does not have to end in this browser. This page meets another device through a pairing code, the two connect directly with WebRTC, and each side wraps its end of that connection in a <code>MessagePort</code>. Then this page does what it does everywhere else on this site: it hands its port to someone. The counter at the end of the yellow cable is a sandboxed frame that was given a port and knows nothing more. Your phone is now pressing its buttons. The server carried a few messages so the two could find each other, and nothing since. The port carries more than text: bytes, other ports and streams can be posted into it, and each is rebuilt on the other device. Two demos further down this page do that.",
     code: `<span class="c">// both devices</span>
 const port = await far({ code });               <span class="c">// a real MessagePort</span>
 
@@ -142,6 +143,7 @@ port.onmessage = ({ data }) => show(data.count);`,
         const url = `${location.origin}/far/#${code}`;
         codeEl.hidden = false;
         codeEl.innerHTML = `Code <strong>${code}</strong>. On a phone: <a href="${url}" target="_blank">${location.host}/far/#${code}</a>`;
+        farBox.node.innerHTML = `<div class="here" style="display:flex;gap:.6rem;align-items:flex-start"><a href="${url}" target="_blank" data-qr style="flex:none;width:6.6rem;line-height:0;border-radius:6px;overflow:hidden">${qrSvg(url, { label: "QR code for " + url })}</a><div><h4>Another device</h4><p class="small muted" style="margin:0">Scan this with a phone, or let a stand-in play the part.</p></div></div>`;
         standIn.disabled = false;
         line = far({
           code, host: true,
@@ -153,6 +155,7 @@ port.onmessage = ({ data }) => show(data.count);`,
             // The port that stands for the other device goes to the counter.
             // This page keeps nothing, and the two talk without it.
             stage.post("tool", { cmd: "port" }, [port]);
+            if (!farBox.frame) farBox.node.innerHTML = `<div class="here"><h4>Another device</h4><p class="small">Connected. It is a real device, so its screen is not shown here.</p></div>`;
             stage.cable("air", "far", "page", "teal");
             stage.cable("port", "page", "tool", "yellow");
             me.say("gave the far port to the counter");
@@ -168,53 +171,72 @@ port.onmessage = ({ data }) => show(data.count);`,
   {
     id: "mounted",
     title: "Mount another site at a path on yours",
-    blurb: "A service worker can answer a request by asking a port, and the other end of that port can be on another origin. This page introduces its service worker to the florist's site. From then on, every request under <code>/patterns/mounted/florist/</code> is answered by the florist: pages, images, and a file whose body is a stream that the florist is still writing while this origin reads it. The florist's server is never contacted. Its page, open in a frame, is the server. One caution that is the whole point: what is mounted here runs as this origin. Mount only what you would let act as you.",
-    code: `<span class="c">// this page: introduce the two, and step away</span>
+    blurb: "A service worker can answer a request by asking a port, and the other end of that port can be on another origin. This page introduces a service worker to the florist's site. From then on, every request under <code>/patterns/mounted/florist/</code> is answered by the florist: pages, images, and a file whose body is a stream that the florist is still writing while this origin reads it. The florist's server is never contacted. Its page, open in a frame, is the server. Nothing in this is particular to the florist. The same worker script, registered again for <code>/patterns/mounted/library/</code> and given a port to the library's site, mounts that site beside it. What is mounted here runs as this origin, so mount only what you would let act as you.",
+    code: `<span class="c">// this page: a worker for the path, and a port to the site that will serve it</span>
+const reg = await navigator.serviceWorker.register("/mount-sw.js", { scope: "/mounted/florist/" });
 const { port1, port2 } = new MessageChannel();
 floristFrame.postMessage({ cmd: "serve" }, floristOrigin, [port1]);
-serviceWorker.postMessage({ mount: true }, [port2]);
+reg.active.postMessage({ mount: true }, [port2]);
 
 <span class="c">// service worker</span>
 origin.postMessage({ path }, [replyPort]);
 <span class="c">// the florist answers with a body that is a ReadableStream, transferred</span>
 return new Response(answer.body, answer);`,
+    tour: { steps: [
+      ["Mount the florist's site here", "This page gives one end of a channel to the florist's site and the other to a service worker for that path."],
+      ["Open the catalogue", "A page at an address on this origin. Its HTML, its picture and a slowly written file all come from the florist, down the port.", 4200],
+      ["Mount the library's site too", "The same worker script is registered for a second path and given a port to the library's site."],
+      ["Open the library's catalogue", "A second address on this origin, served by a second site.", 4200],
+      ["Unmount", "The florist's worker drops its port. That address has nothing behind it, and the library's still works."],
+    ] },
     async setup(stage, ui) {
-      const shelf = stage.box("shelf", { src: `${sites.florist}/actor.html?role=shelf&title=${encodeURIComponent("Florist, a real site")}&color=${encodeURIComponent("#e0364c")}` });
+      const shelfSrc = (site, title, color) => `${sites[site]}/actor.html?role=shelf&shelf=${site}&title=${encodeURIComponent(title)}&color=${encodeURIComponent(color)}`;
+      const shelf = stage.box("shelf", { src: shelfSrc("florist", "Florist, a real site", "#e0364c") });
       shelf.frame.title = "Florist, a real site";
+      const shelf2 = stage.box("shelf2", { src: shelfSrc("library", "Library, a real site", "#0e9f8e") });
+      shelf2.frame.title = "Library, a real site";
       const sw = logBox(stage, "sw", "This site's service worker");
-      const view = stage.box("view", { html: `<div class="here"><h4>/patterns/mounted/florist/</h4><p class="small muted">Nothing is mounted here yet.</p></div>` });
+      const view = stage.box("view", { html: `<div class="here"><h4>/patterns/mounted/</h4><p class="small muted">Nothing is mounted here yet.</p></div>` });
       if (!("serviceWorker" in navigator)) return sw.say("no service worker support here");
-      await shelf.whenReady;
-      let registration = null, mounted = false;
-      const introduce = () => {
+      await Promise.all([shelf.whenReady, shelf2.whenReady]);
+      // One registration of the same script for each mounted site.
+      const mounts = { florist: { box: "shelf", cable: "mount", color: "yellow" }, library: { box: "shelf2", cable: "mount2", color: "teal" } };
+      const introduce = (name) => {
         const { port1, port2 } = new MessageChannel();
-        stage.post("shelf", { cmd: "serve" }, [port1]);
-        registration.active.postMessage({ mount: true }, [port2]);
+        stage.post(mounts[name].box, { cmd: "serve" }, [port1]);
+        mounts[name].registration.active.postMessage({ mount: true }, [port2]);
       };
       const onMessage = (event) => {
         if (!sw.node.isConnected) return navigator.serviceWorker.removeEventListener("message", onMessage);
-        if (event.data === "need-mount" && mounted) return introduce();
-        if (event.data?.mounted) { sw.say(`${event.data.status} ${event.data.mounted}, asked the florist`); stage.pulse("down", "view"); }
+        const name = event.data?.needMount;
+        if (name && mounts[name]?.mounted) return introduce(name);
+        if (event.data?.mounted) { sw.say(`${event.data.status} ${event.data.site}/${event.data.mounted}, asked the ${event.data.site}`); stage.pulse("down", "view"); stage.pulse(mounts[event.data.site]?.cable, "sw"); }
       };
       navigator.serviceWorker.addEventListener("message", onMessage);
-      const load = (file) => embed(view, `/patterns/mounted/florist/${file}?${Date.now()}`, "A page on this origin, served by the florist");
-      const open = ui.button("Open the catalogue", () => { load("catalogue.html"); stage.cable("down", "view", "sw", "teal"); }, true);
+      const load = (name, file) => { stage.cable("down", "view", "sw", "ink"); return embed(view, `/patterns/mounted/${name}/${file}?${Date.now()}`, `A page on this origin, served by the ${name}`); };
+      const mount = async (name) => {
+        const m = mounts[name];
+        try {
+          m.registration = await navigator.serviceWorker.register("/patterns/mount-sw.js", { scope: `/patterns/mounted/${name}/` });
+          const worker = m.registration.active || m.registration.waiting || m.registration.installing;
+          if (worker.state !== "activated") await new Promise((resolve) => worker.addEventListener("statechange", () => worker.state === "activated" && resolve()));
+        } catch (err) { sw.say("could not start: " + err.message); return false; }
+        m.mounted = true; introduce(name);
+        stage.cable(m.cable, m.box, "sw", m.color);
+        sw.say(`holding a port to the ${name}'s site, for /mounted/${name}/`);
+        return true;
+      };
+      const open = ui.button("Open the catalogue", () => load("florist", "catalogue.html"), true);
+      const open2 = ui.button("Open the library's catalogue", () => load("library", "catalogue.html"), true);
       const gone = ui.button("Unmount", (btn) => {
-        mounted = false; registration.active.postMessage({ unmount: true });
-        stage.cut("mount"); sw.say("dropped the port. The path is empty again.");
-        btn.disabled = true; load("catalogue.html");
+        mounts.florist.mounted = false; mounts.florist.registration.active.postMessage({ unmount: true });
+        stage.cut("mount"); sw.say("dropped the port to the florist. Its path is empty again.");
+        btn.disabled = true; load("florist", "catalogue.html");
       }, true);
+      const second = ui.button("Mount the library's site too", async (btn) => { btn.disabled = true; if (await mount("library")) open2.disabled = false; }, true);
       ui.button("Mount the florist's site here", async (btn) => {
         btn.disabled = true;
-        try {
-          registration = await navigator.serviceWorker.register("/patterns/mount-sw.js", { scope: "/patterns/mounted/florist/" });
-          const worker = registration.active || registration.waiting || registration.installing;
-          if (worker.state !== "activated") await new Promise((resolve) => worker.addEventListener("statechange", () => worker.state === "activated" && resolve()));
-        } catch (err) { return sw.say("could not start: " + err.message); }
-        mounted = true; introduce();
-        stage.cable("mount", "shelf", "sw", "yellow");
-        sw.say("holding a port to the florist's site");
-        open.disabled = gone.disabled = false;
+        if (await mount("florist")) open.disabled = gone.disabled = second.disabled = false;
       }, false, true);
       ui.link("Open the mounted catalogue in a new tab", "/patterns/mounted/florist/catalogue.html");
     },
@@ -222,15 +244,32 @@ return new Response(answer.body, answer);`,
   {
     id: "socket",
     title: "One connection to the server, shared by every tab",
-    blurb: "Ten tabs of the same site usually means ten connections to the server. Here no tab has one. A shared worker holds the only WebSocket, and each tab holds a port to the worker. A tab speaks by posting to its port, and the answer comes back down the port of the tab that asked, so replies are never mixed up. Close a tab and the worker notices and carries on. The two boxes on the outside are real pages of this site, and the link opens a third in a real tab that joins the same socket.",
+    blurb: "Ten tabs of the same site usually means ten connections to the server. Here no tab has one. A shared worker holds the only WebSocket, and each tab holds a port to the worker. A tab speaks by posting to its port. The worker numbers each question, and the answer with that number goes back down the port of the tab that asked, so replies are never mixed up. Close a tab and the worker notices and carries on. Drop the connection and the worker opens another and asks again anything that was not answered. The tabs have no code for any of that. The two boxes on the outside are real pages of this site, and the link opens a third in a real tab that joins the same socket.",
+    tour: { steps: [
+      ["Tab one: say hello", "Tab one posts to its port. The worker sends it on the only socket, and the server's answer comes back to tab one alone."],
+      ["Tab two: say hello", "Tab two does the same, on the same socket."],
+      ["Close tab one", "Tab one is destroyed. The worker notices, and the socket stays open for the other."],
+      ["Drop the connection", "The worker's socket is closed, as a failed network would close it. The worker opens another. Tab two did nothing and was told nothing.", 2600],
+      ["Tab two: say hello", "Tab two posts to the same port as before, and the answer arrives over the new socket."],
+    ] },
     code: `<span class="c">// every tab</span>
 const { port } = new SharedWorker("/socket-worker.js");
 port.postMessage({ say: "hello" });
 port.onmessage = ({ data }) => show(data.answer);
 
-<span class="c">// the worker: one socket, and a note of who asked</span>
-port.onmessage = ({ data }) => { asked.push(port); socket.send(data.say); };
-socket.onmessage = ({ data }) => asked.shift().postMessage({ answer: data });`,
+<span class="c">// the worker: one socket, and a note of who asked what</span>
+port.onmessage = ({ data }) => {
+  const id = ++ids;
+  pending.set(id, { port, text: data.say });
+  socket.send(JSON.stringify({ id, text: data.say }));
+};
+socket.onmessage = ({ data }) => {
+  const { id, text } = JSON.parse(data);
+  pending.get(id).port.postMessage({ answer: text });
+  pending.delete(id);
+};
+<span class="c">// a dropped connection: open another and ask again what is still waiting</span>
+socket.onclose = () => setTimeout(connect, 300);`,
     async setup(stage, ui) {
       const one = stage.box("tab1", { html: "" });
       const hub = stage.box("worker", { html: `<div class="here"><h4>Shared worker</h4><p class="small" style="margin:0 0 .3rem">Sockets it has opened: <strong data-opened>0</strong></p><p class="small" style="margin:0 0 .3rem">Open now: <strong data-open>0</strong></p><p class="small" style="margin:0">Tabs on it: <strong data-tabs>none</strong></p></div>` });
@@ -252,6 +291,7 @@ socket.onmessage = ({ data }) => asked.shift().postMessage({ answer: data });`,
       const b1 = ui.button("Tab one: say hello", () => stage.post("tab1", { cmd: "say" }), false, true);
       ui.button("Tab two: say hello", () => stage.post("tab2", { cmd: "say" }));
       ui.button("Close tab one", (btn) => { stage.remove("tab1"); btn.disabled = b1.disabled = true; });
+      ui.button("Drop the connection", () => watch.postMessage({ drop: true }));
       ui.link("Open a third tab for real", "/patterns/tab.html");
     },
   },
