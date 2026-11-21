@@ -1,0 +1,127 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>AI router frame</title>
+<!-- This page has nothing to look at. A site puts it in a hidden iframe. It
+     holds that one site's grant and makes the calls to the model provider, so
+     the API key is only ever used by a page from the router's address. -->
+<script type="module">
+import { generate } from "/providers.js";
+import { unseal } from "/store.js";
+
+// The grant is stored under the address of the page this frame is inside, so
+// each site has its own. Browsers also give a frame inside another site a
+// separate store, but two addresses on the same registrable domain share one,
+// so the frame does not rely on that.
+let KEY = null;
+let grant = null;
+let info = null;          // what the server last said about the grant
+let site = null;          // the origin of the page this frame is inside
+const ports = new Set();  // every port that should hear about a change of state
+
+const ask = async (action, extra = {}) => {
+  const response = await fetch(`/r/${grant.person}/${action}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id: grant.id, secret: grant.secret, ...extra }) });
+  return response.json();
+};
+const forget = () => { grant = null; info = null; localStorage.removeItem(KEY); };
+
+function state() {
+  if (!grant) return { t: "state", ready: false };
+  return { t: "state", ready: true, model: { provider: grant.providerName, name: grant.model, account: grant.label }, left: info ? info.requests - info.used : null, expires: info ? info.expires : null };
+}
+const announce = () => { for (const port of ports) port.postMessage(state()); };
+
+async function check() {
+  if (!grant) return;
+  try {
+    const answer = await ask("status");
+    if (answer.ok) info = answer.grant; else forget();
+  } catch { /* offline: keep the grant, the next request will ask again */ }
+}
+
+// One request: ask the server, unlock the key in memory, call the provider,
+// and post each piece of text to the reply port.
+async function run(message, reply, budget) {
+  const stop = new AbortController();
+  reply.onmessage = (event) => { if (event.data && event.data.t === "cancel") stop.abort(new DOMException("cancelled", "AbortError")); };
+  const fail = (code, text) => { reply.postMessage({ t: "error", code, message: text }); reply.close(); };
+  if (!grant) return fail("no-grant", "This site has no model yet. Ask the person to choose one.");
+  if (budget && budget.left <= 0) return fail("limit", "This port was lent for a fixed number of requests and has used them all.");
+  let allowed;
+  try { allowed = await ask("use"); } catch { return fail("offline", "The router server could not be reached."); }
+  if (!allowed.ok) {
+    const why = allowed.why;
+    forget(); announce();
+    return fail(why === "used up" ? "limit" : "no-grant", why === "used up" ? "This site has used all the requests it was given." : `The grant for this site is ${why}.`);
+  }
+  info = allowed.grant;
+  if (budget) budget.left--;
+  let usage = null;
+  try {
+    const key = grant.sealed ? await unseal(allowed.wrap, grant.sealed) : "";
+    const pieces = generate({ provider: grant.provider, key, baseUrl: grant.baseUrl, model: grant.model }, message, stop.signal);
+    for (;;) {
+      const { value, done } = await pieces.next();
+      if (done) { usage = value; break; }
+      reply.postMessage({ t: "text", text: value });
+    }
+    reply.postMessage({ t: "done", usage, left: info.requests - info.used });
+  } catch (error) {
+    reply.postMessage({ t: "error", code: error.name === "AbortError" ? "cancelled" : error.code || "provider", message: String(error.message || error) });
+  }
+  reply.close();
+  announce();
+  if (usage && (usage.tokensIn || usage.tokensOut)) ask("report", usage).catch(() => {});
+}
+
+// Every port into this frame speaks the same few messages. A lent port has a
+// budget of its own and cannot lend further or forget the grant.
+function serve(port, budget = null) {
+  ports.add(port);
+  port.onmessage = (event) => {
+    const message = event.data || {};
+    if (message.t === "prompt" && event.ports[0]) run(message, event.ports[0], budget);
+    else if (message.t === "state") port.postMessage(state());
+    else if (message.t === "lend" && !budget) {
+      const line = new MessageChannel();
+      const requests = Number(message.requests) > 0 ? Math.round(Number(message.requests)) : null;
+      serve(line.port1, requests ? { left: requests } : null);
+      port.postMessage({ t: "lent", n: message.n }, [line.port2]);
+    } else if (message.t === "forget" && !budget) { forget(); announce(); }
+  };
+  port.postMessage(state());
+}
+
+addEventListener("message", async (event) => {
+  const message = event.data || {};
+  // The page this frame is inside says hello and passes a port.
+  if (message.router === "hello" && event.source === parent && event.ports[0] && parent !== window) {
+    if (site) return;     // one page, one hello
+    site = event.origin;
+    KEY = "router.grant:" + site;
+    try { grant = JSON.parse(localStorage.getItem(KEY)); } catch { /* none */ }
+    if (grant && grant.site !== site) grant = null;
+    await check();
+    serve(event.ports[0]);
+    return;
+  }
+  // The picker window found this frame and wants to hand over a grant. The
+  // browser only delivers this if the sender chose the router's address as the
+  // target, and event.origin proves the sender is a router page too.
+  if (message.router === "picker" && event.origin === location.origin && event.ports[0]) {
+    const line = event.ports[0];
+    line.onmessage = (answer) => {
+      const data = answer.data || {};
+      if (data.t === "grant" && data.grant && data.grant.site === site) {
+        grant = data.grant;
+        info = data.info;
+        localStorage.setItem(KEY, JSON.stringify(grant));
+        line.postMessage({ t: "stored" });
+        announce();
+      }
+      line.close();
+    };
+    line.postMessage({ t: "site", site, current: grant ? { label: grant.label, model: grant.model } : null });
+  }
+});
+
+</script>
