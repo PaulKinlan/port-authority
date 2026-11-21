@@ -188,8 +188,11 @@
           <li>A port cannot be saved. Leave it with a <code>SharedWorker</code> in <code>pagehide</code> and collect it on the next load. Create the worker with <code>extendedLifetime: true</code>, or it dies with its last page. Messages sent meanwhile wait in the port. <a href="/patterns/reload/">Running.</a></li>
           <li>A port survives its page being torn off into a new window, if it is handed to that window. <a href="/patterns/tearoff/">Running.</a></li>
           <li>For anything that must outlive every tab, a port is the wrong tool. Keep the durable part on a server and make fresh ports when a page opens. This site's <a href="/hub/">hub</a> keeps its registry on a server for that reason.</li>
+          <li>Two service workers on two sites can hold the two ends of one port, if a page of each site carries it across once. The browser stops an idle service worker and the port goes with it, without telling the other end, so give each question a time limit and carry a new port across when it passes. That needs a page of each site still open. <a href="/patterns/swpair/">Running.</a></li>
+          <li>Two shared workers joined the same way stay joined while each site has a tab open, with no time limits. <a href="/patterns/swpair/#built-sharedpair">Running.</a></li>
+          <li>A port that came over a port does not say who holds its other end: a message on it has an empty <code>origin</code> and no <code>source</code>. Ask the other end to sign a random value if you need to know. <a href="/patterns/swpair/#built-whoholds">Running.</a></li>
         </ul>
-        <div class="live-set" data-demos="reload built-shop tearoff built-upgrade"><h3>Working examples</h3></div>
+        <div class="live-set" data-demos="reload built-shop tearoff built-upgrade swpair built-sharedpair"><h3>Working examples</h3></div>
       </section>
 
       <section id="alive">
