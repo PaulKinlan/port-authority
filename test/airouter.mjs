@@ -146,8 +146,9 @@ const lent = await library.locator("#lent").innerText();
 check("a port lent for 3 requests answers 3", /Request 3: This is the practice model/.test(lent));
 check("and refuses the fourth", /Request 4 was refused: This port was lent/.test(lent), lent.split("\n")[0]);
 
-// The main site is a third site, and on the live deployment it is on a different
-// registrable domain from the router, so the browser gives the frame separate storage.
+// The main site is another site. Whether the browser gives the frame separate
+// storage there depends on the browser and its settings, so this only reports it.
+// The router does not rely on it: grants are stored under the embedding site's address.
 const main = await ctx.newPage();
 await main.goto(base("hub") + "/ai-router/");
 await main.waitForSelector("#choose:not([disabled])");
@@ -162,7 +163,7 @@ await main.waitForFunction(() => /pieces/.test(document.querySelector("#log").te
 check("the explainer page's own demo gets an answer", /practice model/.test(await main.locator("#answer").innerText()));
 const mainFrame = main.frames().find((f) => f.url().includes("/frame.html"));
 const mainKept = await mainFrame.evaluate(() => Object.keys(localStorage).join(" "));
-console.log(`note the frame inside ${base("hub")} ${/router\.accounts/.test(mainKept) ? "shares storage with the router's own pages (same site)" : "has storage of its own (another site)"}`);
+console.log(`note in this browser the frame inside ${base("hub")} ${/router\\.accounts/.test(mainKept) ? "can see the storage of the router's own pages" : "has storage of its own"}`);
 await main.close();
 
 // The router's home page shows both sites and what they used.
