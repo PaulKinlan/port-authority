@@ -5,6 +5,7 @@ import { far } from "/farport.js";
 import { swRouter } from "/patterns/router.js";
 import { built2 } from "/patterns/built2.js";
 import { further } from "/patterns/further.js";
+import { pairBuilt } from "/patterns/pairs.js";
 
 const logBox = (stage, name, title, extra = "", what = {}) => {
   const box = stage.box(name, { html: `<div class="here"><h4>${title}</h4>${extra}<ul class="log"></ul></div>`, ...what });
@@ -2095,6 +2096,7 @@ process([input]) {
   swRouter,
   ...built2,
   ...further,
+  ...pairBuilt,
 ];
 
 // Ideas that are already what a demo on the site does. key: "pattern:index".
