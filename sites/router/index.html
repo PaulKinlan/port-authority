@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Your AI router</title>
+  <link rel="stylesheet" href="/base.css">
+  <link rel="stylesheet" href="/router.css">
+</head>
+<body>
+  <div class="wrap">
+    <header class="head">
+      <a class="wordmark" href="/">AI router</a>
+      <h1>Your accounts, and the sites that may use them.</h1>
+      <p class="note">Add an API key here once. When a site asks for an AI model, a window from this address opens and you choose which account it may use. The site gets a way to send prompts. It never gets the key. This is an experiment from <a id="main-link" href="#">Port Authority</a>.</p>
+    </header>
+    <main class="grid">
+      <section class="panel stack">
+        <h2>Your accounts</h2>
+        <p class="small muted">Keys are kept in this browser, in the storage for this address. They are not sent to the router's server. They are sent only to the provider they belong to. These pages are served with a rule that stops them connecting to any address except the router and the providers in the list below.</p>
+        <ul class="rows" id="accounts"></ul>
+        <details id="add">
+          <summary class="button quiet">Add an account</summary>
+          <form class="fields" id="form">
+            <div><label for="provider">Provider</label><select id="provider"></select><p class="small muted" id="provider-note"></p></div>
+            <div><label for="label">Name for this account</label><input type="text" id="label" required maxlength="40" placeholder="Work key"></div>
+            <div id="key-row"><label for="key">API key</label><input type="password" id="key" autocomplete="off"></div>
+            <div><label for="models">Models, separated by commas</label><input type="text" id="models" required></div>
+            <div class="actions"><button class="accent">Save</button><span class="small muted" id="form-state"></span></div>
+          </form>
+        </details>
+      </section>
+
+      <section class="panel stack">
+        <h2>Sites you have allowed</h2>
+        <p class="small muted">This list is kept on the router's server so that it can be checked on every request. Stopping a site takes effect on its next request.</p>
+        <ul class="rows" id="grants"><li class="muted">Loading.</li></ul>
+      </section>
+
+      <section class="panel stack">
+        <h2>Sites to try it on</h2>
+        <ul class="rows" id="try"></ul>
+      </section>
+    </main>
+  </div>
+  <script type="module" src="/home.js"></script>
+</body>
+</html>

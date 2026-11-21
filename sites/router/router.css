@@ -1,0 +1,31 @@
+/* The AI router's own pages. Builds on /base.css. */
+:root { --accent: #7c5cff; --on-accent: #fff; }
+.head { padding: 2rem 0 1rem; display: grid; gap: 0.8rem; }
+.head h1 { font-size: var(--step-3); font-stretch: 100%; letter-spacing: -0.03em; line-height: 1; }
+.grid { display: grid; gap: 1.2rem; padding-bottom: 4rem; }
+.grid h2 { font-size: var(--step-1); letter-spacing: -0.01em; }
+.rows { list-style: none; margin: 0; padding: 0; display: grid; }
+.rows > li { display: flex; gap: 1rem; justify-content: space-between; align-items: center; flex-wrap: wrap; padding: 0.7rem 0; border-top: 1px solid var(--line); }
+.rows > li:first-child { border-top: 0; }
+.tag { font: 600 var(--step--1)/1 var(--body); padding: 0.3em 0.6em; border-radius: 999px; border: 1.5px solid var(--line); white-space: nowrap; }
+.tag.active { border-color: var(--teal); color: var(--teal); }
+.tag.off { color: var(--muted); }
+form.fields { display: grid; gap: 0.8rem; max-width: 34rem; }
+input[type="password"], input[type="url"] { font: inherit; color: inherit; background: var(--panel); border: 2px solid var(--line); border-radius: 10px; padding: 0.65em 0.8em; width: 100%; }
+.note { border-left: 6px solid var(--accent); padding: 0.2rem 0 0.2rem 1rem; }
+.error { color: var(--red); font-weight: 600; }
+.actions { display: flex; gap: 0.6rem; flex-wrap: wrap; align-items: center; }
+
+/* The picker window */
+body.picker { padding: 1.2rem; }
+.picker h1 { font-size: var(--step-2); font-stretch: 100%; letter-spacing: -0.02em; line-height: 1.05; overflow-wrap: anywhere; }
+.picker .origin { font: 600 var(--step--1)/1.3 var(--mono); background: color-mix(in srgb, var(--ink) 9%, transparent); padding: 0.4em 0.6em; border-radius: 8px; display: inline-block; overflow-wrap: anywhere; }
+.choices { display: grid; gap: 0.5rem; margin: 0; padding: 0; border: 0; }
+.choices label { display: grid; grid-template-columns: auto 1fr; gap: 0.1rem 0.7rem; align-items: start; padding: 0.7rem 0.8rem; border: 2px solid var(--line); border-radius: 12px; cursor: pointer; margin: 0; font-weight: 400; }
+.choices label:has(input:checked) { border-color: var(--ink); background: var(--panel); }
+.choices input { margin-top: 0.3rem; accent-color: var(--accent); }
+.choices strong { display: block; }
+.limits { display: grid; grid-template-columns: 1fr 1fr; gap: 0.8rem; }
+summary.button { display: inline-flex; }
+details form.fields { margin-top: 1rem; }
+#provider-note { margin-top: .3rem; }

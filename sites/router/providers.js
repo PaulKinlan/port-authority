@@ -1,0 +1,120 @@
+// The providers the router can call. Each one turns a prompt into pieces of
+// text. This file runs in pages served from the router's own address: the
+// router frame inside a site, and the router's home page when it tests a key.
+
+// The router's pages are served with a Content-Security-Policy that lets them
+// connect to these addresses and nowhere else, so this list is fixed. Adding a
+// provider means adding it here and to ROUTER_CONNECT in src/worker.js.
+export const PROVIDERS = {
+  practice: { name: "Practice model", needsKey: false, models: ["not a real model"], note: "Not a real model. It needs no key and makes no network call, so you can try the whole flow." },
+  builtin: { name: "This browser's built-in model", needsKey: false, models: ["built-in"], note: "Runs on this device. Only offered when the browser has the Prompt API and the model is downloaded." },
+  anthropic: { name: "Anthropic", needsKey: true, kind: "anthropic", baseUrl: "https://api.anthropic.com/v1", models: ["claude-sonnet-5-5", "claude-haiku-5-5", "claude-opus-5-5"], note: "Your key from console.anthropic.com." },
+  openai: { name: "OpenAI", needsKey: true, kind: "chat", baseUrl: "https://api.openai.com/v1", models: ["gpt-5-mini"], note: "Your key from platform.openai.com. Change the model names to the ones you use." },
+  openrouter: { name: "OpenRouter", needsKey: true, kind: "chat", baseUrl: "https://openrouter.ai/api/v1", models: ["openrouter/auto"], note: "Your key from openrouter.ai. Change the model names to the ones you use." },
+  gemini: { name: "Google Gemini", needsKey: true, kind: "chat", baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai", models: ["gemini-2.5-flash"], note: "Your key from aistudio.google.com. Change the model names to the ones you use." },
+  ollama: { name: "Ollama on this computer", needsKey: false, local: true, kind: "chat", baseUrl: "http://localhost:11434/v1", models: ["llama3.2"], note: "No key. Ollama must be running and must allow this address: start it with OLLAMA_ORIGINS set to the router's address." },
+};
+
+// True only when the browser has the Prompt API and its model is already on
+// this device. A model that still has to download is not offered.
+export async function hasBuiltin() {
+  if (typeof self.LanguageModel === "undefined") return false;
+  try { return (await self.LanguageModel.availability()) === "available"; } catch { return false; }
+}
+
+// Read a server-sent event stream and yield each event's data as parsed JSON.
+async function* events(response) {
+  const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
+  let buffer = "";
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += value;
+    let end;
+    while ((end = buffer.indexOf("\n")) >= 0) {
+      const line = buffer.slice(0, end).trim();
+      buffer = buffer.slice(end + 1);
+      if (!line.startsWith("data:")) continue;
+      const data = line.slice(5).trim();
+      if (!data || data === "[DONE]") continue;
+      try { yield JSON.parse(data); } catch { /* a partial or non-JSON line */ }
+    }
+  }
+}
+
+async function refuse(response, who) {
+  let detail = "";
+  try { const body = await response.json(); detail = (body.error && (body.error.message || body.error)) || ""; } catch { /* no body */ }
+  const error = new Error(`${who} answered ${response.status}${detail ? ": " + String(detail).slice(0, 300) : ""}`);
+  error.code = response.status === 401 || response.status === 403 ? "key-refused" : "provider";
+  return error;
+}
+
+const wait = (ms, signal) => new Promise((resolve, reject) => {
+  const timer = setTimeout(resolve, ms);
+  signal?.addEventListener("abort", () => { clearTimeout(timer); reject(signal.reason); }, { once: true });
+});
+
+// account: { provider, key, model }
+// ask:     { system, messages: [{ role: "user" | "assistant", content: "text" }], maxTokens }
+// Yields strings. Returns { tokensIn, tokensOut } when the provider reports them.
+export async function* generate(account, ask, signal) {
+  const messages = (ask.messages || []).map((m) => ({ role: m.role === "assistant" ? "assistant" : "user", content: String(m.content) }));
+  const system = ask.system ? String(ask.system) : "";
+  const maxTokens = Math.min(Math.max(Number(ask.maxTokens) || 600, 1), 4000);
+  const usage = { tokensIn: 0, tokensOut: 0 };
+
+  if (account.provider === "practice") {
+    const last = messages.at(-1)?.content || "";
+    const reply = `This is the practice model. It is not an AI and it did not send your words anywhere. You asked: "${last.slice(0, 160)}". With a real account chosen in the router window, a model's answer would arrive here, a few words at a time, exactly like this.`;
+    for (const word of reply.split(" ")) { await wait(45, signal); yield word + " "; }
+    usage.tokensIn = Math.ceil((system.length + messages.reduce((n, m) => n + m.content.length, 0)) / 4);
+    usage.tokensOut = Math.ceil(reply.length / 4);
+    return usage;
+  }
+
+  if (account.provider === "builtin") {
+    if (!(await hasBuiltin())) { const e = new Error("This browser has no built-in model ready to use."); e.code = "provider"; throw e; }
+    const session = await self.LanguageModel.create({ initialPrompts: [...(system ? [{ role: "system", content: system }] : []), ...messages.slice(0, -1)], signal });
+    try {
+      for await (const piece of session.promptStreaming(messages.at(-1)?.content || "", { signal })) yield piece;
+    } finally { session.destroy?.(); }
+    return usage;
+  }
+
+  const kind = PROVIDERS[account.provider]?.kind;
+  if (kind === "anthropic") {
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST", signal,
+      headers: { "content-type": "application/json", "x-api-key": account.key, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
+      body: JSON.stringify({ model: account.model, max_tokens: maxTokens, stream: true, messages, ...(system ? { system } : {}) }),
+    });
+    if (!response.ok) throw await refuse(response, "Anthropic");
+    for await (const event of events(response)) {
+      if (event.type === "content_block_delta" && event.delta?.type === "text_delta") yield event.delta.text;
+      else if (event.type === "message_start") usage.tokensIn = event.message?.usage?.input_tokens || 0;
+      else if (event.type === "message_delta") usage.tokensOut = event.usage?.output_tokens || usage.tokensOut;
+      else if (event.type === "error") { const e = new Error("Anthropic: " + (event.error?.message || "error")); e.code = "provider"; throw e; }
+    }
+    return usage;
+  }
+
+  if (kind === "chat") {
+    const base = PROVIDERS[account.provider].baseUrl;
+    const limit = base.includes("api.openai.com") ? { max_completion_tokens: maxTokens } : { max_tokens: maxTokens };
+    const response = await fetch(base + "/chat/completions", {
+      method: "POST", signal,
+      headers: { "content-type": "application/json", ...(account.key ? { authorization: "Bearer " + account.key } : {}) },
+      body: JSON.stringify({ model: account.model, stream: true, stream_options: { include_usage: true }, ...limit, messages: [...(system ? [{ role: "system", content: system }] : []), ...messages] }),
+    });
+    if (!response.ok) throw await refuse(response, PROVIDERS[account.provider].name);
+    for await (const event of events(response)) {
+      const piece = event.choices?.[0]?.delta?.content;
+      if (piece) yield piece;
+      if (event.usage) { usage.tokensIn = event.usage.prompt_tokens || 0; usage.tokensOut = event.usage.completion_tokens || 0; }
+    }
+    return usage;
+  }
+
+  const e = new Error("The router does not know the provider \"" + account.provider + "\"."); e.code = "provider"; throw e;
+}

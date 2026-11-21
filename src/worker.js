@@ -12,15 +12,23 @@ const LABELS = {
   "pa-florist": "florist", florist: "florist",
   "pa-library": "library", library: "library",
   "pa-planner": "planner", planner: "planner",
+  "pa-router": "router", router: "router",
 };
-const PROD = { main: "portauthority", florist: "pa-florist", library: "pa-library", planner: "pa-planner" };
-const LOCAL = { main: "hub", florist: "florist", library: "library", planner: "planner" };
+const PROD = { main: "portauthority", florist: "pa-florist", library: "pa-library", planner: "pa-planner", router: "pa-router" };
+const LOCAL = { main: "hub", florist: "florist", library: "library", planner: "planner", router: "router" };
 
 const TYPES = {
   html: "text/html; charset=utf-8", js: "text/javascript; charset=utf-8", mjs: "text/javascript; charset=utf-8",
   css: "text/css; charset=utf-8", json: "application/json", svg: "image/svg+xml", txt: "text/plain; charset=utf-8",
   png: "image/png", ico: "image/x-icon", md: "text/markdown; charset=utf-8",
 };
+
+// Keep this list the same as PROVIDERS in sites/router/providers.js.
+const ROUTER_CONNECT = ["https://api.anthropic.com", "https://api.openai.com", "https://openrouter.ai", "https://generativelanguage.googleapis.com", "http://localhost:11434"];
+const ROUTER_CSP = [
+  "default-src 'none'", "script-src 'self'", "worker-src 'self'", "style-src 'self' https://fonts.googleapis.com", "font-src https://fonts.gstatic.com",
+  "img-src 'self' data:", "connect-src 'self' " + ROUTER_CONNECT.join(" "), "base-uri 'none'", "form-action 'none'",
+].join("; ");
 
 function label(host) { return host.split(":")[0].split(".")[0]; }
 function siteFor(host) { return LABELS[label(host)] || "main"; }
@@ -84,6 +92,12 @@ async function serve(env, site, pathname) {
       if (ext === "html") {
         headers["reporting-endpoints"] = 'default="/lab/reports"';
         headers["document-policy"] = "include-js-call-stacks-in-crash-reports";
+      }
+      // The router's pages handle API keys. They may run only their own
+      // scripts and may connect only to the router and the listed providers.
+      if (site === "router") {
+        headers["content-security-policy"] = ROUTER_CSP + (path === "/frame.html" ? "" : "; frame-ancestors 'none'");
+        headers["referrer-policy"] = "no-referrer";
       }
       return new Response(body, { headers });
     }
@@ -155,6 +169,17 @@ export default {
       if (!/^[a-z0-9]{6,12}$/.test(code)) return new Response("bad code", { status: 400 });
       if (request.headers.get("upgrade") !== "websocket") return new Response("expected websocket", { status: 426 });
       return env.MEET.get(env.MEET.idFromName(code)).fetch(request);
+    }
+
+    // /r/<person id>/<action>: the AI router's list of grants. Only pages served
+    // from the router's own address may call it, and only that site has it.
+    if (url.pathname.startsWith("/r/") && site === "router") {
+      if (!env.ROUTER) return new Response("the router store is off", { status: 404 });
+      const [, , id, action] = url.pathname.split("/");
+      if (!/^[A-Za-z0-9_-]{16,64}$/.test(id || "") || !/^[a-z]{3,12}$/.test(action || "")) return new Response("bad address", { status: 400 });
+      if (request.method !== "POST") return new Response("expected POST", { status: 405 });
+      if (request.headers.get("origin") !== url.origin) return new Response("wrong origin", { status: 403 });
+      return env.ROUTER.get(env.ROUTER.idFromName(id)).fetch(request);
     }
 
     // The lab's results: every browser that runs the lab reports what it saw.
@@ -800,4 +825,77 @@ export class Meet {
   }
 
   webSocketClose(ws) { try { ws.close(1000); } catch (err) {} }
+}
+
+// ------------------------------------------------------------ the AI router
+
+// One per person. It holds the list of grants: which site may use which of the
+// person's accounts, how much it has used, and when that stops. It never holds
+// an API key and never sees a prompt. For each grant it keeps an unlock key.
+// The router frame inside a site stores the API key encrypted with it, and has
+// to ask for it again on every request. Revoking a grant deletes the unlock
+// key, so the copy stored inside that site can no longer be read.
+export class Router {
+  constructor(state) { this.storage = state.storage; }
+
+  async fetch(request) {
+    const action = new URL(request.url).pathname.split("/")[3];
+    let body;
+    try { body = await request.json(); } catch { return Response.json({ ok: false, why: "bad request" }, { status: 400 }); }
+    const grants = (await this.storage.get("grants")) || {};
+    const save = () => this.storage.put("grants", grants);
+    const state = (g) => g.revoked ? "revoked" : Date.now() > g.expires ? "expired" : g.used >= g.requests ? "used up" : "active";
+    const view = (g) => ({ id: g.id, site: g.site, label: g.label, provider: g.provider, model: g.model, requests: g.requests, used: g.used, tokensIn: g.tokensIn, tokensOut: g.tokensOut, made: g.made, expires: g.expires, last: g.last, state: state(g) });
+
+    if (action === "grant" || action === "list" || action === "revoke") {
+      // The first owner key presented claims this store. After that only that key opens it.
+      const key = String(body.owner || "");
+      const have = await this.storage.get("owner");
+      const mine = await sha(key);
+      if (!have) { if (key.length < 20) return Response.json({ ok: false, why: "weak key" }, { status: 403 }); await this.storage.put("owner", mine); }
+      else if (have !== mine) return Response.json({ ok: false, why: "wrong key" }, { status: 403 });
+
+      if (action === "list") return Response.json({ ok: true, grants: Object.values(grants).sort((a, b) => b.made - a.made).map(view) });
+      if (action === "revoke") {
+        const g = grants[body.id];
+        if (g) { g.revoked = true; delete g.wrap; await save(); }
+        return Response.json({ ok: true });
+      }
+      let site;
+      try { site = new URL(String(body.site)).origin; } catch { return Response.json({ ok: false, why: "bad site" }, { status: 400 }); }
+      if (Object.keys(grants).length >= 200) return Response.json({ ok: false, why: "too many grants, revoke some first" }, { status: 400 });
+      // One live grant per site: a new one replaces the old.
+      for (const old of Object.values(grants)) if (old.site === site && !old.revoked) { old.revoked = true; delete old.wrap; }
+      const clamp = (n, lo, hi, d) => Math.min(hi, Math.max(lo, Math.round(Number(n)) || d));
+      const g = {
+        id: rand(9), secret: await sha(String(body.secret || "")), wrap: rand(32), site,
+        label: String(body.label || "").slice(0, 80), provider: String(body.provider || "").slice(0, 24), model: String(body.model || "").slice(0, 80),
+        requests: clamp(body.requests, 1, 100000, 20), used: 0, tokensIn: 0, tokensOut: 0,
+        made: Date.now(), expires: Date.now() + clamp(body.days, 1, 365, 7) * 86400000, last: 0,
+      };
+      if (String(body.secret || "").length < 20) return Response.json({ ok: false, why: "weak secret" }, { status: 400 });
+      grants[g.id] = g;
+      await save();
+      return Response.json({ ok: true, id: g.id, wrap: g.wrap, grant: view(g) });
+    }
+
+    // The rest are asked by the router frame inside a site, which proves it
+    // holds the grant by its secret.
+    const g = grants[body.id];
+    if (!g || g.secret !== (await sha(String(body.secret || "")))) return Response.json({ ok: false, why: "unknown grant" });
+    if (action === "status") return Response.json({ ok: state(g) === "active", why: state(g), grant: view(g) });
+    if (action === "use") {
+      if (state(g) !== "active") return Response.json({ ok: false, why: state(g), grant: view(g) });
+      g.used++; g.last = Date.now();
+      await save();
+      return Response.json({ ok: true, wrap: g.wrap, grant: view(g) });
+    }
+    if (action === "report") {
+      g.tokensIn += Math.max(0, Math.round(Number(body.tokensIn)) || 0);
+      g.tokensOut += Math.max(0, Math.round(Number(body.tokensOut)) || 0);
+      await save();
+      return Response.json({ ok: true });
+    }
+    return Response.json({ ok: false, why: "unknown action" }, { status: 404 });
+  }
 }

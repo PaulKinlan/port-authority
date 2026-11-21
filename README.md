@@ -15,6 +15,7 @@ Live (interim): https://portauthority.kinlan-test.workers.dev
 | `sites/main/hub/popup.html` | The window sites open to ask the user (the picker) |
 | `sites/main/bridge.mjs` | Run beside an ACP agent; connects it to the hub and gives it the registry as an MCP server |
 | `sites/florist`, `library`, `planner` | Three demo sites, each served on its own origin |
+| `sites/router/` | The AI router, on its own origin. `router.js` is what a site loads (`connect()`, `fromPort()`), `frame.html` is the hidden frame that holds a site's grant and calls the model provider, `pick.html` is the window where the person chooses an account, `index.html` lists accounts and grants. Explained at `sites/main/ai-router/`; used by `sites/florist/card/` and `sites/library/digest/` |
 | `sites/shared/hawser.js` | Hawser (working name): Comlink's idea rebuilt on today's platform. One file, no dependencies, served on every origin |
 | `sites/main/comlink/` | The Comlink chapter. Three demos that do real work, each with Comlink 4.4.2 beside Hawser: a fractal on two workers (`render-worker.js`), a third-party widget on another origin (`sites/shared/comlink/widget.html`), and a journal in a locked OPFS file (`journal-worker.js`). Then how Comlink works and what has changed |
 | `sites/shared/` | CSS and the patch-bay diagram component used by the demos |
