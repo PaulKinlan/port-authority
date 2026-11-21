@@ -55,7 +55,7 @@ const html = `<!doctype html>
   <div class="wrap">
     <header class="site-bar">
       <a class="wordmark" href="/">Port Authority</a>
-      <nav><a href="/">Experiments</a><a href="/guide/">The guide</a><a href="/patterns/">Port patterns</a><a href="/lab/">The lab</a><a href="/reading/" aria-current="page">Further reading</a><a href="/hub/">Your hub</a></nav>
+      <nav><a href="/">Experiments</a><a href="/guide/">The guide</a><a href="/patterns/">Port patterns</a><a href="/lab/">The lab</a><a href="/missing/">What is missing</a><a href="/reading/" aria-current="page">Further reading</a><a href="/hub/">Your hub</a></nav>
     </header>
     <div class="stack" style="padding-block:2.5rem 1.5rem; --gap:1.1rem">
       <h1 style="font-size:var(--step-3)">Further reading on message ports</h1>
