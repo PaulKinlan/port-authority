@@ -28,6 +28,15 @@ for (const id of ["hello", "reply", "attenuate", "exchange", "stream"]) { await 
 await wait(800);
 await click("#hello", "Open a channel"); await click("#hello", "Send a ping"); await wait(400);
 check("hello: pong comes back", /heard pong 1/.test(await page.locator('#hello .box[data-name="page"]').innerText()));
+// Every box is drawn as what it is, with its address.
+const kind = (sel, name) => page.locator(`${sel} .ctx:has(.box[data-name="${name}"])`).getAttribute("data-kind");
+const drawn = (sel, name) => page.locator(`${sel} .ctx:has(.box[data-name="${name}"])`).evaluate((el) => [...el.querySelectorAll(".ctx-bar, .ctx-foot")].map((part) => part.textContent).join(" | "));
+check("shapes: this page is a window with its address in the bar", (await kind("#hello", "page")) === "window" && /\/patterns\//.test(await drawn("#hello", "page")), await drawn("#hello", "page"));
+check("shapes: a sandboxed frame is an iframe with about:srcdoc underneath", (await kind("#hello", "frame")) === "iframe" && /<iframe sandbox>.*about:srcdoc/.test(await drawn("#hello", "frame")));
+check("shapes: a real page in a frame shows its URL", /<iframe>[^]*\/patterns\/peer\.html\?name=/.test(await page.locator("#exchange .ctx").first().evaluate((el) => el.querySelector(".ctx-bar").textContent + el.querySelector(".ctx-foot").textContent)));
+check("shapes: the shared worker shows its script", (await kind("#exchange", "worker")) === "shared" && /SharedWorker.*\/patterns\/exchange\.js/.test(await drawn("#exchange", "worker")));
+check("shapes: the key under a diagram lists what is in it", /Window.*<iframe>.*MessageChannel/s.test(await page.locator("#hello .stage-legend").innerText()));
+check("shapes: the page has the full key", (await page.locator("#key .stage-legend > div").count()) === 9);
 await click("#reply", "Client one asks"); await click("#reply", "Client two asks"); await wait(2200);
 check("reply: each client gets its own answer", /answer to #1: 7 \(for one\)/.test(await frameText("#reply", "one")) && /\(for two\)/.test(await frameText("#reply", "two")));
 await click("#attenuate", "Share read-only"); await wait(300);

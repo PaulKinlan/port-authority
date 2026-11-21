@@ -5,10 +5,8 @@
 const NAMES = ["orders", "kitchen", "driver"];
 const COLORS = { orders: "red", kitchen: "teal", driver: "yellow" };
 
-const routerBox = (stage, title, extra = "") => {
-  const box = stage.box("router", { html: `<div class="here"><h4>${title}</h4><p class="small" style="margin:0 0 .3rem">Knows: <strong data-table>nobody yet</strong></p><p class="small" style="margin:0 0 .3rem">Passed on: <strong data-routed>0</strong>. Undelivered: <strong data-undelivered>0</strong></p>${extra}<p class="small" data-last style="margin:0;min-height:2.8em;font-family:var(--mono)"></p></div>` });
-  box.node.style.flex = "1 1 100%";   // the router sits under the windows, as wide as all of them
-  box.node.style.minHeight = "0"; box.node.style.height = "auto";
+const routerBox = (stage, title, what, extra = "") => {
+  const box = stage.box("router", { ...what, wide: true, html: `<div class="here"><h4>${title}</h4><p class="small" style="margin:0 0 .3rem">Knows: <strong data-table>nobody yet</strong></p><p class="small" style="margin:0 0 .3rem">Passed on: <strong data-routed>0</strong>. Undelivered: <strong data-undelivered>0</strong></p>${extra}<p class="small" data-last style="margin:0;min-height:2.8em;font-family:var(--mono)"></p></div>` });
   const q = (name) => box.node.querySelector(`[data-${name}]`);
   box.show = (state) => {
     q("table").textContent = state.table.join(", ") || "nobody";
@@ -62,7 +60,7 @@ onconnect = ({ ports: [port] }) => {
   ] },
   async setup(stage, ui) {
     const boxes = windowBoxes(stage, "shared");
-    const hub = routerBox(stage, "Router, a shared worker");
+    const hub = routerBox(stage, "Router, a shared worker", { kind: "shared", url: "/patterns/router-worker.js" });
     if (!("SharedWorker" in self)) { hub.node.querySelector("[data-last]").textContent = "This browser has no SharedWorker."; return; }
     // This page only watches the router. It is not one of the windows.
     const watch = new SharedWorker("/patterns/router-worker.js").port;
@@ -98,7 +96,7 @@ onmessage = async (event) => {
   ] },
   async setup(stage, ui) {
     const boxes = windowBoxes(stage, "sw");
-    const hub = routerBox(stage, "Router, a service worker", `<p class="small" style="margin:0 0 .3rem">Times it asked who is here: <strong data-rollcalls>0</strong></p>`);
+    const hub = routerBox(stage, "Router, a service worker", { kind: "service", url: "/patterns/route-sw.js", scope: "/patterns/routed/" }, `<p class="small" style="margin:0 0 .3rem">Times it asked who is here: <strong data-rollcalls>0</strong></p>`);
     if (!("serviceWorker" in navigator)) { hub.node.querySelector("[data-last]").textContent = "This browser has no service worker."; return; }
     const onMessage = ({ data }) => { if (!hub.node.isConnected) return navigator.serviceWorker.removeEventListener("message", onMessage); if (data.state) hub.show(data.state); };
     navigator.serviceWorker.addEventListener("message", onMessage);
@@ -116,23 +114,32 @@ onmessage = async (event) => {
 // The data flow, drawn. Colours come from the page, so it follows the theme.
 export const routerDiagram = `<figure class="flow"><svg viewBox="0 0 520 590" role="img" aria-labelledby="flow-title flow-desc" xmlns="http://www.w3.org/2000/svg">
   <title id="flow-title">How a message gets from one window to another through the router</title>
-  <desc id="flow-desc">Three windows each tell the router their name. The orders window posts a message addressed to kitchen. The router looks kitchen up in its table and posts the message to the kitchen window with the sender's name attached. No line joins one window to another.</desc>
+  <desc id="flow-desc">Windows are drawn with rounded corners and an address bar. The router is a worker, drawn with its corners cut off. Three windows each tell the router their name. The orders window posts a message addressed to kitchen. The router looks kitchen up in its table and posts the message to the kitchen window with the sender's name attached. No line joins one window to another.</desc>
   <defs>
     <marker id="flow-tip" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z" fill="context-stroke"/></marker>
   </defs>
   <g font-family="system-ui, sans-serif" fill="currentColor">
     <g fill="none" stroke="currentColor" stroke-width="2">
-      <rect x="14" y="14" width="224" height="92" rx="12"/>
-      <rect x="282" y="14" width="224" height="92" rx="12"/>
-      <rect x="148" y="484" width="224" height="92" rx="12"/>
+      <rect x="14" y="14" width="224" height="92" rx="12"/><path d="M14 38h224"/>
+      <g stroke-width="1.5"><circle cx="28" cy="26" r="3"/><circle cx="39" cy="26" r="3"/><circle cx="50" cy="26" r="3"/></g>
+      <rect x="282" y="14" width="224" height="92" rx="12"/><path d="M282 38h224"/>
+      <g stroke-width="1.5"><circle cx="296" cy="26" r="3"/><circle cx="307" cy="26" r="3"/><circle cx="318" cy="26" r="3"/></g>
+      <rect x="148" y="484" width="224" height="92" rx="12"/><path d="M148 508h224"/>
+      <g stroke-width="1.5"><circle cx="162" cy="496" r="3"/><circle cx="173" cy="496" r="3"/><circle cx="184" cy="496" r="3"/></g>
     </g>
-    <rect x="96" y="206" width="328" height="176" rx="14" fill="var(--yellow, #f5b700)" fill-opacity=".16" stroke="currentColor" stroke-width="2.5"/>
-    <text x="126" y="50" text-anchor="middle" font-weight="800" font-size="19">Orders window</text>
-    <text x="126" y="78" text-anchor="middle" font-size="14" opacity=".8">knows: its name, the router</text>
-    <text x="394" y="50" text-anchor="middle" font-weight="800" font-size="19">Driver window</text>
-    <text x="394" y="78" text-anchor="middle" font-size="14" opacity=".8">knows: its name, the router</text>
-    <text x="260" y="520" text-anchor="middle" font-weight="800" font-size="19">Kitchen window</text>
-    <text x="260" y="548" text-anchor="middle" font-size="14" opacity=".8">knows: its name, the router</text>
+    <text x="62" y="30" font-family="ui-monospace, Menlo, monospace" font-size="11" opacity=".8">/route.html?name=orders</text>
+    <text x="330" y="30" font-family="ui-monospace, Menlo, monospace" font-size="11" opacity=".8">/route.html?name=driver</text>
+    <text x="196" y="500" font-family="ui-monospace, Menlo, monospace" font-size="11" opacity=".8">/route.html?name=kitchen</text>
+    <polygon points="122,218 422,218 436,232 436,380 422,394 122,394 108,380 108,232" fill="var(--line, #c9d1e0)"/>
+    <polygon points="116,212 416,212 430,226 430,374 416,388 116,388 102,374 102,226" fill="var(--muted, #56628a)"/>
+    <polygon points="110,206 410,206 424,220 424,368 410,382 110,382 96,368 96,220" fill="var(--paper, #edf0f4)"/>
+    <polygon points="110,206 410,206 424,220 424,368 410,382 110,382 96,368 96,220" fill="var(--yellow, #f5b700)" fill-opacity=".16" stroke="currentColor" stroke-width="2.5"/>
+    <text x="126" y="66" text-anchor="middle" font-weight="800" font-size="19">Orders window</text>
+    <text x="126" y="90" text-anchor="middle" font-size="14" opacity=".8">knows: its name, the router</text>
+    <text x="394" y="66" text-anchor="middle" font-weight="800" font-size="19">Driver window</text>
+    <text x="394" y="90" text-anchor="middle" font-size="14" opacity=".8">knows: its name, the router</text>
+    <text x="260" y="536" text-anchor="middle" font-weight="800" font-size="19">Kitchen window</text>
+    <text x="260" y="560" text-anchor="middle" font-size="14" opacity=".8">knows: its name, the router</text>
     <text x="260" y="238" text-anchor="middle" font-weight="800" font-size="19">Router</text>
     <text x="260" y="260" text-anchor="middle" font-size="14" opacity=".8">a shared worker, or a service worker</text>
     <g font-family="ui-monospace, Menlo, monospace" font-size="15">

@@ -17,7 +17,12 @@
     </header>
     <div class="stack" style="padding-block:2.5rem 2rem; --gap:1.2rem">
       <h1 style="font-size:var(--step-3)">The six basic patterns</h1>
-      <p>Everything else on this site is built from these. Each box below is a real browsing context on its own origin, the cables appear when a port actually lands, and the dots are real messages. Press the buttons.</p>
+      <p>Everything else on this site is built from these. Each box below is a real page, frame or worker, the cables appear when a port actually lands, and the dots are real messages. Press the buttons.</p>
+    </div>
+    <div class="stack" id="key" style="padding-bottom:2rem; --gap:.8rem">
+      <h2 style="font-size:var(--step-1)">How to read the diagrams</h2>
+      <p class="small">Every box is drawn as what it is, and every page and frame shows its address. Under each diagram is a key to the shapes in it.</p>
+      <div data-legend></div>
     </div>
     <nav class="contents" id="contents" aria-label="All the patterns" style="padding-bottom:2rem"></nav>
     <main id="patterns"></main>
@@ -81,6 +86,8 @@
     import { oneway } from "/patterns/oneway.js";
     import { places } from "/patterns/places.js";
     import { groups } from "/patterns/all.js";
+    import { legend } from "/wire.js";
+    document.querySelector("[data-legend]").innerHTML = legend();
     // Each pattern is shown briefly on this page and has a full page of its own.
     document.getElementById("contents").innerHTML = groups.map((group) => `<div><h3>${group.title}</h3><ol>${group.demos.map((d) => `<li><a href="/patterns/${d.id}/">${d.title}</a></li>`).join("")}</ol></div>`).join("");
     import { runCensus } from "/patterns/census.js";

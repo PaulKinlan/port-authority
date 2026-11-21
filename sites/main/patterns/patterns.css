@@ -2,10 +2,57 @@
 .stage > svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 2; overflow: visible; color: var(--ink); }
 .stage .cable { fill: none; stroke-width: 5; stroke-linecap: round; }
 .stage .pulse { stroke: var(--paper); stroke-width: 2.5; }
-.box { flex: 1 1 11.5rem; height: 11.5rem; border: 2px solid var(--ink); border-radius: 14px; overflow: hidden; background: var(--panel); position: relative; }
+/* Each box on a stage is drawn as what it is. See KINDS in /wire.js. */
+.ctx { flex: 1 1 11.5rem; min-width: 0; position: relative; isolation: isolate; --bar: 1.8rem; --foot: 2.5rem; --tint: color-mix(in srgb, var(--ink) 9%, var(--panel)); }
+.ctx.wide { flex-basis: 100%; }
+.ctx-shape { border: 2px solid var(--ink); border-radius: 12px; overflow: hidden; background: var(--panel); }
+.ctx-bar { height: var(--bar); display: flex; align-items: center; gap: 0.4rem; padding: 0 0.6rem; border-bottom: 1.5px solid var(--ink); background: var(--tint); font: 700 0.72rem/1 var(--mono); white-space: nowrap; }
+.ctx-foot { height: var(--foot); display: flex; align-items: center; padding: 0 0.6rem; border-top: 1.5px solid var(--ink); }
+.ctx-url { font: 0.7rem/1.2 var(--mono); color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.ctx-foot .ctx-url { white-space: normal; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; }
+.ctx-url b { color: var(--ink); font-weight: 700; }
+.ctx-url i { font-style: normal; font-family: var(--body); }
+.glyph { flex: none; width: 1.35rem; height: 1rem; }
+.box { height: 11.5rem; overflow: hidden; background: var(--panel); position: relative; }
+.ctx.wide .box { height: auto; }
 .box iframe { width: 100%; height: 100%; border: 0; display: block; }
-.box.gone { border-style: dashed; background: transparent; }
+/* A window: rounded, with the three buttons and an address bar. It has nothing underneath, so its body is taller. */
+.ctx[data-kind="window"] .box, .ctx[data-kind="part"] .box { height: calc(11.5rem + var(--foot)); }
+.ctx.wide[data-kind] .box { height: auto; }
+.ctx-bar .dots { display: flex; gap: 0.22rem; flex: none; }
+.ctx-bar .dots i { width: 0.5rem; height: 0.5rem; border-radius: 50%; border: 1.5px solid var(--ink); }
+.ctx[data-kind="window"] .ctx-url { flex: 1; background: var(--panel); border: 1px solid var(--line); border-radius: 999px; padding: 0.2rem 0.6rem; }
+/* An iframe: square corners, and its address underneath. */
+.ctx[data-kind="iframe"] .ctx-shape { border-radius: 0; }
+/* Workers have no window. Their corners are cut off. */
+.ctx:is([data-kind="worker"], [data-kind="shared"], [data-kind="service"], [data-kind="worklet"]) { --cut: polygon(13px 0, calc(100% - 13px) 0, 100% 13px, 100% calc(100% - 13px), calc(100% - 13px) 100%, 13px 100%, 0 calc(100% - 13px), 0 13px); }
+.ctx:is([data-kind="worker"], [data-kind="shared"], [data-kind="service"], [data-kind="worklet"]) .ctx-shape { border: 0; border-radius: 0; padding: 2px; background: var(--ink); clip-path: var(--cut); }
+.ctx:is([data-kind="worker"], [data-kind="shared"], [data-kind="service"], [data-kind="worklet"]) .ctx-in { background: var(--panel); clip-path: polygon(11.8px 0, calc(100% - 11.8px) 0, 100% 11.8px, 100% calc(100% - 11.8px), calc(100% - 11.8px) 100%, 11.8px 100%, 0 calc(100% - 11.8px), 0 11.8px); }
+.ctx:is([data-kind="worker"], [data-kind="shared"], [data-kind="service"], [data-kind="worklet"]) :is(.ctx-bar, .ctx-foot) { padding-inline: 1rem; }
+/* A shared worker is one thread for many pages: the same shape, with more behind it. */
+.ctx[data-kind="shared"]::before, .ctx[data-kind="shared"]::after { content: ""; position: absolute; inset: 0; z-index: -1; clip-path: var(--cut); }
+.ctx[data-kind="shared"]::before { translate: 6px 6px; background: var(--muted); }
+.ctx[data-kind="shared"]::after { translate: 12px 12px; background: var(--line); z-index: -2; }
+/* A service worker sits in front of the network: a hatched band. */
+.ctx[data-kind="service"] .ctx-bar { background: repeating-linear-gradient(-55deg, var(--tint) 0 6px, var(--panel) 6px 10px); }
+/* Another device: thick at the top and bottom, like a phone. */
+.ctx[data-kind="device"] .ctx-shape { border-radius: 20px; border-width: 3px; border-block-width: 7px; }
+.ctx[data-kind="device"] .ctx-bar { padding-inline: 0.8rem; }
+/* Part of the page itself: a thin outline and no more. */
+.ctx[data-kind="part"] .ctx-shape { border: 1.5px solid var(--muted); border-radius: 4px; }
+.ctx[data-kind="part"] .ctx-bar { background: none; border-bottom-color: var(--line); color: var(--muted); }
+.ctx.gone .ctx-shape { border-style: dashed; background: transparent; }
+.ctx.gone :is(.ctx-bar, .ctx-foot) { opacity: 0.5; background: none; }
+.box.gone { background: transparent; }
 .box.gone::after { content: "gone"; position: absolute; inset: 0; display: grid; place-items: center; font: 700 var(--step-1) var(--display); color: var(--muted); }
+.stage .jack-end { stroke: var(--ink); stroke-width: 2; }
+.stage-legend { margin: 0.2rem 0 0.5rem; padding: 0; display: flex; flex-wrap: wrap; gap: 0.3rem 1.1rem; font-size: 0.78rem; color: var(--muted); }
+.stage-legend > div { display: flex; align-items: center; gap: 0.35rem; }
+.stage-legend strong { font: 700 0.72rem/1.2 var(--mono); color: var(--ink); }
+.stage-legend.full { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 19rem), 1fr)); gap: 0.7rem 1.6rem; font-size: var(--step--1); margin: 0; }
+.stage-legend.full > div { align-items: start; }
+.stage-legend.full .glyph { width: 2rem; height: 1.5rem; color: var(--ink); margin-top: 0.1rem; }
+.stage-legend.full strong { display: block; font-size: 0.8rem; margin-bottom: 0.15rem; }
 .box .here { padding: 0.7rem 0.8rem; }
 .box .here h4 { font: 800 1rem/1.1 var(--display); margin: 0 0 0.5rem; }
 .box .here .log { font-size: 12px; max-height: none; }
