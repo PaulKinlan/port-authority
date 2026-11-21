@@ -3,9 +3,10 @@
 // ideas it covers (by position in deep.js). Same stage as the patterns.
 import { far } from "/farport.js";
 import { swRouter } from "/patterns/router.js";
+import { built2 } from "/patterns/built2.js";
 
-const logBox = (stage, name, title, extra = "") => {
-  const box = stage.box(name, { html: `<div class="here"><h4>${title}</h4>${extra}<ul class="log"></ul></div>` });
+const logBox = (stage, name, title, extra = "", what = {}) => {
+  const box = stage.box(name, { html: `<div class="here"><h4>${title}</h4>${extra}<ul class="log"></ul></div>`, ...what });
   const ul = box.node.querySelector("ul");
   const say = (text) => { const li = document.createElement("li"); li.textContent = text; ul.prepend(li); while (ul.children.length > 6) ul.lastChild.remove(); };
   return { say, node: box.node, box };
@@ -14,7 +15,7 @@ const logBox = (stage, name, title, extra = "") => {
 // A tab that answers requests for the service worker, for the paths under one prefix.
 // Adds a box for the service worker to the stage. Returns null where there is no service worker.
 const serveFrom = async (stage, prefix) => {
-  const sw = logBox(stage, "sw", "Service Worker");
+  const sw = logBox(stage, "sw", "Service Worker", "", { kind: "service", url: "/patterns/tabserver-sw.js", scope: "/patterns/served/" });
   if (!("serviceWorker" in navigator)) { sw.say("no Service Worker support here"); return null; }
   let handler = () => ({ status: 503, body: "not ready", headers: {} });
   const offer = (worker) => {
@@ -725,7 +726,7 @@ for (const buffer of pool) worker.postMessage({ buffer }, [buffer]);`,
     tour: { steps: [["Start the pool", "Two buffers are made once, and then only moved.", 3500], ["Stop", "The pool stops. Two buffers were ever made."]] },
     async setup(stage, ui) {
       const me = stage.box("page", { html: `<div class="here"><h4>This page</h4><p class="small" style="margin:0 0 .25rem">Buffers ever made: <strong data-made>0</strong></p><p class="small" style="margin:0 0 .25rem">Round trips: <strong data-trips>0</strong></p><p class="small" style="margin:0 0 .25rem">Moved: <strong data-moved>0</strong> MB</p><p class="small" style="margin:0 0 .25rem">Copied: <strong>0</strong> MB</p><p class="small" style="margin:0">Held here right now: <strong data-held>0</strong> MB</p></div>` });
-      const wbox = logBox(stage, "worker", "Worker");
+      const wbox = logBox(stage, "worker", "Worker", "", { kind: "worker", url: "blob:" });
       const q = (name) => me.node.querySelector(`[data-${name}]`);
       const SIZE = 8 * 1024 * 1024;
       const worker = new Worker(URL.createObjectURL(new Blob([`onmessage = ({ data }) => { new Uint8Array(data.buffer).fill(data.n % 251); postMessage({ buffer: data.buffer, n: data.n }, [data.buffer]); };`], { type: "text/javascript" })));
@@ -823,7 +824,7 @@ for await (const chunk of file) { sum = checksum(sum, chunk); postMessage({ read
     tour: { steps: [["Stream 64 MB to the worker", "The worker is handed a stream. Each megabyte is made when the worker asks for it, and checked as it lands.", 6000]] },
     async setup(stage, ui) {
       const me = stage.box("page", { html: `<div class="here"><h4>This page makes the file</h4><div style="height:.7rem;border:1.5px solid currentColor;border-radius:99px;overflow:hidden;margin:0 0 .5rem"><div data-bar style="height:100%;width:0;background:var(--teal)"></div></div><p class="small" style="margin:0 0 .25rem">Made so far: <strong data-made>0</strong> MB</p><p class="small" style="margin:0">Most held at once: <strong data-peak>0</strong> MB</p></div>` });
-      const wbox = logBox(stage, "worker", "Worker checks it");
+      const wbox = logBox(stage, "worker", "Worker checks it", "", { kind: "worker", url: "blob:" });
       const q = (name) => me.node.querySelector(`[data-${name}]`);
       const worker = new Worker(URL.createObjectURL(new Blob([`onmessage = async ({ data }) => {
         const reader = data.file.getReader(); let bytes = 0, sum = 0;
@@ -865,7 +866,7 @@ worker.postMessage({ sign: "order 1" });     <span class="c">// the page can ask
     tour: { steps: [["Make a key and give it to the worker", "The page makes a key nobody can read, posts it to its worker and forgets it."], ["Ask the worker to sign", "The worker signs. This page checks the signature with the public half."], ["Page: try to sign by itself", "The page has no key any more."]] },
     async setup(stage, ui) {
       const me = logBox(stage, "page", "This page");
-      const wbox = logBox(stage, "worker", "This page's worker");
+      const wbox = logBox(stage, "worker", "This page's worker", "", { kind: "worker", url: "blob:" });
       const ECDSA = { name: "ECDSA", namedCurve: "P-256" }, SIGN = { name: "ECDSA", hash: "SHA-256" };
       const worker = new Worker(URL.createObjectURL(new Blob([`let key = null; onmessage = async ({ data }) => {
         if (data.key) { key = data.key; return postMessage({ log: "holding the key. Nobody can read it, me included." }); }
@@ -1122,7 +1123,7 @@ onmessage = ({ data }) => { const ctx = data.surface.getContext("2d"); for (;;) 
     tour: { steps: [["Draw on the page's thread", "The page draws for two seconds. Watch its counter: it stops.", 3200], ["Draw in the worker", "The worker draws the same frames into a canvas it was handed. The counter keeps going.", 3200]] },
     async setup(stage, ui) {
       const me = stage.box("page", { html: `<div class="here" style="display:flex;flex-direction:column;height:100%;box-sizing:border-box"><h4>Drawn by this page</h4><p class="small" style="margin:0 0 .3rem">Page ticks: <strong data-ticks>0</strong></p><canvas width="240" height="135" style="width:100%;flex:1;min-height:0;display:block;object-fit:contain;background:#000" aria-label="Drawn on the page's own thread"></canvas><p class="small" data-said style="margin:.3rem 0 0;min-height:2.6em"></p></div>` });
-      const wb = stage.box("worker", { html: `<div class="here" style="display:flex;flex-direction:column;height:100%;box-sizing:border-box"><h4>Drawn by a worker</h4><p class="small" style="margin:0 0 .3rem">The canvas below was handed over.</p><canvas width="240" height="135" style="width:100%;flex:1;min-height:0;display:block;object-fit:contain;background:#000" aria-label="Drawn by a worker"></canvas><p class="small" data-said style="margin:.3rem 0 0;min-height:2.6em"></p></div>` });
+      const wb = stage.box("worker", { kind: "worker", url: "blob:", html: `<div class="here" style="display:flex;flex-direction:column;height:100%;box-sizing:border-box"><h4>Drawn by a worker</h4><p class="small" style="margin:0 0 .3rem">The canvas below was handed over.</p><canvas width="240" height="135" style="width:100%;flex:1;min-height:0;display:block;object-fit:contain;background:#000" aria-label="Drawn by a worker"></canvas><p class="small" data-said style="margin:.3rem 0 0;min-height:2.6em"></p></div>` });
       const ticksEl = me.node.querySelector("[data-ticks]");
       const said = (box, text) => (box.node.querySelector("[data-said]").textContent = text);
       let ticks = 0;
@@ -1205,6 +1206,7 @@ sieve.byteLength;                                          <span class="c">// 0:
   },
   {
     pattern: "pipeline", use: [0], id: "built-stages",
+    also: { roundtrip: [2] },   // the same demo also runs on that pattern's page
     title: "Three parties each supply one stage, and none of them sees the others",
     blurb: "A zipped order needs unzipping, turning from bytes into text, and its card number hiding before it is shown. Each of those is a stream stage supplied by a different origin. This page asks each for a stage, joins the three end to end, and pours the file in. Each party sees only what flows through its own stage, and none of them needs to know the others exist.",
     code: `<span class="c">// each party</span>
@@ -1264,8 +1266,8 @@ out.postMessage({ pixels }, [pixels.buffer]);`,
     tour: { steps: [["Connect the decoder to the renderer", "Each worker gets one end of a channel. Frames start to flow between them."], ["Freeze this page for 3 seconds", "The page's counter stops. The picture does not.", 4200]] },
     async setup(stage, ui) {
       const me = logBox(stage, "page", "This page", `<p class="small" style="margin:0 0 .4rem">Page ticks: <strong data-ticks>0</strong></p>`);
-      const dec = logBox(stage, "decoder", "Decoder worker");
-      const screen = stage.box("renderer", { html: `<canvas width="160" height="90" style="width:100%;height:100%;display:block;background:#000" aria-label="Painted by the renderer worker"></canvas>` });
+      const dec = logBox(stage, "decoder", "Decoder worker", "", { kind: "worker", url: "blob:" });
+      const screen = stage.box("renderer", { kind: "worker", url: "blob:", html: `<canvas width="160" height="90" style="width:100%;height:100%;display:block;background:#000" aria-label="Painted by the renderer worker"></canvas>` });
       const ticksEl = me.node.querySelector("[data-ticks]");
       let ticks = 0;
       const beat = setInterval(() => { if (!ticksEl.isConnected) { decoder.terminate(); renderer.terminate(); return clearInterval(beat); } ticksEl.textContent = ++ticks; }, 100);
@@ -1366,7 +1368,7 @@ session.postMessage({ ask: "balance" });        <span class="c">// goes nowhere:
     tour: { steps: [["Sign in", "The page sends a password and gets a session back, as a port."], ["Hand the session to my worker", "The port moves to the worker, which starts asking for the balance."], ["Page: try to use the session", "The page still has its variable. The port behind it has gone.", 1600]] },
     async setup(stage, ui) {
       const me = logBox(stage, "page", "This page signs in");
-      const wbox = logBox(stage, "worker", "This page's worker");
+      const wbox = logBox(stage, "worker", "This page's worker", "", { kind: "worker", url: "blob:" });
       await stage.frame("account", {
         title: "Account service, another origin", color: "yellow",
         script: () => {
@@ -1511,6 +1513,7 @@ pip.addEventListener("pagehide", () => sidebar.append(meter));`,
   },
   {
     pattern: "tearoff", use: [2], id: "built-upgrade",
+    also: { reload: [2] },   // the same demo also runs on that pattern's page
     title: "Replace a running widget with its next version, and keep its connection",
     blurb: "Version 1 of a chat widget is holding a port to a service that sends it numbered messages. Version 2 is ready. Loading it the usual way would mean dropping the connection and making another, and losing whatever arrived in between. Here version 1 stops listening, hands its port to version 2, and is removed. Messages that arrive during the swap wait in the port. The service is never told that anything changed.",
     code: `<span class="c">// version 1, when asked to step aside</span>
@@ -1572,7 +1575,7 @@ addEventListener("pagehide", () => bank.port.postMessage({ deposit: "orders" }, 
         title: "Order feed, another origin", color: "teal",
         script: () => on("port", (_, [port]) => { let n = 0; log("granted this site one port"); setInterval(() => send(port, "line", ++n), 400); }),
       });
-      const note = logBox(stage, "bank", "Port bank, a SharedWorker");
+      const note = logBox(stage, "bank", "Port bank, a SharedWorker", "", { kind: "shared", url: "/patterns/bank.js" });
       const site = stage.box("site", { src: `/patterns/shop.html?key=${key}` });
       let moves = 0, page = "Shop", grants = 0;
       stage.on((name, data) => {
@@ -1603,7 +1606,7 @@ port.onmessage = async ({ data, ports: [reply] }) => {
     async setup(stage, ui) {
       const me = logBox(stage, "page", "This tab has the files");
       const server = await serveFrom(stage, "/patterns/served/files/");
-      const served = stage.box("served", { html: `<div class="here"><h4>/patterns/served/files/</h4><p class="small muted">Nothing loaded yet.</p></div>` });
+      const served = stage.box("served", { kind: "iframe", html: `<div class="here"><h4>/patterns/served/files/</h4><p class="small muted">Nothing loaded yet.</p></div>` });
       if (!server) return;
       if (!navigator.storage?.getDirectory) return me.say("This browser has no Origin Private File System.");
       const types = { html: "text/html; charset=utf-8", css: "text/css", svg: "image/svg+xml" };
@@ -1649,7 +1652,7 @@ port.onmessage = ({ data, ports: [reply] }) =>
     async setup(stage, ui) {
       const me = logBox(stage, "page", "This tab holds the notes", `<p class="small" style="margin:0 0 .4rem">Notes in memory: <strong data-n>1</strong></p>`);
       const server = await serveFrom(stage, "/patterns/served/notes/");
-      const served = stage.box("served", { html: `<div class="here"><h4>A reader, in another page</h4><p class="small muted">Not open yet.</p></div>` });
+      const served = stage.box("served", { kind: "iframe", html: `<div class="here"><h4>A reader, in another page</h4><p class="small muted">Not open yet.</p></div>` });
       if (!server) return;
       const notes = ["Water the ferns"], more = ["Order brown paper", "Ring the tulip grower", "Sweep the shop floor"];
       const reader = `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width"><style>body{font:14px system-ui;margin:.7rem;color-scheme:light dark}h1{font-size:1rem;margin:0 0 .3rem}ul{margin:0 0 .4rem;padding-left:1.1rem}p{font:12px ui-monospace,monospace;margin:0}</style><h1>Reader</h1><ul id="list"></ul><p id="said"></p><script>
@@ -1798,7 +1801,7 @@ serviceWorker.postMessage({ serve: true, prefix: "/app/calendar/" }, [port2]);`,
       const me = logBox(stage, "page", "This tab is the host app's server");
       const server = await serveFrom(stage, "/patterns/served/app/");
       await stage.frame("Invoices", { title: "Invoices plug-in, origin two", color: "red", script: plugin });
-      const view = stage.box("served", { html: `<div class="here"><h4>The host app</h4><p class="small muted">Not open yet.</p></div>` });
+      const view = stage.box("served", { kind: "iframe", html: `<div class="here"><h4>The host app</h4><p class="small muted">Not open yet.</p></div>` });
       if (!server) return;
       const installed = [];
       server.handle(() => {
@@ -1855,8 +1858,8 @@ port.onmessage = ({ data, ports: [reply] }) => {
         },
       });
       const me = logBox(stage, "page", "This page is the editor");
-      const sw = logBox(stage, "sw", "Service Worker");
-      const view = stage.box("served", { html: `<div class="here"><h4>Preview</h4><p class="small muted">Nothing to preview yet.</p></div>` });
+      const sw = logBox(stage, "sw", "Service Worker", "", { kind: "service", url: "/patterns/tabserver-sw.js", scope: "/patterns/served/" });
+      const view = stage.box("served", { kind: "iframe", html: `<div class="here"><h4>Preview</h4><p class="small muted">Nothing to preview yet.</p></div>` });
       if (!("serviceWorker" in navigator)) return sw.say("no Service Worker support here");
       const prefix = "/patterns/served/preview/";
       let registration = null, mounted = false;
@@ -1894,7 +1897,7 @@ port.onmessage = ({ data }) => show(data.price);`,
     tour: { steps: [["Drop the connection", "The server hangs up on the worker. The worker waits half a second and connects again. The tabs did nothing.", 3500], ["Close tab one", "One tab goes. The subscription stays up for the other."]] },
     async setup(stage, ui) {
       const one = stage.box("tab1", { src: "/patterns/feed-tab.html" });
-      const hub = stage.box("worker", { html: `<div class="here"><h4>Shared worker</h4><p class="small" style="margin:0 0 .3rem">Connections it has made: <strong data-opened>0</strong></p><p class="small" style="margin:0 0 .3rem">Connected now: <strong data-open>no</strong></p><p class="small" style="margin:0 0 .3rem">Tabs it feeds: <strong data-tabs>none</strong></p><p class="small" data-said style="margin:0;min-height:1.4em"></p></div>` });
+      const hub = stage.box("worker", { kind: "shared", url: "/patterns/feed-worker.js", html: `<div class="here"><h4>Shared worker</h4><p class="small" style="margin:0 0 .3rem">Connections it has made: <strong data-opened>0</strong></p><p class="small" style="margin:0 0 .3rem">Connected now: <strong data-open>no</strong></p><p class="small" style="margin:0 0 .3rem">Tabs it feeds: <strong data-tabs>none</strong></p><p class="small" data-said style="margin:0;min-height:1.4em"></p></div>` });
       const two = stage.box("tab2", { src: "/patterns/feed-tab.html" });
       const q = (name) => hub.node.querySelector(`[data-${name}]`);
       if (!("SharedWorker" in self)) { q("said").textContent = "This browser has no SharedWorker."; return; }
@@ -1930,8 +1933,8 @@ port.onmessage = ({ data }) => {
     tour: { steps: [["Start the decoder", "The worker and the audio thread are introduced. Blocks of sound start to flow between them."], ["Freeze this page for 3 seconds", "The page stops. The worker keeps decoding and the audio thread keeps playing.", 4200], ["Stop the sound", "The audio is closed."]] },
     async setup(stage, ui) {
       const me = logBox(stage, "page", "This page", `<p class="small" style="margin:0 0 .4rem">Page ticks: <strong data-ticks>0</strong></p>`);
-      const dec = logBox(stage, "decoder", "Decoder worker");
-      stage.box("audio", { html: `<div class="here"><h4>The audio thread</h4><p class="small muted" style="margin:0">Plays whatever blocks of samples arrive on its port, and reports how many it has played.</p></div>` });
+      const dec = logBox(stage, "decoder", "Decoder worker", "", { kind: "worker", url: "blob:" });
+      stage.box("audio", { kind: "worklet", url: "blob:", html: `<div class="here"><h4>The audio thread</h4><p class="small muted" style="margin:0">Plays whatever blocks of samples arrive on its port, and reports how many it has played.</p></div>` });
       if (!("AudioWorkletNode" in self)) return me.say("this browser has no audio worklet");
       const ticksEl = me.node.querySelector("[data-ticks]");
       let ticks = 0, audio = null;
@@ -2015,8 +2018,8 @@ process([input]) {
     tour: { steps: [["Start the tone and the meter", "The audio thread and the meter's worker are given one end each of a channel."], ["Freeze this page for 3 seconds", "The page stops. The meter does not.", 4200], ["Stop the sound", "The audio is closed."]] },
     async setup(stage, ui) {
       const me = logBox(stage, "page", "This page", `<p class="small" style="margin:0 0 .4rem">Page ticks: <strong data-ticks>0</strong></p>`);
-      stage.box("audio", { html: `<div class="here"><h4>The audio thread</h4><p class="small muted" style="margin:0">Measures the level of the sound passing through it, and posts each reading to a port.</p></div>` });
-      const screen = stage.box("meter", { html: `<canvas width="300" height="170" style="width:100%;height:100%;display:block" aria-label="A level meter, drawn by a worker"></canvas>` });
+      stage.box("audio", { kind: "worklet", url: "blob:", html: `<div class="here"><h4>The audio thread</h4><p class="small muted" style="margin:0">Measures the level of the sound passing through it, and posts each reading to a port.</p></div>` });
+      const screen = stage.box("meter", { kind: "worker", url: "blob:", html: `<canvas width="300" height="170" style="width:100%;height:100%;display:block" aria-label="A level meter, drawn by a worker"></canvas>` });
       if (!("AudioWorkletNode" in self) || !("OffscreenCanvas" in self)) return me.say("this browser lacks an audio worklet or an offscreen canvas");
       const ticksEl = me.node.querySelector("[data-ticks]");
       let ticks = 0, audio = null;
@@ -2089,13 +2092,11 @@ process([input]) {
     },
   },
   swRouter,
+  ...built2,
 ];
 
 // Ideas that are already what a demo on the site does. key: "pattern:index".
 export const shown = {
-  "hello:1": ["/patterns/introduce/", "every other pattern starts this way"],
-  "introduce:0": ["/hub/", "the hub on this site"],
-  "functions:2": ["/comlink/", "the Comlink page"],
   "canvas:2": ["#demo", "the demo at the top of this page"],
   "tearoff:0": ["#demo", "the demo at the top of this page"],
   "tabserver:0": ["#demo", "the demo at the top of this page"],
@@ -2110,10 +2111,6 @@ export const shown = {
   "far:0": ["#demo", "the demo at the top of this page"],
   "mounted:0": ["#demo", "the demo at the top of this page"],
   "socket:0": ["#demo", "the demo at the top of this page"],
-  "roundtrip:2": ["/patterns/pipeline/#built-stages", "three parties each supplying a stage"],
   "frozen:2": ["/patterns/frozen/#built-relay", "a decoder worker handing frames to a renderer worker"],
-  "reload:2": ["/patterns/tearoff/#built-upgrade", "version 1 of a widget handing its port to version 2"],
   "audio:0": ["#demo", "the demo at the top of this page"],
-  "router:1": ["/hub/", "the hub on this site, which routes calls to whichever site has the tool"],
-  "filter:1": ["/patterns/frozen/", "two workers that keep going while the page is frozen"],
 };

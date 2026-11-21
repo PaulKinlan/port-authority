@@ -57,7 +57,7 @@ while (performance.now() < until) {}`,
       const css = getComputedStyle(document.documentElement);
       const url = URL.createObjectURL(new Blob([`(${talker})()`], { type: "text/javascript" }));
       const make = (name, title, color, starts) => {
-        const box = stage.box(name, { html: `<canvas style="width:100%;height:100%;display:block" aria-label="${title}, painted by the worker itself"></canvas>` });
+        const box = stage.box(name, { kind: "worker", url: "blob:", html: `<canvas style="width:100%;height:100%;display:block" aria-label="${title}, painted by the worker itself"></canvas>` });
         const canvas = box.node.querySelector("canvas");
         const ratio = Math.min(2, devicePixelRatio || 1);
         canvas.width = box.node.clientWidth * ratio; canvas.height = box.node.clientHeight * ratio;
