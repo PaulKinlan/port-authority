@@ -175,7 +175,7 @@ onconnect = ({ ports: [port] }) => {
       const suffix = Math.random().toString(36).slice(2, 5);
       const names = [`Left ${suffix}`, `Right ${suffix}`];
       stage.box(names[0], { src: `/patterns/peer.html?name=${encodeURIComponent(names[0])}` });
-      const workerBox = stage.box("worker", { html: `<div class="here"><h4>SharedWorker</h4><ul class="log"><li>starting</li></ul></div>` });
+      const workerBox = stage.box("worker", { kind: "shared", url: "/patterns/exchange.js", html: `<div class="here"><h4>SharedWorker</h4><ul class="log"><li>starting</li></ul></div>` });
       stage.box(names[1], { src: `/patterns/peer.html?name=${encodeURIComponent(names[1])}` });
       const observer = new SharedWorker("/patterns/exchange.js", { name: "exchange" });
       observer.port.onmessage = ({ data }) => {

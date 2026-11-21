@@ -1,8 +1,8 @@
 // Runnable examples for the guide's list of things that go wrong, each with
 // the habit that deals with it. Same stage as the patterns.
 
-const logBox = (stage, name, title, extra = "") => {
-  const box = stage.box(name, { html: `<div class="here"><h4>${title}</h4>${extra}<ul class="log"></ul></div>` });
+const logBox = (stage, name, title, extra = "", what = {}) => {
+  const box = stage.box(name, { html: `<div class="here"><h4>${title}</h4>${extra}<ul class="log"></ul></div>`, ...what });
   const ul = box.node.querySelector("ul");
   const say = (text) => { const li = document.createElement("li"); li.textContent = text; ul.prepend(li); while (ul.children.length > 6) ul.lastChild.remove(); };
   return { say, node: box.node, box };
@@ -129,7 +129,7 @@ port.onmessage = ({ data }) => {
     tour: { steps: [["Send some text", "An ordinary message. The receiver acknowledges it."], ["Send a module, carelessly", "postMessage does not throw. The receiver is not listening for messageerror, and the sender is not timing anything. Silence.", 1800], ["Send a module, with the habits", "The receiver reports that something arrived that it could not read, and the sender's promise rejects."]] },
     async setup(stage, ui) {
       const me = logBox(stage, "page", "This page sends");
-      const there = logBox(stage, "worker", "A shared worker receives");
+      const there = logBox(stage, "worker", "A shared worker receives", "", { kind: "shared", url: "/patterns/bite-worker.js" });
       if (!("SharedWorker" in self)) return me.say("This browser has no SharedWorker.");
       const port = new SharedWorker("/patterns/bite-worker.js").port;
       const waiting = new Map();
