@@ -16,7 +16,7 @@ const check = (name, ok, extra = "") => { console.log(`${ok ? "ok  " : "FAIL"} $
 await page.goto(root + "/patterns/");
 await page.waitForSelector("#contents a");
 const links = await page.locator("#contents a").evaluateAll((as) => as.map((a) => [a.getAttribute("href"), a.textContent]));
-check("the patterns page lists every pattern with a link to its page", links.length === 27, String(links.length));
+check("the patterns page lists every pattern with a link to its page", links.length === 32, String(links.length));
 check("each short version links to its full page", (await page.locator('#keycopy .more a').getAttribute("href")) === "/patterns/keycopy/");
 
 const thin = [];
@@ -32,7 +32,7 @@ for (const [href, title] of links) {
   const need = ["what", "code", "how", "uses", "try", "traps", "related"];
   if (!ok || got.title !== title || !got.tab.startsWith(title) || need.some((n) => !got.sections.includes(n)) || got.wide || errors.length > before) thin.push(`${href} ${JSON.stringify(got)} ${errors.slice(before).join("|")}`);
 }
-check("all 27 pages load their demo and every part of the explainer, with no sideways scroll on a phone", thin.length === 0, thin.join("\n"));
+check("all 32 pages load their demo and every part of the explainer, with no sideways scroll on a phone", thin.length === 0, thin.join("\n"));
 
 await page.goto(root + "/patterns/attenuate/");
 await page.waitForSelector("#demo .fwd");
