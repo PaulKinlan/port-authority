@@ -79,7 +79,7 @@ export const hasCloseEvent = typeof MessagePort !== "undefined" && "onclose" in 
 
 // closeEvent: false ignores the port close event where a browser has one, to time pings alone.
 // An answer says whether the page that sent it is hidden. Chrome can hold a
-// page that has been hidden for five minutes to running timers once a minute,
+// hidden page to running timers once a minute (measured from 1 to 6 minutes in),
 // and its answers slow down too, so a hidden far side is allowed `hiddenEvery`
 // between answers instead of `every`.
 export function watch(port, { every = 1000, misses = 3, hiddenEvery = 60000, pausedFor = 600000, closeEvent = true, onState = () => {}, onPing = () => {}, onPong = () => {} } = {}) {
