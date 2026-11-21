@@ -75,7 +75,8 @@
 
       const list = (items, tag = "ul") => `<${tag}>${items.map((item) => `<li>${item}</li>`).join("")}</${tag}>`;
       const steps = (demo.tour || TOURS[id] || { steps: [] }).steps;
-      const mine = built.filter((b) => b.pattern === id);
+      // A demo built for another pattern can also be what an idea on this page asks for.
+      const mine = built.filter((b) => b.pattern === id || b.also?.[id]).map((b) => (b.pattern === id ? b : { ...b, use: b.also[id] }));
       const parts = [];
       parts.push(`<section id="what"><h2>What you are looking at</h2><p>${demo.blurb}</p></section>`);
       parts.push(`<section id="code"><h2>The code</h2><pre>${demo.code}</pre></section>`);
