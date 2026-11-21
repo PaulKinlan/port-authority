@@ -12,7 +12,7 @@
   <div class="wrap">
     <header class="site-bar">
       <a class="wordmark" href="/">Port Authority</a>
-      <nav><a href="/guide/">The guide</a><a href="/">About</a><a href="/patterns/">Port patterns</a><a href="/hub/" aria-current="page">Your hub</a></nav>
+      <nav><a href="/guide/">The guide</a><a href="/">About</a><a href="/patterns/">Port patterns</a><a href="/reading/">Further reading</a><a href="/hub/" aria-current="page">Your hub</a></nav>
     </header>
     <div class="stack" style="--gap:.8rem; padding-top:2rem">
       <h1 style="font-size:var(--step-3)">Your hub</h1>
@@ -25,5 +25,6 @@
     import { switchboard, mountDashboard } from "/hub/ui.js";
     mountDashboard(document.getElementById("dash"), switchboard());
   </script>
+  <script type="module" src="/refs.js"></script>
 </body>
 </html>

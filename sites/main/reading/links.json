@@ -1,0 +1,1321 @@
+{
+ "checked": "2026-11-21",
+ "groups": [
+  {
+   "id": "reference",
+   "title": "Reference pages",
+   "intro": "The MDN reference for each API this site uses. Each page has examples and a browser support table.",
+   "items": [
+    {
+     "t": "Channel Messaging API",
+     "u": "https://developer.mozilla.org/en-US/docs/Web/API/Channel_Messaging_API",
+     "by": "MDN",
+     "n": "Overview of MessageChannel and MessagePort."
+    },
+    {
+     "t": "Using channel messaging",
+     "u": "https://developer.mozilla.org/en-US/docs/Web/API/Channel_Messaging_API/Using_channel_messaging",
+     "by": "MDN",
+     "n": "A worked example that passes a port to an iframe and replies over it."
+    },
+    {
+     "t": "MessageChannel",
+     "u": "https://developer.mozilla.org/en-US/docs/Web/API/MessageChannel",
+     "by": "MDN",
+     "n": "The constructor that makes two connected ports."
+    },
+    {
+     "t": "MessagePort",
+     "u": "https://developer.mozilla.org/en-US/docs/Web/API/MessagePort",
+     "by": "MDN",
+     "n": "postMessage(), start(), close() and the message and messageerror events."
+    },
+    {
+     "t": "MessagePort: start()",
+     "u": "https://developer.mozilla.org/en-US/docs/Web/API/MessagePort/start",
+     "by": "MDN",
+     "n": "Why a port with addEventListener receives nothing until start() is called."
+    },
+    {
+     "t": "MessageEvent",
+     "u": "https://developer.mozilla.org/en-US/docs/Web/API/MessageEvent",
+     "by": "MDN",
+     "n": "The event every message arrives as, with data, origin, source and ports."
+    },
+    {
+     "t": "Window: postMessage()",
+     "u": "https://developer.mozilla.org/en-US/docs/Web/API/Window/postMessage",
+     "by": "MDN",
+     "n": "Sending to another window or frame, with the target origin and the security notes."
+    },
+    {
+     "t": "Worker: postMessage()",
+     "u": "https://developer.mozilla.org/en-US/docs/Web/API/Worker/postMessage",
+     "by": "MDN",
+     "n": "Sending to a dedicated worker."
+    },
+    {
+     "t": "ServiceWorker: postMessage()",
+     "u": "https://developer.mozilla.org/en-US/docs/Web/API/ServiceWorker/postMessage",
+     "by": "MDN",
+     "n": "Sending from a page to a service worker."
+    },
+    {
+     "t": "Client: postMessage()",
+     "u": "https://developer.mozilla.org/en-US/docs/Web/API/Client/postMessage",
+     "by": "MDN",
+     "n": "Sending from a service worker to a page."
+    },
+    {
+     "t": "Transferable objects",
+     "u": "https://developer.mozilla.org/en-US/docs/Web/API/Web_Workers_API/Transferable_objects",
+     "by": "MDN",
+     "n": "The list of things that can be moved instead of copied, and what happens to the sender's copy."
+    },
+    {
+     "t": "The structured clone algorithm",
+     "u": "https://developer.mozilla.org/en-US/docs/Web/API/Web_Workers_API/Structured_clone_algorithm",
+     "by": "MDN",
+     "n": "What can be copied in a message and what cannot."
+    },
+    {
+     "t": "Window: structuredClone()",
+     "u": "https://developer.mozilla.org/en-US/docs/Web/API/Window/structuredClone",
+     "by": "MDN",
+     "n": "The same copy and transfer rules without sending a message."
+    },
+    {
+     "t": "SharedWorker",
+     "u": "https://developer.mozilla.org/en-US/docs/Web/API/SharedWorker",
+     "by": "MDN",
+     "n": "One worker shared by every same-origin page, reached through a port."
+    },
+    {
+     "t": "SharedWorkerGlobalScope: connect event",
+     "u": "https://developer.mozilla.org/en-US/docs/Web/API/SharedWorkerGlobalScope/connect_event",
+     "by": "MDN",
+     "n": "How a shared worker receives the port for each page that connects."
+    },
+    {
+     "t": "Broadcast Channel API",
+     "u": "https://developer.mozilla.org/en-US/docs/Web/API/Broadcast_Channel_API",
+     "by": "MDN",
+     "n": "Sending to every same-origin context by name. It cannot carry transferables."
+    },
+    {
+     "t": "Using web workers",
+     "u": "https://developer.mozilla.org/en-US/docs/Web/API/Web_Workers_API/Using_web_workers",
+     "by": "MDN",
+     "n": "The guide to dedicated and shared workers."
+    },
+    {
+     "t": "ReadableStream",
+     "u": "https://developer.mozilla.org/en-US/docs/Web/API/ReadableStream",
+     "by": "MDN",
+     "n": "A stream can be transferred. Its support table has a row for that."
+    },
+    {
+     "t": "HTMLCanvasElement: transferControlToOffscreen()",
+     "u": "https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/transferControlToOffscreen",
+     "by": "MDN",
+     "n": "Handing a canvas to a worker as a transferable OffscreenCanvas."
+    },
+    {
+     "t": "Web Locks API",
+     "u": "https://developer.mozilla.org/en-US/docs/Web/API/Web_Locks_API",
+     "by": "MDN",
+     "n": "A lock that is released when its holder goes away, which is one way to learn that the other end of a port has gone."
+    },
+    {
+     "t": "State Partitioning",
+     "u": "https://developer.mozilla.org/en-US/docs/Web/Privacy/Guides/State_Partitioning",
+     "by": "MDN",
+     "n": "Firefox's partitioning by top-level site. Shared workers and BroadcastChannel are on the list, so one inside a third-party iframe is not shared across sites."
+    },
+    {
+     "t": "Document: requestStorageAccess()",
+     "u": "https://developer.mozilla.org/en-US/docs/Web/API/Document/requestStorageAccess",
+     "by": "MDN",
+     "n": "Asking for unpartitioned storage in an embedded frame. Chrome can also grant an unpartitioned SharedWorker and BroadcastChannel."
+    },
+    {
+     "t": "Can I use: Channel messaging",
+     "u": "https://caniuse.com/channel-messaging",
+     "by": "caniuse.com",
+     "n": "Browser support for MessageChannel."
+    },
+    {
+     "t": "Can I use: Shared Web Workers",
+     "u": "https://caniuse.com/sharedworkers",
+     "by": "caniuse.com",
+     "n": "Browser support for SharedWorker."
+    }
+   ]
+  },
+  {
+   "id": "specs",
+   "title": "Specifications",
+   "intro": "The standards that define the behaviour.",
+   "items": [
+    {
+     "t": "HTML Standard: Web messaging",
+     "u": "https://html.spec.whatwg.org/multipage/web-messaging.html",
+     "by": "WHATWG",
+     "n": "The current specification for cross-document messaging, channel messaging and BroadcastChannel."
+    },
+    {
+     "t": "HTML Standard: Channel messaging",
+     "u": "https://html.spec.whatwg.org/multipage/web-messaging.html#channel-messaging",
+     "by": "WHATWG",
+     "n": "MessageChannel and MessagePort, including the rule that a port with a listener is not garbage collected."
+    },
+    {
+     "t": "HTML Standard: Ports as the basis of an object-capability model on the web",
+     "u": "https://html.spec.whatwg.org/multipage/web-messaging.html#ports-as-the-basis-of-an-object-capability-model-on-the-web",
+     "by": "WHATWG",
+     "n": "A short section of the standard that describes a port as a permission that can be handed on."
+    },
+    {
+     "t": "HTML Standard: Security of cross-document messaging",
+     "u": "https://html.spec.whatwg.org/multipage/web-messaging.html#security-postmsg",
+     "by": "WHATWG",
+     "n": "What the standard asks authors to check when they receive a message."
+    },
+    {
+     "t": "HTML Standard: Safe passing of structured data",
+     "u": "https://html.spec.whatwg.org/multipage/structured-data.html#safe-passing-of-structured-data",
+     "by": "WHATWG",
+     "n": "The definition of serializable objects, transferable objects and structured clone."
+    },
+    {
+     "t": "HTML Standard: Web workers",
+     "u": "https://html.spec.whatwg.org/multipage/workers.html",
+     "by": "WHATWG",
+     "n": "Dedicated and shared workers, and the implicit port each dedicated worker has."
+    },
+    {
+     "t": "Streams Standard: Transferable streams",
+     "u": "https://streams.spec.whatwg.org/#transferrable-streams",
+     "by": "WHATWG",
+     "n": "How a stream is moved to another context: the two halves are joined by a message port."
+    },
+    {
+     "t": "Transferable streams explainer",
+     "u": "https://github.com/whatwg/streams/blob/main/transferable-streams-explainer.md",
+     "by": "WHATWG",
+     "n": "The reasons for making streams transferable, with examples."
+    },
+    {
+     "t": "Service Workers",
+     "u": "https://w3c.github.io/ServiceWorker/",
+     "by": "W3C",
+     "n": "Defines postMessage between pages and service workers."
+    },
+    {
+     "t": "Web Locks API",
+     "u": "https://w3c.github.io/web-locks/",
+     "by": "W3C",
+     "n": "The specification for locks shared by tabs and workers of one origin."
+    },
+    {
+     "t": "Client-Side Storage Partitioning",
+     "u": "https://privacycg.github.io/storage-partitioning/",
+     "by": "W3C Privacy Community Group",
+     "n": "The plan for partitioning storage and communication APIs, including SharedWorker and BroadcastChannel, by top-level site."
+    },
+    {
+     "t": "The Storage Access API",
+     "u": "https://github.com/privacycg/storage-access",
+     "by": "W3C Privacy Community Group",
+     "n": "The repository for the API an embedded frame uses to ask for unpartitioned access."
+    },
+    {
+     "t": "HTML5 Web Messaging (W3C Recommendation, 2015)",
+     "u": "https://www.w3.org/TR/2015/REC-webmessaging-20150519/",
+     "by": "W3C",
+     "y": "2015",
+     "n": "The older W3C snapshot of the same text. It has been superseded by the HTML Standard and is useful for history."
+    }
+   ]
+  },
+  {
+   "id": "history",
+   "title": "How the standards changed",
+   "intro": "Discussions, proposals and browser announcements that show why the APIs behave as they do.",
+   "items": [
+    {
+     "t": "Cross-Window Messaging",
+     "u": "https://johnresig.com/blog/cross-window-messaging/",
+     "by": "John Resig",
+     "y": "2008",
+     "n": "An early description of postMessage, written when Firefox 3 was about to ship it."
+    },
+    {
+     "t": "Computing with JavaScript Web Workers",
+     "u": "https://johnresig.com/blog/web-workers/",
+     "by": "John Resig",
+     "y": "2009",
+     "n": "An early description of workers and their message passing."
+    },
+    {
+     "t": "W3C bug 13584: Channel Messaging Origins",
+     "u": "https://www.w3.org/Bugs/Public/show_bug.cgi?id=13584",
+     "by": "W3C Bugzilla",
+     "y": "2011",
+     "n": "A security review asked why messages on a port carry no origin. The reply led to the capability section in the standard."
+    },
+    {
+     "t": "Re: postMessage, workers and sandboxing",
+     "u": "https://lists.w3.org/Archives/Public/public-webappsec/2015Jan/0328.html",
+     "by": "Brad Hill, public-webappsec",
+     "y": "2015",
+     "n": "A mailing list reply that explains a port is meant to work as a capability its owner can delegate."
+    },
+    {
+     "t": "Explainer: a close event for MessagePort",
+     "u": "https://github.com/fergald/explainer-messageport-close",
+     "by": "Fergal Daly",
+     "y": "2023",
+     "n": "The proposal for an event that tells one port the other end has gone."
+    },
+    {
+     "t": "Intent to Prototype and Ship: MessagePort.onclose",
+     "u": "https://groups.google.com/a/chromium.org/g/blink-dev/c/enQs5VEdOmU",
+     "by": "blink-dev",
+     "y": "2023",
+     "n": "The Chromium discussion about shipping the close event."
+    },
+    {
+     "t": "Chrome Platform Status: MessagePort close event",
+     "u": "https://chromestatus.com/feature/5086799659794432",
+     "by": "Chrome Platform Status",
+     "n": "The current shipping status of the close event in Chrome, with links to the other browsers' positions."
+    },
+    {
+     "t": "W3C TAG review 923: Adding a close event to MessagePort",
+     "u": "https://github.com/w3ctag/design-reviews/issues/923",
+     "by": "W3C TAG",
+     "y": "2023",
+     "n": "The design review of the close event."
+    },
+    {
+     "t": "Intent to Ship: Streams API: transferable streams",
+     "u": "https://groups.google.com/a/chromium.org/g/blink-dev/c/1LStSgBt6AM",
+     "by": "blink-dev",
+     "y": "2020",
+     "n": "The Chromium discussion about shipping transferable streams."
+    },
+    {
+     "t": "WebKit Features in Safari 16.0",
+     "u": "https://webkit.org/blog/13152/webkit-features-in-safari-16-0/",
+     "by": "WebKit",
+     "y": "2022",
+     "n": "The release in which SharedWorker returned to Safari, on macOS and iOS."
+    },
+    {
+     "t": "Intent to Experiment: SharedWorker on Android",
+     "u": "https://groups.google.com/a/chromium.org/g/blink-dev/c/_Lsfs08XX5c",
+     "by": "blink-dev",
+     "y": "2025",
+     "n": "The start of Chrome's trial of SharedWorker on Android, with the concern that Android may stop the worker's process."
+    },
+    {
+     "t": "Intent to Ship: SharedWorker on Android",
+     "u": "https://groups.google.com/a/chromium.org/g/blink-dev/c/pS1PDOa69CU",
+     "by": "blink-dev",
+     "y": "2026",
+     "n": "The Chromium discussion about shipping SharedWorker in Chrome for Android."
+    },
+    {
+     "t": "Intent to Ship: Extended lifetime shared workers",
+     "u": "https://groups.google.com/a/chromium.org/g/blink-dev/c/gibsFdrin2s",
+     "by": "blink-dev",
+     "y": "2026",
+     "n": "A proposal to let a shared worker keep running for a short time after its last page closes."
+    },
+    {
+     "t": "Storage Partitioning",
+     "u": "https://privacysandbox.google.com/cookies/storage-partitioning",
+     "by": "Google Privacy Sandbox",
+     "n": "What Chrome partitions by top-level site, including SharedWorker and BroadcastChannel."
+    },
+    {
+     "t": "Changes to BFCache behavior with extension message ports",
+     "u": "https://developer.chrome.com/blog/bfcache-extension-messaging-changes",
+     "by": "Chrome for Developers",
+     "y": "2024",
+     "n": "What happens to an extension's open port when its page goes into the back/forward cache."
+    }
+   ]
+  },
+  {
+   "id": "browser-teams",
+   "title": "Guides from browser teams",
+   "intro": "",
+   "items": [
+    {
+     "t": "Transferable objects - Lightning fast",
+     "u": "https://developer.chrome.com/blog/transferable-objects-lightning-fast",
+     "by": "Eric Bidelman, Chrome for Developers",
+     "y": "2011",
+     "n": "The announcement of transferable ArrayBuffers, with the first timings of transfer against copy."
+    },
+    {
+     "t": "Use web workers to run JavaScript off the browser's main thread",
+     "u": "https://web.dev/articles/off-main-thread",
+     "by": "Surma, web.dev",
+     "y": "2019",
+     "n": "Why to move work to a worker, and how Comlink hides the messages."
+    },
+    {
+     "t": "Workers overview",
+     "u": "https://web.dev/articles/workers-overview",
+     "by": "web.dev",
+     "y": "2020",
+     "n": "How dedicated workers and service workers differ, and how a page talks to each."
+    },
+    {
+     "t": "Two-way communication with service workers",
+     "u": "https://web.dev/articles/two-way-communication-guide",
+     "by": "web.dev",
+     "y": "2020",
+     "n": "Compares postMessage, a MessageChannel and BroadcastChannel for talking to a service worker."
+    },
+    {
+     "t": "Broadcast updates to pages with service workers",
+     "u": "https://web.dev/articles/broadcast-updates-guide",
+     "by": "web.dev",
+     "y": "2020",
+     "n": "Sending from a service worker to every open page."
+    },
+    {
+     "t": "Deep-copying in JavaScript using structuredClone",
+     "u": "https://web.dev/articles/structured-clone",
+     "by": "Surma, web.dev",
+     "y": "2021",
+     "n": "What structured clone copies, what it drops, and how transfer fits in."
+    },
+    {
+     "t": "An overview of web workers",
+     "u": "https://web.dev/learn/performance/web-worker-overview",
+     "by": "web.dev",
+     "n": "A short lesson on workers and their messages from the Learn Performance course."
+    },
+    {
+     "t": "BroadcastChannel API - A message bus for the web",
+     "u": "https://developer.chrome.com/blog/broadcastchannel",
+     "by": "Eric Bidelman, Chrome for Developers",
+     "y": "2016",
+     "n": "An introduction to BroadcastChannel and how it compares with postMessage and SharedWorker."
+    },
+    {
+     "t": "Message passing in Chrome extensions",
+     "u": "https://developer.chrome.com/docs/extensions/develop/concepts/messaging",
+     "by": "Chrome for Developers",
+     "n": "Extensions have their own long-lived Port object. This explains how it works and how it differs."
+    },
+    {
+     "t": "How fast are web workers?",
+     "u": "https://hacks.mozilla.org/2015/07/how-fast-are-web-workers/",
+     "by": "Guillaume Cedric Marty, Mozilla Hacks",
+     "y": "2015",
+     "n": "Measurements of worker start-up and message time on a low-end phone."
+    },
+    {
+     "t": "Service Worker postMessage() sample",
+     "u": "https://googlechrome.github.io/samples/service-worker/post-message/",
+     "by": "Google Chrome samples",
+     "n": "A small running example that sends a MessageChannel port to a service worker and waits for the reply."
+    }
+   ]
+  },
+  {
+   "id": "performance",
+   "title": "Performance and timing",
+   "intro": "What a message costs, and how message ports are used for scheduling.",
+   "items": [
+    {
+     "t": "Is postMessage slow?",
+     "u": "https://surma.dev/things/is-postmessage-slow/",
+     "by": "Surma",
+     "y": "2019",
+     "n": "Measures the cost of structured clone by payload size on several devices and gives size budgets."
+    },
+    {
+     "t": "When should you be using Web Workers?",
+     "u": "https://surma.dev/things/when-workers/",
+     "by": "Surma",
+     "y": "2019",
+     "n": "The argument for workers on slow phones, and where the cost of messaging fits."
+    },
+    {
+     "t": "High-performance Web Worker messages",
+     "u": "https://nolanlawson.com/2016/02/29/high-performance-web-worker-messages/",
+     "by": "Nolan Lawson",
+     "y": "2016",
+     "n": "Compares sending objects with sending JSON strings. The post has later updates as browsers changed."
+    },
+    {
+     "t": "Deep-copying in JavaScript",
+     "u": "https://surma.dev/things/deep-copy/",
+     "by": "Surma",
+     "y": "2018",
+     "n": "Uses a MessageChannel to reach structured clone before structuredClone() existed, and times it."
+    },
+    {
+     "t": "Improving Webapp Performance with Multi-Threading: a Study of Web Workers' Communication Overhead",
+     "u": "https://www.infoq.com/news/2019/08/postMessage-performance-study/",
+     "by": "InfoQ",
+     "y": "2019",
+     "n": "A summary of Surma's measurements."
+    },
+    {
+     "t": "Why do browsers throttle JavaScript timers?",
+     "u": "https://nolanlawson.com/2025/08/31/why-do-browsers-throttle-javascript-timers/",
+     "by": "Nolan Lawson",
+     "y": "2025",
+     "n": "Explains timer clamping and why libraries post to a MessageChannel to schedule a task without the delay."
+    },
+    {
+     "t": "The State Of Web Workers In 2021",
+     "u": "https://www.smashingmagazine.com/2021/06/web-workers-2021/",
+     "by": "Surma, Smashing Magazine",
+     "y": "2021",
+     "n": "A survey of how workers are used, the cost of postMessage and the tools around it."
+    }
+   ]
+  },
+  {
+   "id": "posts",
+   "title": "Posts about ports, frames and shared workers",
+   "intro": "There are not many articles that go past the basics. These are the ones we found.",
+   "items": [
+    {
+     "t": "Messing with MessageChannel",
+     "u": "https://blog.humphd.org/messing-with-messagechannel/",
+     "by": "David Humphrey",
+     "y": "2015",
+     "n": "Uses a MessageChannel between an editor in a cross-origin iframe and the app that hosts it."
+    },
+    {
+     "t": "ServiceWorker, MessageChannel, & postMessage",
+     "u": "https://ponyfoo.com/articles/serviceworker-messagechannel-postmessage",
+     "by": "Nicolás Bevacqua, Pony Foo",
+     "y": "2015",
+     "n": "Request and reply between a page and a service worker by sending a port with each message."
+    },
+    {
+     "t": "How to use async/await with postMessage",
+     "u": "https://advancedweb.hu/how-to-use-async-await-with-postmessage/",
+     "by": "Tamás Sallai",
+     "y": "2020",
+     "n": "Turns a message and its reply into a promise by sending a new MessageChannel port with each request."
+    },
+    {
+     "t": "Using MessageChannel to call functions within iframes",
+     "u": "https://www.useanvil.com/blog/engineering/using-message-channel-to-call-functions-within-iframes/",
+     "by": "Winggo Tse, Anvil",
+     "y": "2023",
+     "n": "A walk-through of handing an iframe a port and calling functions over it."
+    },
+    {
+     "t": "How to make postMessage type-safe in under 350 bytes",
+     "u": "https://evilmartians.com/chronicles/how-to-make-postmessage-type-safe-in-under-350-bytes",
+     "by": "Pavel Grinchenko and Travis Turner, Evil Martians",
+     "y": "2026",
+     "n": "A small typed wrapper for messages between a page and an iframe over a MessageChannel."
+    },
+    {
+     "t": "One-Way Sandboxed Iframes",
+     "u": "https://joshua.hu/rendering-sandboxing-arbitrary-html-content-iframe-interacting",
+     "by": "Joshua Rogers",
+     "y": "2025",
+     "n": "Renders untrusted HTML in a sandboxed iframe that can be sent messages but cannot read anything back."
+    },
+    {
+     "t": "The Architecture of Browser Sandboxes",
+     "u": "https://dev.to/alexgriss/the-architecture-of-browser-sandboxes-a-deep-dive-into-javascript-code-isolation-1dnj",
+     "by": "Alex Griss",
+     "y": "2025",
+     "n": "How code playgrounds isolate code in iframes and workers, with a private port in place of the global message handler."
+    },
+    {
+     "t": "Cross-window communication",
+     "u": "https://javascript.info/cross-window-communication",
+     "by": "javascript.info",
+     "n": "A tutorial on the same-origin policy, iframes and window.postMessage."
+    },
+    {
+     "t": "An Actor, a model and an architect walk onto the web...",
+     "u": "https://surma.dev/things/actormodel/",
+     "by": "Surma",
+     "y": "2017",
+     "n": "Applies the actor model to web apps, where each part only receives and sends messages."
+    },
+    {
+     "t": "Reduce WebSocket Connections With Shared Workers",
+     "u": "https://pusher.com/blog/reduce-websocket-connections-with-shared-workers/",
+     "by": "Pusher",
+     "n": "One WebSocket held in a SharedWorker and shared by every tab."
+    },
+    {
+     "t": "Scaling WebSocket Connections using Shared Workers",
+     "u": "https://dev.to/ayushgp/scaling-websocket-connections-using-shared-workers-14mj",
+     "by": "Ayush Gupta",
+     "y": "2020",
+     "n": "The same pattern, with BroadcastChannel used to reach the tabs."
+    },
+    {
+     "t": "Sharing WebSocket Connections between Browser Tabs and Windows",
+     "u": "https://dev.to/brightdevs/sharing-websocket-connections-between-browser-tabs-and-windows-17dc",
+     "by": "Bright Inventions",
+     "y": "2023",
+     "n": "Keeps each tab's port in the shared worker and uses WeakRef to notice tabs that have closed."
+    },
+    {
+     "t": "Some notes on SharedWorkers",
+     "u": "https://dev.to/chrishow/some-notes-on-sharedworkers-3kkh",
+     "by": "Chris How",
+     "y": "2024",
+     "n": "Practical notes on debugging, lifetime and browser differences."
+    }
+   ]
+  },
+  {
+   "id": "products",
+   "title": "How products use messaging",
+   "intro": "Engineering write-ups from teams that built on postMessage, ports or shared workers.",
+   "items": [
+    {
+     "t": "How to build a plugin system on the web and also sleep well at night",
+     "u": "https://www.figma.com/blog/how-we-built-the-figma-plugin-system/",
+     "by": "Rudi Chen, Figma",
+     "y": "2019",
+     "n": "The options Figma weighed for running third-party plugin code, from iframes with message passing to a separate JavaScript engine."
+    },
+    {
+     "t": "Remote rendering: Shopify's take on extensible UI",
+     "u": "https://shopify.engineering/remote-rendering-ui-extensibility",
+     "by": "Shopify Engineering",
+     "y": "2021",
+     "n": "Third-party code runs in a worker or iframe and describes its UI to the host over a MessageChannel."
+    },
+    {
+     "t": "A whole new Quick Edit in Cloudflare Workers",
+     "u": "https://blog.cloudflare.com/improved-quick-edit/",
+     "by": "Cloudflare",
+     "y": "2023",
+     "n": "Embeds VS Code for the Web in an iframe and talks to it over a transferred MessagePort."
+    },
+    {
+     "t": "How we sped up Notion in the browser with WASM SQLite",
+     "u": "https://www.notion.com/blog/how-we-sped-up-notion-in-the-browser-with-wasm-sqlite",
+     "by": "Carlo Francisco, Notion",
+     "y": "2024",
+     "n": "A SharedWorker chooses which tab may write to the database, and Web Locks tell it when a tab has closed."
+    },
+    {
+     "t": "wa-sqlite discussion 81",
+     "u": "https://github.com/rhashimoto/wa-sqlite/discussions/81",
+     "by": "Roy Hashimoto",
+     "n": "The design Notion's post builds on: one tab at a time uses the database, and the other tabs send their queries to that tab."
+    },
+    {
+     "t": "SQLite Wasm in the browser backed by the Origin Private File System",
+     "u": "https://developer.chrome.com/blog/sqlite-wasm-in-the-browser-backed-by-the-origin-private-file-system",
+     "by": "Chrome for Developers",
+     "y": "2023",
+     "n": "SQLite runs in a worker and the page talks to it with messages."
+    },
+    {
+     "t": "How Partytown Works",
+     "u": "https://www.builder.io/blog/how-partytown-works",
+     "by": "Alex Patterson, Builder.io",
+     "y": "2022",
+     "n": "Third-party scripts run in a worker and reach the DOM through proxied messages."
+    },
+    {
+     "t": "How Partytown's Sync Communication Works",
+     "u": "https://dev.to/adamdbradley/how-partytown-s-sync-communication-works-4244",
+     "by": "Adam Bradley",
+     "y": "2021",
+     "n": "How a worker gets a synchronous answer from the main thread, using a service worker or Atomics."
+    },
+    {
+     "t": "Webview API: passing messages",
+     "u": "https://code.visualstudio.com/api/extension-guides/webview#passing-messages-from-an-extension-to-a-webview",
+     "by": "Visual Studio Code",
+     "n": "How a VS Code extension and its webview talk with postMessage."
+    },
+    {
+     "t": "MessagePorts in Electron",
+     "u": "https://www.electronjs.org/docs/latest/tutorial/message-ports",
+     "by": "Electron",
+     "n": "Passing ports between Electron's main process and its windows, with several worked patterns."
+    }
+   ]
+  },
+  {
+   "id": "libraries",
+   "title": "Libraries",
+   "intro": "Code that wraps postMessage or a MessagePort. Reading the source of the small ones is a good way to learn the API.",
+   "items": [
+    {
+     "t": "Comlink",
+     "u": "https://github.com/GoogleChromeLabs/comlink",
+     "by": "Google Chrome Labs",
+     "n": "Calls across a port look like calls on a local object. This site compares it with a rebuild on <a href=\"/comlink/\">the Comlink page</a>."
+    },
+    {
+     "t": "Cap'n Web",
+     "u": "https://github.com/cloudflare/capnweb",
+     "by": "Cloudflare",
+     "n": "Object-capability RPC with promise pipelining. It runs over HTTP, WebSocket and MessagePort."
+    },
+    {
+     "t": "Penpal",
+     "u": "https://github.com/Aaronius/penpal",
+     "by": "Aaron Hardy",
+     "n": "Promise-based calls between a page and iframes, workers and windows."
+    },
+    {
+     "t": "post-robot",
+     "u": "https://github.com/bluepnume/post-robot",
+     "by": "Daniel Brain",
+     "n": "Request and response between windows on different domains, with functions passed as arguments."
+    },
+    {
+     "t": "zoid",
+     "u": "https://github.com/bluepnume/zoid",
+     "by": "Daniel Brain",
+     "n": "Cross-domain components built on post-robot: an iframe or popup that takes props and callbacks."
+    },
+    {
+     "t": "Postmate",
+     "u": "https://github.com/dollarshaveclub/postmate",
+     "by": "Dollar Shave Club",
+     "n": "A small promise-based library for a parent page and one iframe."
+    },
+    {
+     "t": "rimless",
+     "u": "https://github.com/au-re/rimless",
+     "by": "au-re",
+     "n": "A promise-based wrapper for iframes and workers."
+    },
+    {
+     "t": "kkrpc",
+     "u": "https://github.com/kunkunsh/kkrpc",
+     "by": "Huakun Shen",
+     "n": "Typed two-way RPC over workers, iframes and other transports."
+    },
+    {
+     "t": "Comctx",
+     "u": "https://github.com/molvqingtai/comctx",
+     "by": "molvqingtai",
+     "n": "RPC across contexts with a transport adapter you supply."
+    },
+    {
+     "t": "async-call-rpc",
+     "u": "https://github.com/Jack-Works/async-call-rpc",
+     "by": "Jack Works",
+     "n": "JSON-RPC over any channel that can carry a message."
+    },
+    {
+     "t": "workerize",
+     "u": "https://github.com/developit/workerize",
+     "by": "Jason Miller",
+     "n": "Moves a module into a worker and turns its exports into async functions."
+    },
+    {
+     "t": "greenlet",
+     "u": "https://github.com/developit/greenlet",
+     "by": "Jason Miller",
+     "n": "Moves one async function into its own worker."
+    },
+    {
+     "t": "threads.js",
+     "u": "https://github.com/andywer/threads.js",
+     "by": "Andy Wermke",
+     "n": "One API for web workers and Node worker threads, with pools and observables."
+    },
+    {
+     "t": "workerpool",
+     "u": "https://github.com/josdejong/workerpool",
+     "by": "Jos de Jong",
+     "n": "A pool of workers for Node and the browser."
+    },
+    {
+     "t": "coincident",
+     "u": "https://github.com/WebReflection/coincident",
+     "by": "Andrea Giammarchi",
+     "n": "A proxy that lets a worker call the main thread and wait for the answer, using Atomics."
+    },
+    {
+     "t": "Partytown",
+     "u": "https://github.com/QwikDev/partytown",
+     "by": "QwikDev",
+     "n": "Runs third-party scripts in a web worker."
+    },
+    {
+     "t": "WorkerDOM",
+     "u": "https://github.com/ampproject/worker-dom",
+     "by": "AMP Project",
+     "n": "A DOM implementation that runs in a worker and sends its changes to the page as messages."
+    },
+    {
+     "t": "Remote DOM",
+     "u": "https://github.com/Shopify/remote-dom",
+     "by": "Shopify",
+     "n": "Mirrors a tree of elements from a sandboxed worker or iframe into the host page."
+    },
+    {
+     "t": "broadcast-channel",
+     "u": "https://github.com/pubkey/broadcast-channel",
+     "by": "Daniel Meyer",
+     "n": "A BroadcastChannel that also works in older browsers and in Node."
+    },
+    {
+     "t": "post-message-stream",
+     "u": "https://github.com/MetaMask/post-message-stream",
+     "by": "MetaMask",
+     "n": "A duplex Node-style stream over window.postMessage, used between an extension and a page."
+    },
+    {
+     "t": "Endo and CapTP",
+     "u": "https://github.com/endojs/endo",
+     "by": "Endo",
+     "n": "Hardened JavaScript and a capability transfer protocol for calling objects in another context or on another machine."
+    },
+    {
+     "t": "MCP-B transports",
+     "u": "https://github.com/WebMCP-org/npm-packages",
+     "by": "WebMCP-org",
+     "n": "Model Context Protocol transports for the browser, over postMessage between tabs, iframes and extensions."
+    }
+   ]
+  },
+  {
+   "id": "runtimes",
+   "title": "Outside the browser",
+   "intro": "The same API in server runtimes.",
+   "items": [
+    {
+     "t": "Worker threads: MessageChannel and MessagePort",
+     "u": "https://nodejs.org/api/worker_threads.html#class-messagechannel",
+     "by": "Node.js",
+     "n": "Node's implementation, with the differences from the browser's."
+    },
+    {
+     "t": "Messaging",
+     "u": "https://docs.deno.com/api/web/messaging/",
+     "by": "Deno",
+     "n": "MessageChannel, MessagePort and BroadcastChannel in Deno."
+    },
+    {
+     "t": "MessageChannel",
+     "u": "https://developers.cloudflare.com/workers/runtime-apis/messagechannel/",
+     "by": "Cloudflare Workers",
+     "n": "What MessageChannel does inside a Worker, and what it cannot do there."
+    },
+    {
+     "t": "Workers",
+     "u": "https://bun.sh/docs/runtime/workers",
+     "by": "Bun",
+     "n": "Workers and their messages in Bun."
+    }
+   ]
+  },
+  {
+   "id": "capabilities",
+   "title": "Capabilities and RPC",
+   "intro": "A port gives its holder the ability to send to one place, and it can be handed on. That is the idea behind object-capability security, which has a long literature.",
+   "items": [
+    {
+     "t": "Robust Composition: Towards a Unified Approach to Access Control and Concurrency Control",
+     "u": "http://www.erights.org/talks/thesis/",
+     "by": "Mark S. Miller",
+     "y": "2006",
+     "n": "The thesis that sets out object capabilities and promise pipelining. Cap'n Proto, Cap'n Web and CapTP build on it."
+    },
+    {
+     "t": "Cap'n Proto: RPC Protocol",
+     "u": "https://capnproto.org/rpc.html",
+     "by": "Kenton Varda",
+     "n": "A capability-based RPC protocol in which a reference to a remote object can be passed in a call."
+    },
+    {
+     "t": "Cap'n Web: a new RPC system for browsers and web servers",
+     "u": "https://blog.cloudflare.com/capnweb-javascript-rpc-library/",
+     "by": "Kenton Varda and Steve Faulkner, Cloudflare",
+     "y": "2025",
+     "n": "The same model in plain JavaScript and JSON: pass functions and objects by reference, in both directions."
+    },
+    {
+     "t": "OCapN",
+     "u": "https://ocapn.org/",
+     "by": "OCapN pre-standardization group",
+     "n": "Work on a shared protocol for object capabilities across a network."
+    },
+    {
+     "t": "Endo",
+     "u": "https://endojs.org/",
+     "by": "Endo",
+     "n": "Documentation for Hardened JavaScript, compartments and the eventual-send API."
+    }
+   ]
+  },
+  {
+   "id": "security",
+   "title": "Security guides and write-ups",
+   "intro": "Almost all of these are about window.postMessage listeners that do not check who sent the message. A private MessagePort avoids that class of bug, because only the holder of the other end can send to it.",
+   "items": [
+    {
+     "t": "HTML5 Security Cheat Sheet: Web Messaging",
+     "u": "https://cheatsheetseries.owasp.org/cheatsheets/HTML5_Security_Cheat_Sheet.html#web-messaging",
+     "by": "OWASP",
+     "n": "A short checklist for sending and receiving messages."
+    },
+    {
+     "t": "Controlling the web message source",
+     "u": "https://portswigger.net/web-security/dom-based/controlling-the-web-message-source",
+     "by": "PortSwigger Web Security Academy",
+     "n": "How a message handler becomes a route to DOM-based attacks, with labs to practise on."
+    },
+    {
+     "t": "postMessaged and Compromised",
+     "u": "https://www.microsoft.com/en-us/msrc/blog/2025/08/postmessaged-and-compromised/",
+     "by": "Microsoft Security Response Center",
+     "y": "2025",
+     "n": "Case studies of token theft and script injection through weak origin checks in Microsoft services."
+    },
+    {
+     "t": "The pitfalls of postMessage",
+     "u": "https://labs.detectify.com/writeups/the-pitfalls-of-postmessage/",
+     "by": "Mathias Karlsson, Detectify Labs",
+     "y": "2016",
+     "n": "Common mistakes in origin checks, with examples."
+    },
+    {
+     "t": "postMessage Broadcasts",
+     "u": "https://xsleaks.dev/docs/attacks/postmessage-broadcasts/",
+     "by": "XS-Leaks Wiki",
+     "n": "How a message sent to any origin, or the fact that one was sent at all, leaks information to another site."
+    }
+   ]
+  },
+  {
+   "id": "papers-security",
+   "title": "Research papers: security of messaging",
+   "intro": "We found no paper that is only about MessageChannel. The research is about postMessage, frames and workers, and several papers cover ports as part of that.",
+   "items": [
+    {
+     "t": "Protection and Communication Abstractions for Web Browsers in MashupOS",
+     "u": "https://www.microsoft.com/en-us/research/publication/protection-and-communication-abstractions-for-web-browsers-in-mashupos/",
+     "by": "Wang, Fan, Howell and Jackson, SOSP",
+     "y": "2007",
+     "n": "Proposed browser abstractions for isolated content from different sites to talk to each other, shortly before postMessage shipped."
+    },
+    {
+     "t": "Securing Frame Communication in Browsers",
+     "u": "https://www.usenix.org/conference/17th-usenix-security-symposium/securing-frame-communication-browsers",
+     "by": "Barth, Jackson and Mitchell, USENIX Security",
+     "y": "2008",
+     "n": "Found a confidentiality flaw in the first postMessage design. The fix is the target origin argument used today."
+    },
+    {
+     "t": "Attacks on JavaScript Mashup Communication",
+     "u": "https://www.ieee-security.org/TC/W2SP/2009/papers/s1p3.pdf",
+     "by": "Barth, Jackson and Li, W2SP",
+     "y": "2009",
+     "n": "Shows how libraries layered on postMessage and similar channels let one side compromise the other. PDF."
+    },
+    {
+     "t": "The Emperor's New APIs: On the (In)Secure Usage of New Client-side Primitives",
+     "u": "https://webblaze.cs.berkeley.edu/emperorsAPI.html",
+     "by": "Hanna, Shin, Akhawe, Boehm, Saxena and Song, W2SP",
+     "y": "2010",
+     "n": "Studies postMessage protocols in Facebook Connect and Google Friend Connect and finds missing origin checks."
+    },
+    {
+     "t": "Privilege Separation in HTML5 Applications",
+     "u": "https://www.usenix.org/conference/usenixsecurity12/technical-sessions/presentation/akhawe",
+     "by": "Akhawe, Saxena and Song, USENIX Security",
+     "y": "2012",
+     "n": "Splits an application into unprivileged parts that can only reach a small privileged parent by postMessage."
+    },
+    {
+     "t": "Treehouse: JavaScript Sandboxes to Help Web Developers Help Themselves",
+     "u": "https://www.usenix.org/conference/atc12/technical-sessions/presentation/ingram",
+     "by": "Ingram and Walfish, USENIX ATC",
+     "y": "2012",
+     "n": "Runs untrusted scripts in web workers with a virtual DOM, with every request checked as it crosses by message."
+    },
+    {
+     "t": "The Postman Always Rings Twice: Attacking and Defending postMessage in HTML5 Websites",
+     "u": "https://www.ndss-symposium.org/ndss2013/ndss-2013-programme/postman-always-rings-twice-attacking-and-defending-postmessage-html5-websites/",
+     "by": "Son and Shmatikov, NDSS",
+     "y": "2013",
+     "n": "A study of message receivers on the Alexa top 10,000 sites. Many checked the origin incorrectly or not at all."
+    },
+    {
+     "t": "Protecting Users by Confining JavaScript with COWL",
+     "u": "https://www.usenix.org/conference/osdi14/technical-sessions/presentation/stefan",
+     "by": "Stefan, Yang, Marchenko, Russo, Herman, Karp and Mazières, OSDI",
+     "y": "2014",
+     "n": "Adds labels to browser contexts and to the messages they exchange, so a page can share data with code it does not trust."
+    },
+    {
+     "t": "ZigZag: Automatically Hardening Web Applications Against Client-side Validation Vulnerabilities",
+     "u": "https://www.usenix.org/conference/usenixsecurity15/technical-sessions/presentation/weissbacher",
+     "by": "Weissbacher, Robertson, Kirda, Kruegel and Vigna, USENIX Security",
+     "y": "2015",
+     "n": "Learns what normal messages look like and blocks ones that do not fit, to protect weak postMessage receivers."
+    },
+    {
+     "t": "How the Web Tangled Itself: Uncovering the History of Client-Side Web (In)Security",
+     "u": "https://www.usenix.org/conference/usenixsecurity17/technical-sessions/presentation/stock",
+     "by": "Stock, Johns, Steffens and Backes, USENIX Security",
+     "y": "2017",
+     "n": "Twenty years of archived pages, including how postMessage use and missing origin checks grew over time."
+    },
+    {
+     "t": "Study and Mitigation of Origin Stripping Vulnerabilities in Hybrid-postMessage Enabled Mobile Applications",
+     "u": "https://success.cse.tamu.edu/osv-free/",
+     "by": "Yang, Huang, Gu and Mendoza, IEEE S&P",
+     "y": "2018",
+     "n": "postMessage between native code and a WebView loses the origin of the sender. This is the project page."
+    },
+    {
+     "t": "Site Isolation: Process Separation for Web Sites within the Browser",
+     "u": "https://www.usenix.org/conference/usenixsecurity19/presentation/reis",
+     "by": "Reis, Moshchuk and Oskov, USENIX Security",
+     "y": "2019",
+     "n": "How Chrome puts each site in its own process. Explains what it took to keep postMessage working between frames in different processes."
+    },
+    {
+     "t": "PMForce: Systematically Analyzing postMessage Handlers at Scale",
+     "u": "https://cispa.de/en/research/publications/52660-pmforce-systematically-analyzing-postmessage-handlers-at-scale",
+     "by": "Steffens and Stock, ACM CCS",
+     "y": "2020",
+     "n": "Automated analysis of message handlers on the top 100,000 sites. It found 111 handlers it could exploit automatically."
+    },
+    {
+     "t": "Careful Who You Trust: Studying the Pitfalls of Cross-Origin Communication",
+     "u": "https://cispa.de/en/research/publications/52659-careful-who-you-trust-studying-the-pitfalls-of-cross-origin-communication",
+     "by": "Meiser, Laperdrix and Stock, ACM AsiaCCS",
+     "y": "2021",
+     "n": "Maps which sites trust which others through postMessage and CORS, and how far a flaw in one site reaches."
+    }
+   ]
+  },
+  {
+   "id": "papers-other",
+   "title": "Research papers: timing, workers and concurrency",
+   "intro": "",
+   "items": [
+    {
+     "t": "Fantastic Timers and Where to Find Them: High-Resolution Microarchitectural Attacks in JavaScript",
+     "u": "https://doi.org/10.1007/978-3-319-70972-7_13",
+     "by": "Schwarz, Maurice, Gruss and Mangard, Financial Cryptography",
+     "y": "2017",
+     "n": "Builds precise timers from other browser features after performance.now() was made coarse. Message passing between contexts is one of the building blocks."
+    },
+    {
+     "t": "Loophole: Timing Attacks on Shared Event Loops in Chrome",
+     "u": "https://www.usenix.org/conference/usenixsecurity17/technical-sessions/presentation/vila",
+     "by": "Vila and Köpf, USENIX Security",
+     "y": "2017",
+     "n": "A page posts messages to itself and times their arrival to learn what other pages on the same event loop are doing."
+    },
+    {
+     "t": "Browsix: Bridging the Gap Between Unix and the Browser",
+     "u": "https://arxiv.org/abs/1611.07862",
+     "by": "Powers, Vilk and Berger, ASPLOS",
+     "y": "2017",
+     "n": "Unix processes as web workers, with system calls sent to a kernel on the main thread as messages."
+    },
+    {
+     "t": "Simpler Coordination of JavaScript Web Workers",
+     "u": "https://sungshik.github.io/papers/coordination2017.pdf",
+     "by": "Krauweel and Jongmans, COORDINATION",
+     "y": "2017",
+     "n": "Treats workers and postMessage as an actor language and proposes higher-level ways to coordinate them. PDF."
+    },
+    {
+     "t": "Parallel and Distributed Web Programming with Actors",
+     "u": "https://myter.be/wp-content/uploads/2021/03/pre-print-LNCS.pdf",
+     "by": "Myter, Scholliers and De Meuter",
+     "y": "2018",
+     "n": "Spiders.js, an actor framework that uses one model for web workers and for remote machines. PDF."
+    }
+   ]
+  },
+  {
+   "id": "talks",
+   "title": "Talks and videos",
+   "intro": "",
+   "items": [
+    {
+     "t": "Is postMessage slow? - HTTP 203",
+     "u": "https://www.youtube.com/watch?v=D61EQuTqvvY",
+     "by": "Jake Archibald and Surma, Chrome for Developers",
+     "y": "2019",
+     "n": "The measurements from Surma's article, talked through."
+    },
+    {
+     "t": "The main thread is overworked & underpaid",
+     "u": "https://www.youtube.com/watch?v=7Rrv9qFMWNM",
+     "by": "Surma, Chrome Dev Summit",
+     "y": "2019",
+     "n": "The case for moving application logic to workers and talking to it with messages."
+    },
+    {
+     "t": "A Quest to Guarantee Responsiveness: Scheduling On and Off the Main Thread",
+     "u": "https://www.youtube.com/watch?v=mDdgfyRB5kg",
+     "by": "Shubhie Panicker and Jason Miller, Chrome Dev Summit",
+     "y": "2018",
+     "n": "Scheduling work on the main thread and moving work to workers."
+    },
+    {
+     "t": "Harnessing the Power of MessageChannel and BroadcastChannel",
+     "u": "https://gitnation.com/contents/harnessing-the-power-of-messagechannel-and-broadcastchannel",
+     "by": "Daniel Jakobsen, GitNation",
+     "y": "2023",
+     "n": "A short talk that moves an iframe example from window.postMessage to a port."
+    }
+   ]
+  },
+  {
+   "id": "intents",
+   "title": "Web Intents, WebMCP and agents",
+   "intro": "The ideas the experiments on this site come from: one site asking another to do something for the person, and now an agent doing the asking.",
+   "items": [
+    {
+     "t": "Web Intents (W3C Working Group Note)",
+     "u": "https://www.w3.org/TR/2013/NOTE-web-intents-20130523/",
+     "by": "Greg Billock, James Hawkins and Paul Kinlan, W3C",
+     "y": "2013",
+     "n": "The last published draft. An intent could carry MessagePorts and other transferables to the service that handled it."
+    },
+    {
+     "t": "Connecting Web Apps with Web Intents",
+     "u": "https://blog.chromium.org/2011/08/connecting-web-apps-with-web-intents.html",
+     "by": "James Hawkins, Chromium Blog",
+     "y": "2011",
+     "n": "The announcement of the Web Intents work in Chrome."
+    },
+    {
+     "t": "Web Intents Note Published",
+     "u": "https://www.w3.org/news/2013/web-intents-note-published/",
+     "by": "W3C",
+     "y": "2013",
+     "n": "The notice that work on the specification had stopped."
+    },
+    {
+     "t": "WebIntents wiki",
+     "u": "https://www.w3.org/wiki/WebIntents",
+     "by": "W3C",
+     "n": "Use cases and notes from the task force."
+    },
+    {
+     "t": "public-web-intents mailing list archive",
+     "u": "https://lists.w3.org/Archives/Public/public-web-intents/",
+     "by": "W3C",
+     "n": "The design discussion, including how a MessageChannel should be set up between client and service."
+    },
+    {
+     "t": "WebAPI/WebActivities",
+     "u": "https://wiki.mozilla.org/WebAPI/WebActivities",
+     "by": "Mozilla",
+     "n": "Mozilla's version of the same idea, built for Firefox OS."
+    },
+    {
+     "t": "Web Actions",
+     "u": "https://indieweb.org/webactions",
+     "by": "IndieWeb",
+     "n": "The IndieWeb community's notes on actions across sites, with a history of earlier attempts."
+    },
+    {
+     "t": "Receiving shared data with the Web Share Target API",
+     "u": "https://developer.chrome.com/docs/capabilities/web-apis/web-share-target",
+     "by": "Chrome for Developers",
+     "n": "A later API that covers one Web Intents use case: an installed web app registers to receive shares."
+    },
+    {
+     "t": "WebMCP",
+     "u": "https://webmachinelearning.github.io/webmcp/",
+     "by": "W3C Web Machine Learning Community Group",
+     "n": "The draft specification for a page to offer tools to an agent."
+    },
+    {
+     "t": "WebMCP in Chrome",
+     "u": "https://developer.chrome.com/docs/ai/webmcp",
+     "by": "Chrome for Developers",
+     "n": "Chrome's documentation for trying WebMCP."
+    },
+    {
+     "t": "MCP Apps",
+     "u": "https://modelcontextprotocol.io/extensions/apps/overview",
+     "by": "Model Context Protocol",
+     "n": "An MCP extension in which a tool's UI runs in an iframe and speaks JSON-RPC to its host over postMessage."
+    },
+    {
+     "t": "MCP Apps SDK",
+     "u": "https://github.com/modelcontextprotocol/ext-apps",
+     "by": "Model Context Protocol",
+     "n": "The specification and SDK, including the PostMessageTransport class."
+    },
+    {
+     "t": "Agent Client Protocol",
+     "u": "https://agentclientprotocol.com/",
+     "by": "Agent Client Protocol",
+     "n": "The protocol between an editor or other client and a coding agent, which the hub on this site carries to a web page."
+    }
+   ]
+  },
+  {
+   "id": "paul",
+   "title": "Paul Kinlan's writing",
+   "intro": "The author of this site has written about these ideas since 2011.",
+   "items": [
+    {
+     "t": "WebMessaging is broken",
+     "u": "https://paul.kinlan.me/webmessaging-is-broken/",
+     "by": "paul.kinlan.me",
+     "y": "2011",
+     "n": "The differences between browsers' postMessage implementations at the time."
+    },
+    {
+     "t": "Web Intents: A fresh look",
+     "u": "https://paul.kinlan.me/web-intents-a-fresh-look/",
+     "by": "paul.kinlan.me",
+     "y": "2011",
+     "n": "The design of Web Intents as it stood in mid 2011."
+    },
+    {
+     "t": "What happened to Web Intents?",
+     "u": "https://paul.kinlan.me/what-happened-to-web-intents/",
+     "by": "paul.kinlan.me",
+     "y": "2015",
+     "n": "Why the project ended."
+    },
+    {
+     "t": "What were the UX issues with Web Intents?",
+     "u": "https://paul.kinlan.me/what-were-the-ux-issues-with-web-intents/",
+     "by": "paul.kinlan.me",
+     "y": "2016",
+     "n": "The problems with the picker and with discovery."
+    },
+    {
+     "t": "Service discovery and app interactions on the web",
+     "u": "https://paul.kinlan.me/service-discovery-on-the-web/",
+     "by": "paul.kinlan.me",
+     "y": "2016",
+     "n": "How one site could find another that offers a service."
+    },
+    {
+     "t": "Every browser should support a style of 'intent:' URL syntax",
+     "u": "https://paul.kinlan.me/every-browser-should-support-intent-urls/",
+     "by": "paul.kinlan.me",
+     "y": "2016",
+     "n": "A proposal for links that name an action and not a site."
+    },
+    {
+     "t": "The Headless Web",
+     "u": "https://paul.kinlan.me/the-headless-web/",
+     "by": "paul.kinlan.me",
+     "y": "2016",
+     "n": "The web used through services and programs, without a page in front of the person."
+    },
+    {
+     "t": "Web sites as unintended silos",
+     "u": "https://paul.kinlan.me/unintended-silos/",
+     "by": "paul.kinlan.me",
+     "y": "2017",
+     "n": "Why it is hard to move data in and out of a site in the browser."
+    },
+    {
+     "t": "Reinventing Web Intents",
+     "u": "https://paul.kinlan.me/reinventing-web-intents/",
+     "by": "paul.kinlan.me",
+     "y": "2017",
+     "n": "A middle site that hands a client a MessagePort to a service, using Comlink. The hub on this site follows from it."
+    },
+    {
+     "t": "The Web is my API",
+     "u": "https://paul.kinlan.me/the-web-is-my-api/",
+     "by": "paul.kinlan.me",
+     "y": "2017",
+     "n": "A site exposing its functions to other sites through a hidden frame and Comlink."
+    },
+    {
+     "t": "Barcode detection in a Web Worker using Comlink",
+     "u": "https://paul.kinlan.me/barcode-detection-in-a-web-worker-using-comlink/",
+     "by": "paul.kinlan.me",
+     "y": "2018",
+     "n": "A small example of moving work to a worker."
+    },
+    {
+     "t": "Running FFMPEG with WASM in a Web Worker",
+     "u": "https://paul.kinlan.me/running-ffmpeg-with-wasm-in-a-web-worker/",
+     "by": "paul.kinlan.me",
+     "y": "2018",
+     "n": "A large WebAssembly program in a worker, driven by messages."
+    },
+    {
+     "t": "The web that never was",
+     "u": "https://paul.kinlan.me/the-web-that-never-was/",
+     "by": "paul.kinlan.me",
+     "y": "2022",
+     "n": "Web platform projects that did not ship, Web Intents among them."
+    },
+    {
+     "t": "Posts tagged postMessage",
+     "u": "https://paul.kinlan.me/tags/postmessage/",
+     "by": "paul.kinlan.me",
+     "n": "Every post with the tag."
+    },
+    {
+     "t": "Posts tagged intents",
+     "u": "https://paul.kinlan.me/tags/intents/",
+     "by": "paul.kinlan.me",
+     "n": "Every post with the tag."
+    },
+    {
+     "t": "Calling APIs from the browser shouldn't mean exposing keys",
+     "u": "https://aifoc.us/dangerous/",
+     "by": "aifoc.us",
+     "y": "2025",
+     "n": "The problem the AI router on this site is an answer to."
+    },
+    {
+     "t": "WebMCP is the new Web Intents ... maybe",
+     "u": "https://aifoc.us/webmcp-is-the-new-web-intents/",
+     "by": "aifoc.us",
+     "y": "2026",
+     "n": "WebMCP as a way for sites to declare what they can do."
+    },
+    {
+     "t": "I think I've got it: WebMCP is the new Web Intents",
+     "u": "https://aifoc.us/i-think-ive-got-it-web-intents/",
+     "by": "aifoc.us",
+     "y": "2026",
+     "n": "A registry of tools that the person holds."
+    },
+    {
+     "t": "Extensible web apps",
+     "u": "https://aifoc.us/extensible-web-apps/",
+     "by": "aifoc.us",
+     "y": "2026",
+     "n": "A plugin system built on SharedWorker and MessageChannel."
+    },
+    {
+     "t": "WebIntents on GitHub",
+     "u": "https://github.com/PaulKinlan/WebIntents",
+     "by": "Paul Kinlan",
+     "n": "The original JavaScript shim and examples."
+    }
+   ]
+  }
+ ]
+}

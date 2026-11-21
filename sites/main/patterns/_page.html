@@ -37,7 +37,7 @@
   <div class="wrap">
     <header class="site-bar">
       <a class="wordmark" href="/">Port Authority</a>
-      <nav><a href="/guide/">The guide</a><a href="/patterns/" aria-current="true">Port patterns</a><a href="/lab/">The lab</a><a href="/comlink/">Comlink today</a><a href="/hub/">Your hub</a></nav>
+      <nav><a href="/guide/">The guide</a><a href="/patterns/" aria-current="true">Port patterns</a><a href="/lab/">The lab</a><a href="/comlink/">Comlink today</a><a href="/reading/">Further reading</a><a href="/hub/">Your hub</a></nav>
     </header>
     <main id="main">
       <div class="stack" style="padding-block:2rem 1rem; --gap:.6rem">
@@ -107,5 +107,6 @@
       $("pager").innerHTML = `${prev ? `<a href="/patterns/${prev.id}/"><small>\u2039 Before this</small>${prev.title}</a>` : "<span></span>"}${next ? `<a href="/patterns/${next.id}/" style="text-align:right"><small>After this \u203a</small>${next.title}</a>` : ""}`;
     }
   </script>
+  <script type="module" src="/refs.js"></script>
 </body>
 </html>
