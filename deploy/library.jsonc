@@ -1,0 +1,23 @@
+{
+  // The library demo site: the same script and files as the main site, under its
+  // own Worker name so that it has its own origin. The hub, the lab and the
+  // meeting point are the main Worker's Durable Objects.
+  "name": "pa-library",
+  "main": "../src/worker.js",
+  "compatibility_date": "2026-10-01",
+  "workers_dev": true,
+  "preview_urls": false,
+  "assets": {
+    "directory": "../sites",
+    "binding": "ASSETS",
+    "run_worker_first": true,
+    "html_handling": "none",
+    "not_found_handling": "none"
+  },
+  "vars": { "MAIN_HOST": "port-authority.dev", "DEMO_SUFFIX": ".kinlan-test.workers.dev" },
+  "durable_objects": { "bindings": [
+    { "name": "HUB", "class_name": "Hub", "script_name": "portauthority" },
+    { "name": "LAB", "class_name": "Lab", "script_name": "portauthority" },
+    { "name": "MEET", "class_name": "Meet", "script_name": "portauthority" }
+  ] }
+}

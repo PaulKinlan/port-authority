@@ -4,7 +4,7 @@ Experiments in what the web can do when sites hand each other `MessagePort`s:
 Web Intents for the agent era, a registry of WebMCP-style tools, and the
 user's own agent on any site over the Agent Client Protocol.
 
-Live (interim): https://portauthority.kinlan-test.workers.dev
+Live: https://port-authority.dev
 
 ## What is here
 
@@ -104,10 +104,24 @@ LIVE=kinlan-test.workers.dev ...                 # same tests against the deploy
 
 ## Deploy
 
-The same script is deployed under four Worker names (`portauthority`,
-`pa-florist`, `pa-library`, `pa-planner`) so each demo has a real origin.
-For now files are pushed into KV with `scripts/upload.sh`; moving to
-`wrangler deploy` with static assets is the next step once this is in a repo.
+Merging to `main` deploys. Cloudflare Workers Builds is connected to this
+repository and runs one deploy per Worker on every push to `main`:
+
+| Worker | Address | Deploy command |
+| --- | --- | --- |
+| `portauthority` | https://port-authority.dev | `npx wrangler deploy` |
+| `pa-florist` | https://pa-florist.kinlan-test.workers.dev | `npx wrangler deploy -c deploy/florist.jsonc` |
+| `pa-library` | https://pa-library.kinlan-test.workers.dev | `npx wrangler deploy -c deploy/library.jsonc` |
+| `pa-planner` | https://pa-planner.kinlan-test.workers.dev | `npx wrangler deploy -c deploy/planner.jsonc` |
+| `pa-router` | https://pa-router.kinlan-test.workers.dev | `npx wrangler deploy -c deploy/router.jsonc` |
+
+All five run `src/worker.js` and carry the whole `sites/` folder as static
+assets; the script picks the folder by hostname. The three demo sites use the
+main Worker's Durable Objects (hub, lab, meeting point), so `portauthority`
+has to exist before they deploy. `pa-router` has a Router class of its own.
+
+A build's log is in the Cloudflare dashboard under the Worker, in Deployments.
+A new Worker name needs a file in `deploy/` and a build trigger on Cloudflare.
 
 ## Known limits
 

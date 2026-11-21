@@ -1,9 +1,22 @@
 {
   // Port Authority (working name). One Worker script, deployed under several
   // names so that each demo site gets its own real origin.
+  //
+  // This file is the main site (port-authority.dev) and is also what
+  // `wrangler dev` runs locally, where one Worker stands in for every site.
+  // The demo sites have their own files in deploy/.
+  //
+  // Deploys are automatic: Cloudflare Workers Builds runs `npx wrangler deploy`
+  // for each Worker on every push to main. See "Deploy" in README.md.
   "name": "portauthority",
   "main": "src/worker.js",
   "compatibility_date": "2026-10-01",
+  "workers_dev": true,
+  "preview_urls": false,
+  // port-authority.dev is attached to this Worker as a custom domain on
+  // Cloudflare. It is not listed under "routes" here because `wrangler dev`
+  // would then answer every local request as that host, and the script picks
+  // the site by hostname. A deploy leaves the domain attached.
   "assets": {
     "directory": "sites",
     "binding": "ASSETS",
@@ -11,8 +24,10 @@
     "html_handling": "none",
     "not_found_handling": "none"
   },
-  // Set both when the main site has its own domain and the demo sites stay on workers.dev.
+  // The main site has its own domain and the demo sites stay on workers.dev.
   "vars": { "MAIN_HOST": "port-authority.dev", "DEMO_SUFFIX": ".kinlan-test.workers.dev" },
+  // ROUTER is here for local development. In production only pa-router answers
+  // /r/, with its own Router class (deploy/router.jsonc).
   "durable_objects": { "bindings": [{ "name": "HUB", "class_name": "Hub" }, { "name": "LAB", "class_name": "Lab" }, { "name": "MEET", "class_name": "Meet" }, { "name": "ROUTER", "class_name": "Router" }] },
   "migrations": [
     { "tag": "v1", "new_sqlite_classes": ["Relay"] },
