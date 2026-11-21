@@ -6,7 +6,7 @@
   <title>Write a card, Stem and Petal</title>
   <link rel="stylesheet" href="/base.css">
   <link rel="stylesheet" href="/site.css">
-  <style>:root { --accent: #e0364c; --on-accent: #fff; } .card { font: var(--step-1)/1.45 Georgia, serif; min-height: 7rem; white-space: pre-wrap; }</style>
+  <style>:root { --accent: #e0364c; --on-accent: #fff; } .widget { width: 100%; height: 19rem; border: 2px dashed var(--ink); border-radius: 10px; } .card { font: var(--step-1)/1.45 Georgia, serif; min-height: 7rem; white-space: pre-wrap; }</style>
 </head>
 <body>
   <div class="wrap">
@@ -36,6 +36,13 @@
         <p class="small muted" id="meta"></p>
       </section>
       <section class="panel stack">
+        <h2>A widget from another site</h2>
+        <p class="small muted">The box below is an iframe from the planner's address. It cannot ask the router for anything. This page can lend it a port that stops after 2 requests.</p>
+        <div class="status"><button id="lend" disabled>Lend the widget a port for 2 requests</button></div>
+        <iframe id="widget" title="Gift tag widget from the planner" class="widget"></iframe>
+        <p class="small muted">iframe: <code id="widget-url"></code></p>
+      </section>
+      <section class="panel stack">
         <h2>What this page did</h2>
         <ul class="log" id="log"><li class="muted">Nothing yet.</li></ul>
       </section>
@@ -43,7 +50,8 @@
   </div>
   <script type="module">
     import { sites } from "/_sites.js";
-    const { connect } = await import(`${sites.router}/router.js`);
+    const router = sites.router || sites.florist.replace("florist", "router");   // older deployments do not list the router
+    const { connect } = await import(`${router}/router.js`);
     const $ = (id) => document.getElementById(id);
     const log = (text) => { const li = document.createElement("li"); li.textContent = text; if ($("log").querySelector(".muted")) $("log").innerHTML = ""; $("log").prepend(li); };
 
@@ -55,6 +63,14 @@
       $("choose").disabled = false;
       $("write").disabled = !ai.ready;
       $("forget").hidden = !ai.ready;
+      $("lend").disabled = !ai.ready;
+    };
+    $("widget").src = sites.planner + "/tag/";
+    $("widget-url").textContent = sites.planner.replace(/^https?:\/\//, "") + "/tag/";
+    $("lend").onclick = async () => {
+      const port = await ai.lend({ requests: 2 });
+      $("widget").contentWindow.postMessage({ t: "ai-port" }, sites.planner, [port]);
+      log("Asked the router for a port limited to 2 requests and posted it to the planner's iframe.");
     };
     ai.onchange(show);
     show();

@@ -96,6 +96,23 @@ if (process.env.DEBUG) console.log(kept);
 const stored = JSON.parse(kept)["router.grant:" + base("florist")] || "";
 check("the frame's stored copy of the key is encrypted", !stored.includes(KEY) && /sealed/.test(stored));
 
+// The router's pages may connect only to the router and the listed providers.
+const csp = await home.evaluate(async () => (await fetch("/frame.html")).headers.get("content-security-policy") || "");
+check("the router frame is served with a content security policy", /default-src 'none'/.test(csp) && /connect-src 'self' https:\/\/api\.anthropic\.com/.test(csp) && !/unsafe/.test(csp), csp.slice(0, 60));
+const elsewhere = await frame.evaluate(() => fetch("https://example.com/", { mode: "no-cors" }).then(() => "allowed", () => "blocked"));
+check("the router frame cannot connect to an address that is not on the list", elsewhere === "blocked");
+check("the provider call was made from a worker inside the frame", florist.workers().some((w) => w.url().endsWith("/frame-worker.js")));
+
+// The site lends a port to an iframe from a third site, limited to 2 requests.
+await florist.click("#lend");
+const widget = florist.frameLocator("#widget");
+await widget.locator("#go:not([disabled])").waitFor();
+for (let i = 1; i <= 3; i++) {
+  await widget.locator("#go").click();
+  await widget.locator("#state", { hasText: `Request ${i}` }).waitFor();
+}
+check("an iframe from another site answers with the port it was lent, then stops at its limit", /Request 3 was refused: This port was lent/.test(await widget.locator("#state").innerText()) && (await widget.locator("#tag").innerText()) === "", await widget.locator("#state").innerText());
+
 // A reload needs no window.
 await florist.reload();
 await florist.waitForSelector("#write:not([disabled])");
@@ -153,7 +170,7 @@ await home.bringToFront();
 await home.evaluate(() => dispatchEvent(new Event("focus")));
 await home.waitForFunction(() => document.querySelectorAll("#grants li[data-id]").length >= 3);
 const grants = await home.locator("#grants").innerText();
-check("the router lists both sites with their usage", /florist/.test(grants) && /1 of 5 requests used/.test(grants) && /21 tokens in, 9 out/.test(grants) && /library/.test(grants) && /7 of 20 requests used/.test(grants), grants.replace(/\n/g, " | "));
+check("the router lists both sites with their usage", /florist/.test(grants) && /3 of 5 requests used/.test(grants) && /63 tokens in, 27 out/.test(grants) && /library/.test(grants) && /7 of 20 requests used/.test(grants), grants.replace(/\n/g, " | "));
 
 // Stop the florist. Its next request is refused, and its stored copy of the key cannot be opened.
 await home.locator("#grants li", { hasText: "florist" }).locator("[data-revoke]").click();

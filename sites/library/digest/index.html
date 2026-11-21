@@ -39,7 +39,8 @@
     </main>
   </div>
   <script type="module">
-    import { sites } from "/_sites.js";
+    import { sites as listed } from "/_sites.js";
+    const sites = { ...listed, router: listed.router || listed.florist.replace("florist", "router") };   // older deployments do not list the router
     const { connect, fromPort } = await import(`${sites.router}/router.js`);
     const $ = (id) => document.getElementById(id);
     const add = (list, text) => { const li = document.createElement("li"); li.textContent = text; if ($(list).querySelector(".muted")) $(list).innerHTML = ""; $(list).prepend(li); return li; };

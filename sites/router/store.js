@@ -27,9 +27,9 @@ export function removeAccount(id) { write("router.accounts", accounts().filter((
 // Every account and model the person can choose from, as a flat list.
 export async function choices() {
   const out = [];
-  for (const a of accounts()) for (const model of a.models) out.push({ key: a.id + "|" + model, label: a.label, provider: a.provider, providerName: PROVIDERS[a.provider].name, model, secretKey: a.key, baseUrl: a.baseUrl });
+  for (const a of accounts()) for (const model of a.models) out.push({ key: a.id + "|" + model, label: a.label, provider: a.provider, providerName: PROVIDERS[a.provider].name, model, secretKey: a.key || "" });
   if (await hasBuiltin()) out.push({ key: "builtin", label: "This browser", provider: "builtin", providerName: PROVIDERS.builtin.name, model: "built-in", note: "Runs on this device. Free." });
-  out.push({ key: "practice", label: "Practice model", provider: "practice", providerName: PROVIDERS.practice.name, model: "not a real model", note: "Not a real model. No key, no network call." });
+  out.push({ key: "practice", label: "Practice model", provider: "practice", providerName: PROVIDERS.practice.name, model: PROVIDERS.practice.models[0], note: "Not a real model. No key, no network call." });
   return out;
 }
 
@@ -39,17 +39,4 @@ export async function server(action, body = {}) {
   return response.json();
 }
 
-// Encrypt the API key so that the copy kept inside a site can only be read
-// with the unlock key the server hands out while the grant is good.
-const bytes = (text) => Uint8Array.from(atob(text.replace(/-/g, "+").replace(/_/g, "/")), (c) => c.charCodeAt(0));
-const text64 = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf)));
-const aes = (wrap) => crypto.subtle.importKey("raw", bytes(wrap).slice(0, 32), "AES-GCM", false, ["encrypt", "decrypt"]);
-export async function seal(wrap, secret) {
-  const iv = crypto.getRandomValues(new Uint8Array(12));
-  const data = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, await aes(wrap), new TextEncoder().encode(secret));
-  return { iv: text64(iv), data: text64(data) };
-}
-export async function unseal(wrap, sealed) {
-  const data = await crypto.subtle.decrypt({ name: "AES-GCM", iv: bytes(sealed.iv) }, await aes(wrap), bytes(sealed.data));
-  return new TextDecoder().decode(data);
-}
+export { seal } from "/seal.js";

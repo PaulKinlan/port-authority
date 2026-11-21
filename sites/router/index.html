@@ -17,15 +17,14 @@
     <main class="grid">
       <section class="panel stack">
         <h2>Your accounts</h2>
-        <p class="small muted">Keys are kept in this browser, in the storage for this address. They are not sent to the router's server. They are sent only to the provider they belong to.</p>
+        <p class="small muted">Keys are kept in this browser, in the storage for this address. They are not sent to the router's server. They are sent only to the provider they belong to. These pages are served with a rule that stops them connecting to any address except the router and the providers in the list below.</p>
         <ul class="rows" id="accounts"></ul>
         <details id="add">
-          <summary class="button quiet" style="display:inline-flex">Add an account</summary>
-          <form class="fields" id="form" style="margin-top:1rem">
-            <div><label for="provider">Provider</label><select id="provider"></select><p class="small muted" id="provider-note" style="margin-top:.3rem"></p></div>
+          <summary class="button quiet">Add an account</summary>
+          <form class="fields" id="form">
+            <div><label for="provider">Provider</label><select id="provider"></select><p class="small muted" id="provider-note"></p></div>
             <div><label for="label">Name for this account</label><input type="text" id="label" required maxlength="40" placeholder="Work key"></div>
-            <div id="base-row"><label for="base">Address</label><input type="url" id="base"></div>
-            <div><label for="key">API key</label><input type="password" id="key" autocomplete="off"></div>
+            <div id="key-row"><label for="key">API key</label><input type="password" id="key" autocomplete="off"></div>
             <div><label for="models">Models, separated by commas</label><input type="text" id="models" required></div>
             <div class="actions"><button class="accent">Save</button><span class="small muted" id="form-state"></span></div>
           </form>
@@ -44,85 +43,6 @@
       </section>
     </main>
   </div>
-  <script type="module">
-    import { sites } from "/_sites.js";
-    import { PROVIDERS, generate } from "/providers.js";
-    import { accounts, saveAccount, removeAccount, server, random } from "/store.js";
-    const $ = (id) => document.getElementById(id);
-    const esc = (text) => String(text).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
-    $("main-link").href = sites.main + "/ai-router/";
-    $("try").innerHTML = [
-      [sites.florist + "/card/", "Stem and Petal", "A florist that writes the card for a bouquet."],
-      [sites.library + "/digest/", "Harbour Street Library", "A library that hands its port to a worker, and lends a 3-request port."],
-      [sites.main + "/ai-router/", "Port Authority", "How the router works, with a box to try it in."],
-    ].map(([href, name, what]) => `<li><span><a href="${href}"><strong>${name}</strong></a><br><span class="small muted">${what}</span></span></li>`).join("");
-
-    // ---- accounts
-    const keyed = Object.entries(PROVIDERS).filter(([, p]) => p.needsKey);
-    $("provider").innerHTML = keyed.map(([id, p]) => `<option value="${id}">${p.name}</option>`).join("");
-    const providerChanged = () => {
-      const p = PROVIDERS[$("provider").value];
-      $("provider-note").textContent = p.note;
-      $("base-row").hidden = !p.baseUrl;
-      $("base").value = p.baseUrl || "";
-      $("models").value = p.models.join(", ");
-    };
-    $("provider").onchange = providerChanged;
-    providerChanged();
-
-    function drawAccounts() {
-      const all = accounts();
-      $("accounts").innerHTML = all.length ? all.map((a) => `<li data-id="${esc(a.id)}">
-        <span><strong>${esc(a.label)}</strong><br><span class="small muted">${esc(PROVIDERS[a.provider].name)} · ${esc(a.models.join(", "))} · key ends ${esc((a.key || "none").slice(-4))}</span><br><span class="small" data-result></span></span>
-        <span class="actions"><button class="tiny quiet" data-test>Test</button><button class="tiny quiet" data-remove>Remove</button></span></li>`).join("")
-        : `<li class="muted">None yet. Without one you can still use the practice model, which is not a real model.</li>`;
-    }
-    drawAccounts();
-    $("accounts").onclick = async (event) => {
-      const row = event.target.closest("li[data-id]");
-      if (!row) return;
-      const account = accounts().find((a) => a.id === row.dataset.id);
-      if (event.target.matches("[data-remove]")) { removeAccount(account.id); drawAccounts(); }
-      if (event.target.matches("[data-test]")) {
-        const out = row.querySelector("[data-result]");
-        out.textContent = "Asking " + account.models[0] + " to say hello.";
-        try {
-          let text = "";
-          for await (const piece of generate({ ...account, model: account.models[0] }, { messages: [{ role: "user", content: "Say hello in five words or fewer." }], maxTokens: 30 })) { text += piece; out.textContent = "It answered: " + text; }
-        } catch (error) { out.innerHTML = `<span class="error">${esc(error.message)}</span>`; }
-      }
-    };
-    $("form").onsubmit = (event) => {
-      event.preventDefault();
-      const provider = $("provider").value;
-      const models = $("models").value.split(",").map((m) => m.trim()).filter(Boolean);
-      if (!models.length) return;
-      saveAccount({ id: random(6), provider, label: $("label").value.trim(), key: $("key").value.trim(), baseUrl: PROVIDERS[provider].baseUrl ? $("base").value.trim() : null, models });
-      $("form").reset(); providerChanged(); $("add").open = false;
-      drawAccounts();
-    };
-
-    // ---- grants
-    const day = (ms) => new Date(ms).toLocaleDateString(undefined, { day: "numeric", month: "short" });
-    async function drawGrants() {
-      let answer;
-      try { answer = await server("list"); } catch { $("grants").innerHTML = `<li class="error">The router server could not be reached.</li>`; return; }
-      const grants = answer.grants || [];
-      $("grants").innerHTML = grants.length ? grants.map((g) => `<li data-id="${esc(g.id)}">
-        <span><strong>${esc(g.site.replace(/^https?:\/\//, ""))}</strong><br>
-        <span class="small muted">${esc(g.label)} · ${esc(g.model)} · ${g.used} of ${g.requests} requests used${g.tokensIn + g.tokensOut ? ` · ${g.tokensIn} tokens in, ${g.tokensOut} out` : ""} · ${g.state === "active" ? "until " + day(g.expires) : "allowed " + day(g.made)}</span></span>
-        <span class="actions"><span class="tag ${g.state === "active" ? "active" : "off"}">${g.state === "active" ? "Allowed" : g.state === "revoked" ? "Stopped" : g.state === "expired" ? "Expired" : "Used up"}</span>${g.state === "active" ? `<button class="tiny quiet" data-revoke>Stop</button>` : ""}</span></li>`).join("")
-        : `<li class="muted">No site has asked yet. Try one of the sites below.</li>`;
-    }
-    $("grants").onclick = async (event) => {
-      const row = event.target.closest("li[data-id]");
-      if (!row || !event.target.matches("[data-revoke]")) return;
-      await server("revoke", { id: row.dataset.id });
-      drawGrants();
-    };
-    drawGrants();
-    addEventListener("focus", drawGrants);
-    setInterval(() => { if (!document.hidden) drawGrants(); }, 5000);
-  </script>
+  <script type="module" src="/home.js"></script>
 </body>
 </html>

@@ -2,11 +2,17 @@
 // text. This file runs in pages served from the router's own address: the
 // router frame inside a site, and the router's home page when it tests a key.
 
+// The router's pages are served with a Content-Security-Policy that lets them
+// connect to these addresses and nowhere else, so this list is fixed. Adding a
+// provider means adding it here and to ROUTER_CONNECT in src/worker.js.
 export const PROVIDERS = {
-  practice: { name: "Practice model", needsKey: false, models: ["practice"], note: "Not a real model. It needs no key and makes no network call, so you can try the whole flow." },
-  builtin: { name: "This browser's built-in model", needsKey: false, models: ["built-in"], note: "Runs on this device. Only offered when the browser has the Prompt API." },
-  anthropic: { name: "Anthropic", needsKey: true, models: ["claude-sonnet-5-5", "claude-haiku-5-5", "claude-opus-5-5"], note: "Your key from console.anthropic.com." },
-  openai: { name: "OpenAI-compatible", needsKey: true, baseUrl: "https://api.openai.com/v1", models: ["gpt-5-mini"], note: "OpenAI, OpenRouter, a local Ollama, or anything else that has /chat/completions. Change the address and the model names to match." },
+  practice: { name: "Practice model", needsKey: false, models: ["not a real model"], note: "Not a real model. It needs no key and makes no network call, so you can try the whole flow." },
+  builtin: { name: "This browser's built-in model", needsKey: false, models: ["built-in"], note: "Runs on this device. Only offered when the browser has the Prompt API and the model is downloaded." },
+  anthropic: { name: "Anthropic", needsKey: true, kind: "anthropic", baseUrl: "https://api.anthropic.com/v1", models: ["claude-sonnet-5-5", "claude-haiku-5-5", "claude-opus-5-5"], note: "Your key from console.anthropic.com." },
+  openai: { name: "OpenAI", needsKey: true, kind: "chat", baseUrl: "https://api.openai.com/v1", models: ["gpt-5-mini"], note: "Your key from platform.openai.com. Change the model names to the ones you use." },
+  openrouter: { name: "OpenRouter", needsKey: true, kind: "chat", baseUrl: "https://openrouter.ai/api/v1", models: ["openrouter/auto"], note: "Your key from openrouter.ai. Change the model names to the ones you use." },
+  gemini: { name: "Google Gemini", needsKey: true, kind: "chat", baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai", models: ["gemini-2.5-flash"], note: "Your key from aistudio.google.com. Change the model names to the ones you use." },
+  ollama: { name: "Ollama on this computer", needsKey: false, local: true, kind: "chat", baseUrl: "http://localhost:11434/v1", models: ["llama3.2"], note: "No key. Ollama must be running and must allow this address: start it with OLLAMA_ORIGINS set to the router's address." },
 };
 
 // True only when the browser has the Prompt API and its model is already on
@@ -49,7 +55,7 @@ const wait = (ms, signal) => new Promise((resolve, reject) => {
   signal?.addEventListener("abort", () => { clearTimeout(timer); reject(signal.reason); }, { once: true });
 });
 
-// account: { provider, key, baseUrl, model }
+// account: { provider, key, model }
 // ask:     { system, messages: [{ role: "user" | "assistant", content: "text" }], maxTokens }
 // Yields strings. Returns { tokensIn, tokensOut } when the provider reports them.
 export async function* generate(account, ask, signal) {
@@ -76,7 +82,8 @@ export async function* generate(account, ask, signal) {
     return usage;
   }
 
-  if (account.provider === "anthropic") {
+  const kind = PROVIDERS[account.provider]?.kind;
+  if (kind === "anthropic") {
     const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST", signal,
       headers: { "content-type": "application/json", "x-api-key": account.key, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
@@ -92,15 +99,15 @@ export async function* generate(account, ask, signal) {
     return usage;
   }
 
-  if (account.provider === "openai") {
-    const base = String(account.baseUrl || PROVIDERS.openai.baseUrl).replace(/\/+$/, "");
+  if (kind === "chat") {
+    const base = PROVIDERS[account.provider].baseUrl;
     const limit = base.includes("api.openai.com") ? { max_completion_tokens: maxTokens } : { max_tokens: maxTokens };
     const response = await fetch(base + "/chat/completions", {
       method: "POST", signal,
       headers: { "content-type": "application/json", ...(account.key ? { authorization: "Bearer " + account.key } : {}) },
       body: JSON.stringify({ model: account.model, stream: true, stream_options: { include_usage: true }, ...limit, messages: [...(system ? [{ role: "system", content: system }] : []), ...messages] }),
     });
-    if (!response.ok) throw await refuse(response, new URL(base).host);
+    if (!response.ok) throw await refuse(response, PROVIDERS[account.provider].name);
     for await (const event of events(response)) {
       const piece = event.choices?.[0]?.delta?.content;
       if (piece) yield piece;

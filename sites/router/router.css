@@ -26,3 +26,6 @@ body.picker { padding: 1.2rem; }
 .choices input { margin-top: 0.3rem; accent-color: var(--accent); }
 .choices strong { display: block; }
 .limits { display: grid; grid-template-columns: 1fr 1fr; gap: 0.8rem; }
+summary.button { display: inline-flex; }
+details form.fields { margin-top: 1rem; }
+#provider-note { margin-top: .3rem; }

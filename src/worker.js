@@ -23,6 +23,13 @@ const TYPES = {
   png: "image/png", ico: "image/x-icon", md: "text/markdown; charset=utf-8",
 };
 
+// Keep this list the same as PROVIDERS in sites/router/providers.js.
+const ROUTER_CONNECT = ["https://api.anthropic.com", "https://api.openai.com", "https://openrouter.ai", "https://generativelanguage.googleapis.com", "http://localhost:11434"];
+const ROUTER_CSP = [
+  "default-src 'none'", "script-src 'self'", "worker-src 'self'", "style-src 'self' https://fonts.googleapis.com", "font-src https://fonts.gstatic.com",
+  "img-src 'self' data:", "connect-src 'self' " + ROUTER_CONNECT.join(" "), "base-uri 'none'", "form-action 'none'",
+].join("; ");
+
 function label(host) { return host.split(":")[0].split(".")[0]; }
 function siteFor(host) { return LABELS[label(host)] || "main"; }
 
@@ -85,6 +92,12 @@ async function serve(env, site, pathname) {
       if (ext === "html") {
         headers["reporting-endpoints"] = 'default="/lab/reports"';
         headers["document-policy"] = "include-js-call-stacks-in-crash-reports";
+      }
+      // The router's pages handle API keys. They may run only their own
+      // scripts and may connect only to the router and the listed providers.
+      if (site === "router") {
+        headers["content-security-policy"] = ROUTER_CSP + (path === "/frame.html" ? "" : "; frame-ancestors 'none'");
+        headers["referrer-policy"] = "no-referrer";
       }
       return new Response(body, { headers });
     }

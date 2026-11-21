@@ -28,6 +28,7 @@
     svg .bar { fill: color-mix(in srgb, var(--ink) 12%, var(--panel)); stroke: var(--ink); stroke-width: 2; }
     svg .addr { fill: var(--panel); stroke: var(--line); }
     svg .frame { fill: color-mix(in srgb, #7c5cff 12%, var(--panel)); stroke: #7c5cff; stroke-width: 2; stroke-dasharray: 6 4; }
+    svg .work { fill: var(--panel); stroke: var(--ink); stroke-width: 2; } svg .cog { fill: none; stroke: var(--ink); stroke-width: 2; stroke-linecap: round; }
     svg .wire { stroke: var(--ink); stroke-width: 2; fill: none; marker-end: url(#tip); }
     svg .num { fill: var(--ink); } svg .numt { fill: var(--paper); font-weight: 700; font-size: 12px; }
     table { border-collapse: collapse; font-size: var(--step--1); min-width: 34rem; width: 100%; }
@@ -92,7 +93,7 @@
       <section id="code">
         <h2>The code a site writes</h2>
 <pre id="code-site"></pre>
-        <p>A site can pass its access on. <code>lend()</code> returns a second port into the same grant. Post it to a worker or to another frame, and wrap it there with <code>fromPort()</code>. With a limit, the port stops after that many requests. A lent port cannot lend again.</p>
+        <p>A site can pass its access on. <code>lend()</code> returns a second port into the same grant. Post it to a worker or to an iframe from another site, and wrap it there with <code>fromPort()</code>. With a limit, the port stops after that many requests. A lent port cannot lend again.</p>
 <pre><span class="c">// on the page</span>
 const port = await ai.lend({ requests: 3 });
 worker.postMessage({ job: "summarise" }, [port]);
@@ -108,26 +109,31 @@ onmessage = async (event) =&gt; {
       <section id="how">
         <h2>How it works</h2>
         <figure>
-          <svg viewBox="0 0 760 400" role="img" aria-labelledby="d-title d-desc" xmlns="http://www.w3.org/2000/svg">
+          <svg viewBox="0 0 760 402" role="img" aria-labelledby="d-title d-desc" xmlns="http://www.w3.org/2000/svg">
             <title id="d-title">The parts of the AI router and what passes between them</title>
-            <desc id="d-desc">A browser window showing a site contains a hidden iframe from the router. A second, smaller browser window is the router's picker. The picker passes a grant to the iframe. The iframe asks the router server for permission and then calls the model provider.</desc>
+            <desc id="d-desc">A browser window showing a site contains a hidden iframe from the router, and the iframe contains a worker. A second, smaller browser window is the router's picker. The picker passes a grant to the iframe. The worker asks the router server for permission and then calls the model provider.</desc>
             <defs><marker id="tip" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z" fill="var(--ink)"/></marker></defs>
 
             <!-- the site: a browser window -->
-            <rect class="win" x="10" y="10" width="360" height="300" rx="10"/>
+            <rect class="win" x="10" y="10" width="360" height="324" rx="10"/>
             <path class="bar" d="M10 46V20a10 10 0 0 1 10-10h340a10 10 0 0 1 10 10v26z"/>
             <circle cx="28" cy="28" r="5" fill="var(--red)"/><circle cx="44" cy="28" r="5" fill="var(--yellow)"/><circle cx="60" cy="28" r="5" fill="var(--teal)"/>
             <rect class="addr" x="76" y="17" width="284" height="22" rx="11"/>
             <text class="url" x="88" y="32" data-url="site"></text>
-            <text x="28" y="76" font-weight="700" font-size="16">A site's page</text>
-            <text x="28" y="96" font-size="13">Holds a port. Sends prompts, reads answers.</text>
+            <text x="28" y="80" font-weight="700" font-size="16">A site's page</text>
+            <text x="28" y="100" font-size="13">Holds a port. Sends prompts, reads answers.</text>
 
-            <!-- the iframe inside it -->
-            <rect class="frame" x="28" y="150" width="324" height="120" rx="6"/>
-            <text x="42" y="174" font-weight="700" font-size="15">Hidden iframe: the router frame</text>
-            <text x="42" y="194" font-size="13">Holds this site's grant and an encrypted</text>
-            <text x="42" y="211" font-size="13">copy of the key. Calls the provider.</text>
-            <text class="url" x="42" y="258" data-url="frame"></text>
+            <!-- the iframe inside it, and the worker inside that -->
+            <rect class="frame" x="28" y="120" width="324" height="200" rx="6"/>
+            <text x="42" y="143" font-weight="700" font-size="15">Hidden iframe: the router frame</text>
+            <text x="42" y="162" font-size="13">Keeps this site's grant. Starts the worker.</text>
+            <text class="url" x="42" y="180" data-url="frame"></text>
+            <rect class="work" x="42" y="194" width="296" height="112" rx="16"/>
+            <path class="cog" d="M62 208v-5m0 23v-5m-9-6.500h5m8 0h5m-15.400-6.400 3.500 3.500m5.800 5.800 3.500 3.500m0-12.800-3.500 3.500m-5.800 5.800-3.500 3.500"/><circle class="cog" cx="62" cy="214.500" r="4"/>
+            <text x="80" y="219" font-weight="700" font-size="15">Worker</text>
+            <text x="56" y="244" font-size="13">Holds every port. Unlocks the key</text>
+            <text x="56" y="261" font-size="13">in memory and calls the provider.</text>
+            <text class="url" x="56" y="292" data-url="worker"></text>
 
             <!-- the picker: a smaller browser window -->
             <rect class="win" x="450" y="10" width="300" height="150" rx="10"/>
@@ -150,36 +156,39 @@ onmessage = async (event) =&gt; {
             <text class="url" x="680" y="284" text-anchor="middle">or another</text>
 
             <!-- what passes -->
-            <path class="wire" d="M190 104V146"/>
-            <circle class="num" cx="190" cy="124" r="10"/><text class="numt" x="190" y="128" text-anchor="middle">1</text>
-            <path class="wire" d="M450 120C410 120 400 170 356 176"/>
-            <circle class="num" cx="406" cy="146" r="10"/><text class="numt" x="406" y="150" text-anchor="middle">2</text>
-            <path class="wire" d="M352 232C400 232 410 252 446 256"/>
-            <circle class="num" cx="402" cy="240" r="10"/><text class="numt" x="402" y="244" text-anchor="middle">3</text>
-            <path class="wire" d="M352 262C420 340 620 350 676 314"/>
-            <circle class="num" cx="520" cy="341" r="10"/><text class="numt" x="520" y="345" text-anchor="middle">4</text>
+            <path class="wire" d="M20 96C2 150 14 240 40 250"/>
+            <circle class="num" cx="16" cy="170" r="10"/><text class="numt" x="16" y="174" text-anchor="middle">1</text>
+            <path class="wire" d="M450 120C410 120 400 140 356 146"/>
+            <circle class="num" cx="406" cy="130" r="10"/><text class="numt" x="406" y="134" text-anchor="middle">2</text>
+            <path class="wire" d="M338 240C390 240 410 252 446 256"/>
+            <circle class="num" cx="394" cy="244" r="10"/><text class="numt" x="394" y="248" text-anchor="middle">3</text>
+            <path class="wire" d="M338 280C420 360 620 364 676 314"/>
+            <circle class="num" cx="520" cy="350" r="10"/><text class="numt" x="520" y="354" text-anchor="middle">4</text>
 
-            <text x="10" y="345" font-size="13"><tspan font-weight="700">1</tspan> a port for prompts   <tspan font-weight="700" dx="10">2</tspan> the grant, on a private port</text>
-            <text x="10" y="366" font-size="13"><tspan font-weight="700">3</tspan> "is this grant still good?" on every request   <tspan font-weight="700" dx="10">4</tspan> the prompt and the key</text>
+            <text x="10" y="372" font-size="13"><tspan font-weight="700">1</tspan> a port for prompts, passed on to the worker   <tspan font-weight="700" dx="10">2</tspan> the grant, on a private port</text>
+            <text x="10" y="392" font-size="13"><tspan font-weight="700">3</tspan> "is this grant still good?" on every request   <tspan font-weight="700" dx="10">4</tspan> the prompt and the key</text>
           </svg>
-          <figcaption>Solid boxes with an address bar are browser windows. The dashed box is an iframe, with its address inside it. Rounded boxes are servers.</figcaption>
+          <figcaption>Solid boxes with an address bar are browser windows. The dashed box is an iframe, with its address inside it. The box with the cog is a worker, with the address of its script. Rounded boxes are servers.</figcaption>
         </figure>
 
         <h3>The first time a site asks</h3>
         <ol>
-          <li>The site's script adds a hidden iframe from the router's address and posts it one end of a <code>MessageChannel</code>. The site keeps the other end. Prompts go on this port.</li>
+          <li>The site's script adds a hidden iframe from the router's address and posts it one end of a <code>MessageChannel</code>. The site keeps the other end.</li>
+          <li>The frame starts a worker and posts that port on to it. From here the site's page talks to the worker directly. The frame only keeps the grant in storage, because a worker has no <code>localStorage</code>.</li>
           <li>On a click, the script opens the picker window. The picker is a normal top-level window at the router's address, so it can read the accounts you saved there.</li>
           <li>The picker has to find the router frame inside the page that opened it. It posts a message to each of that page's frames with the router's address as the required target origin. The browser drops the message for any frame that is not a router page. The message carries a port, so the picker and the frame now have a line the site cannot listen to.</li>
           <li>The frame tells the picker which site it is inside. The frame learned that from the browser when the site said hello, not from anything the site wrote. The picker shows you that address.</li>
-          <li>You choose. The picker records the grant on the router server and gets back an unlock key. It encrypts your API key with it and posts the grant and the encrypted key to the frame over the private port. Then it closes.</li>
+          <li>You choose. The picker records the grant on the router server and gets back an unlock key. It encrypts your API key with it and posts the grant and the encrypted key to the frame over the private port. The frame stores them and passes them to the worker. The picker closes.</li>
         </ol>
         <h3>Every prompt</h3>
         <ol>
-          <li>The site posts the prompt to the frame, with a new port for the answer.</li>
-          <li>The frame asks the router server whether the grant is still good. The server counts the request and returns the unlock key, or refuses.</li>
-          <li>The frame decrypts the API key in memory, calls the provider directly from the browser, and posts each piece of the answer to the reply port.</li>
+          <li>The site posts the prompt on its port, with a new port for the answer. It arrives in the worker.</li>
+          <li>The worker asks the router server whether the grant is still good. The server counts the request and returns the unlock key, or refuses.</li>
+          <li>The worker decrypts the API key in memory, calls the provider directly from the browser, and posts each piece of the answer to the reply port. Your prompt and the answer go to the provider and nowhere else.</li>
           <li>The site can post <code>cancel</code> on the reply port to stop the request.</li>
         </ol>
+        <h3>Where the ports end up</h3>
+        <p>Every port leads to the same worker. The site's page holds one. A worker the site starts can hold another, and so can an iframe from a third site that the page chooses to lend to. None of them can open the router window, and none holds a key. The browser's built-in model cannot be used from a worker, so for that one the frame lends the worker a port and answers on it.</p>
         <h3>After a reload</h3>
         <p>The frame stored the grant under the site's address, so the site has its model again with no window. If you pressed Stop in the router, the server has deleted the unlock key. The encrypted key left inside that site can no longer be opened, and the frame deletes it the next time it checks.</p>
       </section>
@@ -190,9 +199,10 @@ onmessage = async (event) =&gt; {
           <thead><tr><th>Part</th><th>Can read your API key</th><th>Can read your prompts</th><th>What it holds</th></tr></thead>
           <tbody>
             <tr><td>The site</td><td>No</td><td>Yes, it wrote them</td><td>A port</td></tr>
-            <tr><td>Router frame inside the site</td><td>Only while a request runs</td><td>Yes, it sends them</td><td>The grant and an encrypted key</td></tr>
+            <tr><td>Router frame inside the site</td><td>No, it stores an encrypted copy</td><td>No</td><td>The grant and an encrypted key</td></tr>
+            <tr><td>Worker inside the router frame</td><td>Only while a request runs</td><td>Yes, it sends them</td><td>Every port, and the grant in memory</td></tr>
             <tr><td>Picker window and router page</td><td>Yes</td><td>No</td><td>Your accounts, in the browser's storage for the router's address</td></tr>
-            <tr><td>Router server</td><td>No</td><td>No</td><td>The list of grants, request and token counts, unlock keys</td></tr>
+            <tr><td>Router server</td><td>No</td><td>No</td><td>For each grant: the site's address, the account name and model name, request and token counts, and an unlock key</td></tr>
             <tr><td>Model provider</td><td>Yes, it issued it</td><td>Yes</td><td></td></tr>
           </tbody>
         </table></div>
@@ -202,11 +212,13 @@ onmessage = async (event) =&gt; {
         <h2>What does not work yet, and what to know</h2>
         <ul>
           <li>You are trusting the router's code. The frame and the picker are pages from the router's address, and they handle your key. A site is kept away from the key by the browser's rule that a page cannot read a frame from another origin.</li>
-          <li>It only works for providers that accept calls from a browser. Anthropic does when the request carries the <code>anthropic-dangerous-direct-browser-access</code> header. Many OpenAI-compatible servers do. A provider that sends no CORS headers cannot be used.</li>
+          <li>The router's pages and its worker are served with a Content-Security-Policy. They can run only the router's own scripts and can connect only to the router and to Anthropic, OpenAI, OpenRouter, Google Gemini and an Ollama on your own computer. A changed or injected script could not send your key anywhere else.</li>
+          <li>There is one small server, and it exists because browsers give a frame separate storage inside each site. The list of grants is the only thing that has to be seen from everywhere, so that Stop works and the router page can show usage. It holds no keys and sees no prompts or answers.</li>
+          <li>It only works for providers that accept calls from a browser. Anthropic does when the request carries the <code>anthropic-dangerous-direct-browser-access</code> header. A provider that sends no CORS headers cannot be used.</li>
           <li>Your key is visible in your own browser's network tools when the frame calls the provider. It is your key and your browser. Other sites still cannot see it.</li>
           <li>Limits are counted in requests and days, not money. A site with 20 requests can still send 20 long prompts.</li>
           <li>The site sees every answer. The router controls who pays and how much. It does not control what the site does with the text.</li>
-          <li>The Anthropic and OpenAI-compatible paths were tested against a stand-in server, not with a real key. Only Chromium has been tested.</li>
+          <li>The Anthropic path was tested against a stand-in server, not with a real key. The OpenAI, OpenRouter, Gemini and Ollama paths have not been run at all yet. Only Chromium has been tested.</li>
           <li>There is no tool calling and no images yet. Prompts and answers are text.</li>
         </ul>
       </section>
@@ -214,12 +226,13 @@ onmessage = async (event) =&gt; {
     <footer class="small muted" style="padding-block:2rem 4rem">A working name and a work in progress.</footer>
   </div>
   <script type="module">
-    import { sites } from "/_sites.js";
+    import { sites as listed } from "/_sites.js";
+    const sites = { ...listed, router: listed.router || listed.florist.replace("florist", "router") };   // older deployments do not list the router
     const $ = (id) => document.getElementById(id);
     const host = (url) => url.replace(/^https?:\/\//, "");
 
     // Fill in the real addresses, in the diagram and the code.
-    const urls = { site: host(location.origin) + "/ai-router/", frame: host(sites.router) + "/frame.html", pick: host(sites.router) + "/pick.html" };
+    const urls = { site: host(location.origin) + "/ai-router/", frame: host(sites.router) + "/frame.html", worker: host(sites.router) + "/frame-worker.js", pick: host(sites.router) + "/pick.html" };
     for (const el of document.querySelectorAll("[data-url]")) el.textContent = urls[el.dataset.url];
     for (const el of document.querySelectorAll("[data-router]")) el.textContent = sites.router;
     $("code-site").innerHTML = `import { connect } from "${sites.router}/router.js";
@@ -238,7 +251,7 @@ button.onclick = async () =&gt; {
 ai.model   <span class="c">// { provider: "Anthropic", name: "claude-sonnet-5-5", account: "Work key" }</span>
 ai.left    <span class="c">// requests left on this site's grant</span>`;
     $("sites").innerHTML = [
-      [sites.florist + "/card/", "Stem and Petal, a florist", "Writes the message for the card that goes with a bouquet, and streams it in."],
+      [sites.florist + "/card/", "Stem and Petal, a florist", "Writes the message for the card that goes with a bouquet, and streams it in. Lends a 2-request port to an iframe from a third site."],
       [sites.library + "/digest/", "Harbour Street Library", "Gives its port to a worker that writes a note for each book. Lends a port that stops after 3 requests."],
       [sites.router + "/", "Your router", "Add an account, see which sites you allowed and what they used, and stop any of them."],
     ].map(([href, name, what]) => `<li><a href="${href}"><strong>${name}</strong></a><span>${what}</span><span class="url">${host(href)}</span></li>`).join("");
