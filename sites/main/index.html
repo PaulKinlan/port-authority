@@ -9,7 +9,8 @@
   <link rel="stylesheet" href="/patterns/patterns.css">
   <style>
     .hero { padding-block: clamp(2rem, 6vw, 5rem) 1rem; display: grid; gap: clamp(1.5rem, 4vw, 2.5rem); }
-    .hero p { font-size: var(--step-1); line-height: 1.35; max-width: 34ch; }
+    .hero .intro { display: grid; gap: 0.9rem; max-width: 62ch; }
+    .hero .intro p:first-child { font-size: var(--step-1); line-height: 1.35; max-width: 34ch; }
     .hero-demo { background: color-mix(in srgb, var(--yellow) 22%, var(--paper)); border-radius: 22px; padding: clamp(1rem, 3vw, 1.8rem); }
     .hero-demo > p { font-size: var(--step-0); max-width: 60ch; margin-bottom: 1.2rem; }
     .experiments { list-style: none; margin: 0; padding: 0; }
@@ -35,7 +36,12 @@
 
     <section class="hero">
       <h1>What you can do with a MessagePort</h1>
-      <p>A MessagePort can be handed to another window, another origin, a worker, and on again. Whoever holds it can talk, and nobody in between has to stay. These are experiments in how far that goes.</p>
+      <div class="intro">
+        <p>Hello, I'm <a href="https://paul.kinlan.me">Paul Kinlan</a>. I've been working on the web for a long time, and I think message channels and message ports are massively underserved. Most people don't know what they can do.</p>
+        <p>A MessagePort can be handed to another window, another origin or a worker, and passed on again. Whoever holds it can talk, and nothing in between has to stay open.</p>
+        <p>I'm exploring the future of the web and where the web meets AI, and I made this site along the way. It explains how ports work, and it gives you patterns, best practices and tools for thinking about advanced communication on the web.</p>
+        <p>I write about the web at <a href="https://paul.kinlan.me">paul.kinlan.me</a> and about the web and AI at <a href="https://aifoc.us">aifoc.us</a>.</p>
+      </div>
       <div class="hero-demo">
         <p>Three real origins. Site A and Site B have never met. Press <strong>Next</strong> to introduce them, let them talk, then remove the one in the middle.</p>
         <div id="hero-demo"></div>
