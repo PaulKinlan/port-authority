@@ -1,8 +1,8 @@
 // More of the ideas listed under "What you could build with it", built.
 // Same shape as the entries in built.js, which includes these in its list.
 
-const logBox = (stage, name, title, extra = "") => {
-  const box = stage.box(name, { html: `<div class="here"><h4>${title}</h4>${extra}<ul class="log"></ul></div>` });
+const logBox = (stage, name, title, extra = "", what = {}) => {
+  const box = stage.box(name, { html: `<div class="here"><h4>${title}</h4>${extra}<ul class="log"></ul></div>`, ...what });
   const ul = box.node.querySelector("ul");
   const say = (text) => { const li = document.createElement("li"); li.textContent = text; ul.prepend(li); while (ul.children.length > 6) ul.lastChild.remove(); };
   return { say, node: box.node, box };
@@ -13,9 +13,7 @@ const logBox = (stage, name, title, extra = "") => {
 // its own, so the three demos on one page do not share a table.
 function postRoom(stage, kind, title) {
   const room = `${kind}-${Math.random().toString(36).slice(2, 8)}`;
-  const hub = stage.box("router", { html: `<div class="here"><h4>${title}</h4><p class="small" style="margin:0 0 .3rem">Open windows: <strong data-table>none yet</strong></p><p class="small" style="margin:0 0 .3rem">Holding: <strong data-held>nothing</strong></p><p class="small" data-last style="margin:0;min-height:1.5em;font-family:var(--mono)"></p></div>` });
-  hub.node.style.flex = "1 1 100%";   // the worker sits under the windows, as wide as all of them
-  hub.node.style.minHeight = "0"; hub.node.style.height = "auto";
+  const hub = stage.box("router", { kind: "shared", url: "/patterns/post-worker.js", wide: true, html: `<div class="here"><h4>${title}</h4><p class="small" style="margin:0 0 .3rem">Open windows: <strong data-table>none yet</strong></p><p class="small" style="margin:0 0 .3rem">Holding: <strong data-held>nothing</strong></p><p class="small" data-last style="margin:0;min-height:1.5em;font-family:var(--mono)"></p></div>` });
   const q = (name) => hub.node.querySelector(`[data-${name}]`);
   const ok = "SharedWorker" in self;
   if (!ok) q("last").textContent = "This browser has no SharedWorker.";
@@ -37,7 +35,7 @@ function postRoom(stage, kind, title) {
   const open = async (name, extra = "") => {
     const color = colors[count++ % colors.length];
     const box = stage.box(name, { src: `/patterns/desk.html?room=${room}&name=${name}${extra}` });
-    stage.el.insertBefore(box.node, hub.node);
+    stage.el.insertBefore(box.wrap, hub.wrap);
     await box.whenReady;
     stage.cable("c-" + name, name, "router", color);
     return box;
@@ -422,7 +420,7 @@ onmessage = ({ data }) => {
       const canvas = picture.node.querySelector("canvas");
       const ctx = canvas.getContext("2d", { willReadFrequently: true });
       const main = logBox(stage, "main", "Main thread", `<div style="height:.7rem;border:1.5px solid currentColor;border-radius:99px;margin:0 0 .4rem;position:relative;overflow:hidden"><i data-marker style="position:absolute;top:0;bottom:0;width:18%;background:var(--red, #e0364c);border-radius:99px"></i></div><p class="small" style="margin:0 0 .4rem">Longest stop during the last blur: <strong data-gap>not run yet</strong></p>`);
-      const helper = logBox(stage, "worker", "Worker");
+      const helper = logBox(stage, "worker", "Worker", "", { kind: "worker", url: "/patterns/effect-worker.js" });
       const draw = () => {
         const sky = ctx.createLinearGradient(0, 0, W, H);
         sky.addColorStop(0, "#0f1c3f"); sky.addColorStop(1, "#0e9f8e");

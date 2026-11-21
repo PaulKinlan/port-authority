@@ -46,11 +46,11 @@
 .box.gone { background: transparent; }
 .box.gone::after { content: "gone"; position: absolute; inset: 0; display: grid; place-items: center; font: 700 var(--step-1) var(--display); color: var(--muted); }
 .stage .jack-end { stroke: var(--ink); stroke-width: 2; }
-.stage-legend { list-style: none; margin: 0.2rem 0 0.5rem; padding: 0; display: flex; flex-wrap: wrap; gap: 0.3rem 1.1rem; font-size: 0.78rem; color: var(--muted); }
-.stage-legend li { display: flex; align-items: center; gap: 0.35rem; }
+.stage-legend { margin: 0.2rem 0 0.5rem; padding: 0; display: flex; flex-wrap: wrap; gap: 0.3rem 1.1rem; font-size: 0.78rem; color: var(--muted); }
+.stage-legend > div { display: flex; align-items: center; gap: 0.35rem; }
 .stage-legend strong { font: 700 0.72rem/1.2 var(--mono); color: var(--ink); }
 .stage-legend.full { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 19rem), 1fr)); gap: 0.7rem 1.6rem; font-size: var(--step--1); margin: 0; }
-.stage-legend.full li { align-items: start; }
+.stage-legend.full > div { align-items: start; }
 .stage-legend.full .glyph { width: 2rem; height: 1.5rem; color: var(--ink); margin-top: 0.1rem; }
 .stage-legend.full strong { display: block; font-size: 0.8rem; margin-bottom: 0.15rem; }
 .box .here { padding: 0.7rem 0.8rem; }

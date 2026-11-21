@@ -47,7 +47,7 @@ function address(url) {
 
 // A key to the shapes. With no argument it lists every kind, with what each one is.
 export function legend(kinds = Object.keys(KINDS), full = true) {
-  return `<ul class="stage-legend${full ? " full" : ""}" aria-label="What the shapes mean">${kinds.map((kind) => `<li>${glyph(kind)}<span><strong>${esc(KINDS[kind].label)}</strong>${full ? " " + KINDS[kind].about : ""}</span></li>`).join("")}</ul>`;
+  return `<div class="stage-legend${full ? " full" : ""}" role="list" aria-label="What the shapes mean">${kinds.map((kind) => `<div role="listitem">${glyph(kind)}<span><strong>${esc(KINDS[kind].label)}</strong>${full ? " " + KINDS[kind].about : ""}</span></div>`).join("")}</div>`;
 }
 
 // What a box is, when the demo that made it did not say.
@@ -167,12 +167,14 @@ export class Stage {
     this.boxes.set(name, box);
     this.describe(box);
     box.watch = new MutationObserver(() => this.describe(box));
-    box.watch.observe(node, { childList: true });
+    box.watch.observe(node, { childList: true, attributes: true, attributeFilter: ["style"] });
     return box;
   }
 
   // Draw the frame around a box: what kind of thing it is, and its address.
   describe(box) {
+    // Older demos widen a box by styling it directly. The frame around it follows.
+    if (box.node.style.flexBasis === "100%") box.wrap.classList.add("wide");
     const frame = box.node.querySelector(":scope > iframe");
     if (frame) {
       box.frame = frame;

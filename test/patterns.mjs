@@ -36,7 +36,7 @@ check("shapes: a sandboxed frame is an iframe with about:srcdoc underneath", (aw
 check("shapes: a real page in a frame shows its URL", /<iframe>[^]*\/patterns\/peer\.html\?name=/.test(await page.locator("#exchange .ctx").first().evaluate((el) => el.querySelector(".ctx-bar").textContent + el.querySelector(".ctx-foot").textContent)));
 check("shapes: the shared worker shows its script", (await kind("#exchange", "worker")) === "shared" && /SharedWorker.*\/patterns\/exchange\.js/.test(await drawn("#exchange", "worker")));
 check("shapes: the key under a diagram lists what is in it", /Window.*<iframe>.*MessageChannel/s.test(await page.locator("#hello .stage-legend").innerText()));
-check("shapes: the page has the full key", (await page.locator("#key .stage-legend li").count()) === 9);
+check("shapes: the page has the full key", (await page.locator("#key .stage-legend > div").count()) === 9);
 await click("#reply", "Client one asks"); await click("#reply", "Client two asks"); await wait(2200);
 check("reply: each client gets its own answer", /answer to #1: 7 \(for one\)/.test(await frameText("#reply", "one")) && /\(for two\)/.test(await frameText("#reply", "two")));
 await click("#attenuate", "Share read-only"); await wait(300);
