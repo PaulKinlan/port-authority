@@ -51,6 +51,7 @@ await click("Give the widget a one-way port"); await click("Send this month's sp
 check("chart: the widget draws the figures it was sent", !!(await until(async () => /drew rent 900/.test(await frameText("widget")))) && (await frame("widget").locator("div > div").count()) === 4, flat(await frameText("widget")));
 await click("Widget: try to send the figures out");
 await until(async () => /network request: (blocked|sent)/.test(await frameText("widget")));
+await until(async () => /Stopped, coming back: 1/.test(flat(await boxText("page")).replace(/ \| /g, " ")), 5000);
 t = flat(await boxText("page")).replace(/ \| /g, " ");
 check("chart: its message back stops at the valve and its network request is blocked", /Stopped, coming back: 1/.test(t) && /Heard from the widget on my port: 0/.test(t) && /network request: blocked/.test(await frameText("widget")), t);
 await shot("built-figures");

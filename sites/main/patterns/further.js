@@ -40,10 +40,10 @@ export function openLine(stage, ui, { makeMe, openLabel = "Open a line to your p
       onState(s) {
         if (s === "found") me.say("the other device is here, connecting directly");
         if (s === "failed") me.say("could not connect");
-        if (s === "gone") { me.say("the connection closed"); stage.cut("air"); hang.disabled = true; onGone(); }
+        if (s === "gone") { delete farBox.node.dataset.link; me.say("the connection closed"); stage.cut("air"); hang.disabled = true; onGone(); }
       },
       onPort(port) {
-        if (!state.standIn) farBox.node.innerHTML = `<div class="here"><h4>Your phone</h4><p class="small">Connected. It is a real device, so its screen is not shown here.</p></div>`;
+        if (!state.standIn) { farBox.node.dataset.link = "up"; farBox.node.innerHTML = `<div class="here"><h4>Your phone</h4><p class="small">Connected. It is a real device, so its screen is not shown here.</p></div>`; }
         stage.cable("air", "far", "page", "teal");
         stand.disabled = true; hang.disabled = false;
         state.line.route().then((route) => me.say(`connected directly${route ? ", " + route : ""}. The server is out of it.`));

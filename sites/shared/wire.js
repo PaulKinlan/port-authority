@@ -194,7 +194,7 @@ export class Stage {
         if (!box.url) where = "<i>no page loaded yet</i>";
         else if (box.url === "about:srcdoc") where += " <i>written by this page, with no origin of its own</i>";
       }
-      if (kind === "device") where = frame ? `<i>stand-in, an iframe at</i> ${where}` : "<i>not connected</i>";
+      if (kind === "device") where = frame ? `<i>stand-in, an iframe at</i> ${where}` : `<i>${box.node.dataset.link === "up" ? "connected directly" : "not connected"}</i>`;
       if (kind === "service" && box.scope) where += ` <i>scope</i> ${esc(box.scope)}`;
       if (kind === "part") where = "";
       bar.innerHTML = `${glyph(kind)}<span class="ctx-kind">${esc(label)}</span>`;

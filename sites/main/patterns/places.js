@@ -155,7 +155,7 @@ port.onmessage = ({ data }) => show(data.count);`,
             // The port that stands for the other device goes to the counter.
             // This page keeps nothing, and the two talk without it.
             stage.post("tool", { cmd: "port" }, [port]);
-            if (!farBox.frame) farBox.node.innerHTML = `<div class="here"><h4>Another device</h4><p class="small">Connected. It is a real device, so its screen is not shown here.</p></div>`;
+            if (!farBox.frame) { farBox.node.dataset.link = "up"; farBox.node.innerHTML = `<div class="here"><h4>Another device</h4><p class="small">Connected. It is a real device, so its screen is not shown here.</p></div>`; }
             stage.cable("air", "far", "page", "teal");
             stage.cable("port", "page", "tool", "yellow");
             me.say("gave the far port to the counter");
