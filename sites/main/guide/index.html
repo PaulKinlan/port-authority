@@ -51,9 +51,10 @@
         <li><a href="#threads">6. Threads</a></li>
         <li><a href="#keys">7. Keys</a></li>
         <li><a href="#lasting">8. Making a port last</a></li>
-        <li><a href="#far">9. Further than one browser</a></li>
-        <li><a href="#bites">10. Common mistakes, and what to do</a></li>
-        <li><a href="#open">11. What is still open</a></li>
+        <li><a href="#alive">9. Knowing the other side is still there</a></li>
+        <li><a href="#far">10. Further than one browser</a></li>
+        <li><a href="#bites">11. Common mistakes, and what to do</a></li>
+        <li><a href="#open">12. What is still open</a></li>
       </ul>
     </div>
     <div class="stack" id="key" style="padding-bottom:1.5rem; --gap:.8rem">
@@ -191,8 +192,21 @@
         <div class="live-set" data-demos="reload built-shop tearoff built-upgrade"><h3>Working examples</h3></div>
       </section>
 
+      <section id="alive">
+        <h2>9. Knowing the other side is still there</h2>
+        <ul>
+          <li>A port gives no sign when the page or worker at its other end is closed, navigated, crashed or stuck. <code>postMessage</code> still returns normally. A <code>close</code> event was added to the HTML standard in January 2024 and removed on 2 October 2026; no browser turns it on.</li>
+          <li>Keep health checks off the port that does the work. Send a second port with the first and ping on it, <a href="/patterns/health-pair/">running</a>. Or let the far side make the second channel and send a port back, so each side sets up one, <a href="/patterns/health-back/">running</a>. Or give each other one-way ports and beat on a timer, so both sides know about each other, <a href="/patterns/health-beats/">running</a>. The helpers are one small file, <a href="/alive.js">/alive.js</a>.</li>
+          <li>A page that is closing or navigating says goodbye from <code>pagehide</code>, which arrives in milliseconds. If <code>event.persisted</code> is true the page is going into the back/forward cache: treat it as paused. Measured: a tab holding ports and a SharedWorker connection went into the cache, said it was paused, came back, and its ports still worked.</li>
+          <li>On one origin, a Web Lock held by the far side is released by the browser the moment that side is destroyed, crashes included. It says nothing about a stuck thread. <a href="/patterns/alive-signals/">Which signal notices which ending</a>, measured in your browser.</li>
+          <li>Count missed beats, never one. A busy thread is late and then fine. If your own timer ran late, your side was the busy one, and the misses say nothing about the other side.</li>
+          <li>When it is gone, start another and ask again, if the work is safe to repeat. <a href="/patterns/alive-restart/">Running.</a></li>
+        </ul>
+        <div class="live-set" data-demos="health-pair health-back health-beats alive-signals alive-restart"><h3>Working examples</h3></div>
+      </section>
+
       <section id="far">
-        <h2>9. Further than one browser</h2>
+        <h2>10. Further than one browser</h2>
         <ul>
           <li>Two tabs that are not related cannot pass a port: neither has a reference to the other. A server can introduce them, and they can then open a WebRTC data channel between themselves. Wrap each end in a <code>MessageChannel</code> and both sides hold what looks like an ordinary port. <a href="/hub/">The hub does this</a> when a tool's site is already open.</li>
           <li>The hub's bridge carries JSON only. The bridge between devices below carries more.</li>
@@ -203,7 +217,7 @@
       </section>
 
       <section id="bites">
-        <h2>10. Common mistakes, and what to do</h2>
+        <h2>11. Common mistakes, and what to do</h2>
         <p>For each: what goes wrong, what to do about it, and where it helps, the thing happening in front of you.</p>
         <article class="bite">
           <h3>A port that listens and hears nothing</h3>
@@ -310,7 +324,7 @@ else travel(dot, cable);</pre>
       </section>
 
       <section id="open">
-        <h2>11. What is still open</h2>
+        <h2>12. What is still open</h2>
         <ul>
           <li>Safari and Firefox. Everything marked "measured" is Chromium until <a href="/lab/results/">the results page</a> says otherwise.</li>
           <li>WebTransport streams. They are ordinary streams and should move like any other, which would let one origin open a session and lend another a single stream of it. Not measured: it needs a server this site does not have yet. The WebSocket version is <a href="/patterns/lend/">running</a>.</li>

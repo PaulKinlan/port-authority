@@ -2099,6 +2099,12 @@ process([input]) {
 
 // Ideas that are already what a demo on the site does. key: "pattern:index".
 export const shown = {
+  "health-pair:0": ["#demo", "the demo at the top of this page"],
+  "health-pair:1": ["/patterns/alive-restart/", "a worker restarted when it stops answering"],
+  "health-back:0": ["#demo", "the demo at the top of this page"],
+  "health-beats:0": ["#demo", "the demo at the top of this page"],
+  "alive-signals:0": ["#demo", "the demo at the top of this page"],
+  "alive-restart:0": ["#demo", "the demo at the top of this page"],
   "canvas:2": ["#demo", "the demo at the top of this page"],
   "tearoff:0": ["#demo", "the demo at the top of this page"],
   "tabserver:0": ["#demo", "the demo at the top of this page"],
