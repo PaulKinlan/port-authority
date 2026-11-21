@@ -480,3 +480,42 @@ const keys = await crypto.subtle.generateKey({ name: "ECDSA", namedCurve: "P-256
     },
   },
 );
+
+// How each of these works, for the page. Shown under the demo and its code.
+const HOW = {
+  "built-lines": [
+    "There are three kinds of port in this demo. The teal one joins the two pages, and is only ever used to carry other ports. The yellow one joins the two workers. Each red one joins a single florist tab to the library's worker.",
+    "A tab cannot make its own line, because it has no way to reach the library's worker. Its own worker can. When a tab asks, the florist's worker calls <code>new MessageChannel()</code>. It posts one port to the tab with <code>client.postMessage</code>. It posts the other to the library's worker in the transfer list of an ordinary message on the yellow port. That message carries two ports: one for the library's worker to say it has the line, and the line itself.",
+    "The library's worker sets <code>onmessage</code> on the port it was sent and keeps it in a set. From that moment the florist's worker holds neither end. A question from the tab goes from the tab's thread to the library's worker's thread and nowhere else, so the florist's worker can lose its yellow port, or be stopped by the browser, and the tab does not notice.",
+    "The red line lasts as long as the library's worker keeps running. When that worker is stopped, its ends of every line are lost together. A tab is not told. It learns the way a worker does: its next question gets no answer within 1.5 seconds. It then asks its own worker for a new line, and if that worker has no yellow port either, the pages carry a new one across first.",
+  ],
+  "built-swfetch": [
+    "A page's <code>fetch</code> for an address on its own site goes to that site's service worker first. The florist's worker looks at the path. For anything under <code>/pair/from-other/</code> it calls <code>event.respondWith</code> with a promise, and then asks the library's worker for the file over the port that joins them. The question carries a reply port.",
+    "The library's worker builds the answer as a plain object: a status, some headers, and a <code>ReadableStream</code> for the body. It posts that on the reply port with the stream in the transfer list. A transferred stream is moved. The library's worker keeps the end it writes into, and the florist's worker receives an end it can read from.",
+    "The florist's worker does not read it. It passes the stream straight to <code>new Response(body, { status, headers })</code> and returns that. So each line the library's worker writes goes to the florist's worker, and from there to the page that called <code>fetch</code>, as it is written. The page reads the response with a stream reader and shows each line when it arrives, 350 milliseconds apart.",
+    "The page cannot tell that another site was involved. The address is the florist's, the response has no cross-origin restrictions, and no request went to any server. That is also the risk: whatever the library's worker sends is served as the florist's own content, so a site should only do this with a site it trusts as much as itself.",
+    "If the library's worker has lost its port, the first question gets no answer. The florist's worker waits 1.5 seconds, has a new port carried across, and asks again, all inside the same <code>respondWith</code>. The page sees one fetch that took longer.",
+  ],
+  "built-matchmaker": [
+    "The planner's page has a frame of the florist and a frame of the library, or here, sits beside them in the same page. It can post to both windows. It calls <code>new MessageChannel()</code> and posts one port to each with <code>window.postMessage</code>, giving the site's origin as the second argument, so the browser will deliver the message only if that window is still showing that site.",
+    "Each page receives an ordinary window message. This is the one moment the browser says who is speaking: <code>event.origin</code> is the planner's origin. The page checks it, and refuses a port from anywhere else. Then it gives the port to its own worker with <code>registration.active.postMessage</code>, along with what the planner said about the other end.",
+    "Now the two workers hold the two ends of the planner's channel. The planner kept neither, so it cannot read what they say, and destroying its frame changes nothing.",
+    "What is missing is a way back. In the demo at the top of the page, the two pages hold a line to each other and can carry a second port when the first is lost. Here the only thing that could reach both sites was the planner. When one worker is stopped, the other gets no answer, asks its pages for one that can carry a port, and none can.",
+  ],
+  "built-sharedpair": [
+    "A shared worker is one thread for every tab of a site. Each tab connects with <code>new SharedWorker(url)</code> and gets a port, and the worker gets the other end in its <code>connect</code> event. The dark cables in the diagram are those ports. The worker keeps them in a list.",
+    "The join is the same four hops as for service workers. The florist's shared worker makes a channel and posts one port down the port of the tab that asked. That tab sends it over the line to the library's tab, which posts it to the library's shared worker. The yellow cable is that channel.",
+    "A note takes three hops. The tab posts it to its own worker. The worker posts it to every tab in its list and into the yellow port. The other worker receives it and posts it to every tab in its list. No tab holds a port to the other site, and no tab needs to have taken part in the join.",
+    "The two tabs that carried the port are not part of the path, so closing them changes nothing. What matters is that each worker stays alive, and a shared worker lives as long as one tab of its site is connected. There is no idle limit, so there are no time limits in this code and no rejoining.",
+    "Two things are not reported by the browser. A shared worker is not told when a tab closes, so each tab posts a goodbye in <code>pagehide</code> and the worker takes it off the list. And when a site's last tab closes, its worker ends and the other worker is not told. Its next post into the yellow port goes nowhere, with no error.",
+  ],
+  "built-whoholds": [
+    "When a message arrives from a window, the browser fills in <code>event.origin</code> with the sender's origin, and the sender cannot fake it. A message that arrives on a port has no such field to rely on. A port has no address. Its <code>origin</code> is an empty string and its <code>source</code> is null, whoever posted it.",
+    "So what a receiver knows about a port is what it was told by whoever handed it over. That is fine for one hop, where the receiver checked the origin of the window that gave it the port. It is weaker after two hops. This page passes on ports it was given, and it has no idea what is at their other ends. Both ports here open by saying \"I am the florist\", and the library shows what the browser reports for each. The two lines are identical.",
+    "The check uses a key pair. The florist made one with <code>crypto.subtle.generateKey</code> and marked the private key as not extractable, which means no script can read it, the florist's own included. The public key can be given to anyone. The library has it.",
+    "The library makes 32 random bytes and posts them into a port. Whoever holds the other end has to post back a signature of those bytes. The library runs <code>crypto.subtle.verify</code> with the florist's public key. The florist's signature passes. The stranger can sign too, but only with a key of its own, and that signature does not pass. The value is new each time, so an old signature cannot be sent again.",
+    "This proves who was at the other end when it signed, and a port can still be handed on afterwards. It also depends on the library having the right public key, which in practice means fetching it from the florist's own site over HTTPS.",
+  ],
+};
+for (const demo of pairBuilt) demo.how = HOW[demo.id];
+

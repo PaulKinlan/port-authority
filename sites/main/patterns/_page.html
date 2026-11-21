@@ -21,6 +21,7 @@
     .flow figcaption { font-size: var(--step--1, .85rem); opacity: .8; margin-top: .4rem; }
     .built h3 { font-size: var(--step-1); }
     .built .idea { margin: 0; }
+    .built h4 { font: 800 var(--step-0)/1.2 var(--display); margin: .5rem 0 -.3rem; }
     .deep h3.todo { font-size: var(--step-0); margin: 1.4rem 0 .6rem; }
     .measured { border-left: 5px solid var(--teal); padding: .2rem 0 .2rem .9rem; }
     .cards { list-style: none; padding: 0 !important; display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: .8rem; }
@@ -87,7 +88,7 @@
         const seen = more.uses.map((text, i) => [text, shown[`${id}:${i}`]]).filter(([, where], i) => where && !covered.has(i));
         const todo = more.uses.filter((_, i) => !covered.has(i) && !shown[`${id}:${i}`]);
         parts.push(`<section id="uses"><h2>What you could build with it</h2>${mine.length ? `<p>${mine.length === 1 ? "This one is built and running below." : "These are built and running below."}</p>` : ""}
-          ${mine.map((b) => `<article class="built" id="${b.id}"><h3>${b.title}</h3><p class="small muted idea">The idea: ${b.use.map((i) => more.uses[i]).join(" ")}</p><div class="demo"></div><p>${b.blurb}</p><pre>${b.code}</pre></article>`).join("")}
+          ${mine.map((b) => `<article class="built" id="${b.id}"><h3>${b.title}</h3><p class="small muted idea">The idea: ${b.use.map((i) => more.uses[i]).join(" ")}</p><div class="demo"></div><h4>What you are looking at</h4><p>${b.blurb}</p><h4>The code</h4><pre>${b.code}</pre>${b.how ? `<h4>How it works</h4><div class="stack" style="--gap:.9rem">${b.how.map((p) => `<p>${p}</p>`).join("")}</div>` : ""}${b.tour?.steps.length ? `<h4>Step by step</h4><p>What each press of Next does in this demo.</p>${list(b.tour.steps.map(([label, text]) => `<strong>${label}.</strong> ${text}`), "ol")}` : ""}</article>`).join("")}
           ${seen.length ? `<h3 class="todo">Already running</h3>${list(seen.map(([text, [href, label]]) => `${text} <a href="${href}">See ${label}.</a>`))}` : ""}
           ${todo.length ? `<h3 class="todo">Not built yet</h3>${list(todo)}` : ""}</section>`);
       }
@@ -97,10 +98,10 @@
       const related = (more.related || []).map(byId).filter(Boolean);
       if (related.length) parts.push(`<section id="related"><h2>Read next</h2><ul class="cards">${related.map((d) => `<li><a href="/patterns/${d.id}/"><strong>${d.title}</strong><span>${plain(d.blurb).split(". ")[0]}.</span></a></li>`).join("")}</ul></section>`);
       $("deep").innerHTML = parts.join("");
-      // The built ideas are demos too. Each is set up when it is about to be seen.
+      // The built ideas are demos too. Each is set up when any part of its article is about to be seen.
       for (const b of mine) {
         const el = document.querySelector(`#${b.id} .demo`);
-        new IntersectionObserver((entries, io) => { if (entries[0].isIntersecting) { io.disconnect(); mount(el, b); } }, { rootMargin: "300px" }).observe(el);
+        new IntersectionObserver((entries, io) => { if (entries[0].isIntersecting) { io.disconnect(); mount(el, b); } }, { rootMargin: "300px" }).observe(el.closest("article"));
       }
 
       const prev = all[index - 1], next = all[index + 1];
