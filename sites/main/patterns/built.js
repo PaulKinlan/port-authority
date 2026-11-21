@@ -3,6 +3,7 @@
 // ideas it covers (by position in deep.js). Same stage as the patterns.
 import { far } from "/farport.js";
 import { swRouter } from "/patterns/router.js";
+import { built2 } from "/patterns/built2.js";
 
 const logBox = (stage, name, title, extra = "", what = {}) => {
   const box = stage.box(name, { html: `<div class="here"><h4>${title}</h4>${extra}<ul class="log"></ul></div>`, ...what });
@@ -1205,6 +1206,7 @@ sieve.byteLength;                                          <span class="c">// 0:
   },
   {
     pattern: "pipeline", use: [0], id: "built-stages",
+    also: { roundtrip: [2] },   // the same demo also runs on that pattern's page
     title: "Three parties each supply one stage, and none of them sees the others",
     blurb: "A zipped order needs unzipping, turning from bytes into text, and its card number hiding before it is shown. Each of those is a stream stage supplied by a different origin. This page asks each for a stage, joins the three end to end, and pours the file in. Each party sees only what flows through its own stage, and none of them needs to know the others exist.",
     code: `<span class="c">// each party</span>
@@ -1511,6 +1513,7 @@ pip.addEventListener("pagehide", () => sidebar.append(meter));`,
   },
   {
     pattern: "tearoff", use: [2], id: "built-upgrade",
+    also: { reload: [2] },   // the same demo also runs on that pattern's page
     title: "Replace a running widget with its next version, and keep its connection",
     blurb: "Version 1 of a chat widget is holding a port to a service that sends it numbered messages. Version 2 is ready. Loading it the usual way would mean dropping the connection and making another, and losing whatever arrived in between. Here version 1 stops listening, hands its port to version 2, and is removed. Messages that arrive during the swap wait in the port. The service is never told that anything changed.",
     code: `<span class="c">// version 1, when asked to step aside</span>
@@ -2089,13 +2092,11 @@ process([input]) {
     },
   },
   swRouter,
+  ...built2,
 ];
 
 // Ideas that are already what a demo on the site does. key: "pattern:index".
 export const shown = {
-  "hello:1": ["/patterns/introduce/", "every other pattern starts this way"],
-  "introduce:0": ["/hub/", "the hub on this site"],
-  "functions:2": ["/comlink/", "the Comlink page"],
   "canvas:2": ["#demo", "the demo at the top of this page"],
   "tearoff:0": ["#demo", "the demo at the top of this page"],
   "tabserver:0": ["#demo", "the demo at the top of this page"],
@@ -2110,10 +2111,6 @@ export const shown = {
   "far:0": ["#demo", "the demo at the top of this page"],
   "mounted:0": ["#demo", "the demo at the top of this page"],
   "socket:0": ["#demo", "the demo at the top of this page"],
-  "roundtrip:2": ["/patterns/pipeline/#built-stages", "three parties each supplying a stage"],
   "frozen:2": ["/patterns/frozen/#built-relay", "a decoder worker handing frames to a renderer worker"],
-  "reload:2": ["/patterns/tearoff/#built-upgrade", "version 1 of a widget handing its port to version 2"],
   "audio:0": ["#demo", "the demo at the top of this page"],
-  "router:1": ["/hub/", "the hub on this site, which routes calls to whichever site has the tool"],
-  "filter:1": ["/patterns/frozen/", "two workers that keep going while the page is frozen"],
 };

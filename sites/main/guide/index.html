@@ -72,7 +72,7 @@
           <li>So holding a port is the permission to use it, and passing a port on is how permission is given.</li>
         </ol>
         <p class="see">Running: <a href="/patterns/hello/">opening a channel</a>, <a href="/patterns/introduce/">connecting two frames and removing yourself</a>.</p>
-        <div class="live-set" data-demos="hello built-private introduce built-wire built-rpc"><h3>See it run</h3></div>
+        <div class="live-set" data-demos="hello built-private built-oneknock introduce built-wire built-picker built-rpc built-proxy"><h3>See it run</h3></div>
       </section>
 
       <section id="where">
@@ -97,7 +97,7 @@
         </ul>
         <p>Outside the browser's own pages, the same idea appears as real ports between an Android app and its WebView, between an extension's content script and the page it runs in, and between Electron's processes. This site has not tested those.</p>
         <p class="see">Running: <a href="/lab/">the lab</a> sends to thirteen of these places. <a href="/patterns/exchange/">A SharedWorker as the exchange</a>. <a href="/patterns/tabserver/">A tab that is a web server for other tabs</a>. <a href="/patterns/socket/">A shared worker holding the only socket</a>. <a href="/patterns/audio/">A worker sending notes to the audio thread</a>.</p>
-        <div class="live-set" data-demos="exchange router built-swroute built-sync built-leader socket built-feed tabserver built-notes built-files"><h3>See it run</h3></div>
+        <div class="live-set" data-demos="exchange router built-swroute built-queue built-everyone built-toolroute built-sync built-leader socket built-feed tabserver built-notes built-files"><h3>See it run</h3></div>
       </section>
 
       <section id="what">
@@ -166,7 +166,7 @@
           <li>The audio thread accepts a port. Give a worker the other end and it drives sound with no help from the page. Measured: 13 notes in a 3 second freeze, at one every 230 ms, so none were lost. <a href="/patterns/audio/">Running.</a></li>
           <li>A shared worker can hold the one connection a site needs, with a port to each tab. An answer goes back down the port of the tab that asked. <a href="/patterns/socket/">Running.</a></li>
         </ul>
-        <div class="live-set" data-demos="frozen built-relay built-watermark audio built-pcm built-meter mounted built-plugins built-preview"><h3>Working examples</h3></div>
+        <div class="live-set" data-demos="frozen built-relay built-effect built-watermark audio built-pcm built-meter mounted built-plugins built-preview"><h3>Working examples</h3></div>
       </section>
 
       <section id="keys">
