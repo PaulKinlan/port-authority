@@ -246,6 +246,8 @@ export class Hub {
     this.state = state;
     this.storage = state.storage;
     this.pending = new Map();
+    this.agentRequests = new Map(); // opaque id -> { grantId, agentId }
+    this.permissions = new Map();   // perm id -> pending owner approval for session/request_permission
     this.data = null;
   }
 
@@ -331,8 +333,22 @@ export class Hub {
       services: Object.entries(d.known).map(([origin, k]) => ({ origin, ...k, live: !!this.serviceSocket(origin) })).sort((a, b) => Number(b.live) - Number(a.live)),
       grants: Object.values(d.grants),
       agent: { mode: d.agent.mode, room: d.agent.token, present: !!this.agentSocket(), info: d.agentInit, cwd: d.agentHello ? d.agentHello.cwd : null },
+      permissions: [...this.permissions.values()].map(({ id, client, toolCall, options, at }) => ({ id, client, toolCall, options, at })),
       log: d.log,
     };
+  }
+  cancelPendingFor(match) {
+    const agent = this.agentSocket();
+    for (const [id, p] of [...this.permissions]) {
+      if (!match(p)) continue;
+      this.permissions.delete(id);
+      if (agent) try { agent.send(JSON.stringify({ ch: "acp", msg: { jsonrpc: "2.0", id: p.agentId, result: { outcome: { outcome: "cancelled" } } } })); } catch {}
+    }
+    for (const [id, r] of [...this.agentRequests]) {
+      if (!match(r)) continue;
+      this.agentRequests.delete(id);
+      if (agent) try { agent.send(JSON.stringify({ ch: "acp", msg: { jsonrpc: "2.0", id: r.agentId, error: { code: -32001, message: "Access revoked" } } })); } catch {}
+    }
   }
   broadcast() {
     const state = JSON.stringify(this.snapshot());
@@ -362,16 +378,21 @@ export class Hub {
     await this.load();
     const meta = ws.deserializeAttachment() || {};
     this.leaving = ws;
-    try { ws.close(); } catch {}
-    if (meta.role === "site" && meta.registered) {
-      const still = this.state.getWebSockets("site").some((s) => s !== ws && (s.deserializeAttachment() || {}).origin === meta.origin && (s.deserializeAttachment() || {}).registered);
-      if (!still) { this.note((this.data.known[meta.origin] || {}).name + " disconnected"); this.toolsChanged(); }
-    }
-    if (meta.role === "agent" && !this.state.getWebSockets("agent").some((s) => s !== ws)) {
-      this.data.agentInit = null; this.data.agentHello = null;
-      this.save("agentInit"); this.save("agentHello");
-      this.note("Your agent disconnected");
-      this.broadcast();
+    try {
+      try { ws.close(); } catch {}
+      if (meta.role === "site" && meta.registered) {
+        const still = this.state.getWebSockets("site").some((s) => s !== ws && (s.deserializeAttachment() || {}).origin === meta.origin && (s.deserializeAttachment() || {}).registered);
+        if (!still) { this.note((this.data.known[meta.origin] || {}).name + " disconnected"); this.toolsChanged(); }
+      }
+      if (meta.role === "agent" && !this.state.getWebSockets("agent").some((s) => s !== ws)) {
+        this.data.agentInit = null; this.data.agentHello = null;
+        this.permissions.clear(); this.agentRequests.clear();
+        this.save("agentInit"); this.save("agentHello");
+        this.note("Your agent disconnected");
+        this.broadcast();
+      }
+    } finally {
+      if (this.leaving === ws) this.leaving = null;
     }
   }
   webSocketError(ws) { return this.webSocketClose(ws); }
@@ -425,6 +446,7 @@ export class Hub {
         if (!g) return;
         delete d.grants[msg.grantId];
         this.save("grants");
+        this.cancelPendingFor((p) => p.grantId === g.id);
         for (const site of this.siteSockets(g.client)) site.send(JSON.stringify({ t: "revoked", grant: g.id }));
         this.note("Access for " + hostOf(g.client) + " was revoked");
         return this.broadcast();
@@ -439,8 +461,10 @@ export class Hub {
         const tokens = await this.storage.list({ prefix: "site:" });
         const dead = [...tokens].filter((entry) => entry[1] === msg.origin).map((entry) => entry[0]);
         if (dead.length) await this.storage.delete(dead);
-        for (const g of Object.values(d.grants)) if (g.client === msg.origin) delete d.grants[g.id];
+        const deadGrants = new Set();
+        for (const g of Object.values(d.grants)) if (g.client === msg.origin) { deadGrants.add(g.id); delete d.grants[g.id]; }
         this.save("grants");
+        if (deadGrants.size) this.cancelPendingFor((p) => deadGrants.has(p.grantId));
         for (const id of Object.keys(d.lines)) if (d.lines[id].client === msg.origin || d.lines[id].service === msg.origin) delete d.lines[id];
         this.save("lines");
         for (const site of this.siteSockets(msg.origin)) {
@@ -449,6 +473,17 @@ export class Hub {
         }
         this.note(name + " was forgotten. It has to be added again to come back.");
         return this.toolsChanged();
+      }
+      case "permission": {
+        const p = this.permissions.get(msg.id);
+        if (!p) return;
+        this.permissions.delete(msg.id);
+        const agent = this.agentSocket();
+        const chosen = typeof msg.optionId === "string" ? p.options.find((o) => o.optionId === msg.optionId) : null;
+        const outcome = chosen ? { outcome: "selected", optionId: chosen.optionId } : { outcome: "cancelled" };
+        if (agent) agent.send(JSON.stringify({ ch: "acp", msg: { jsonrpc: "2.0", id: p.agentId, result: { outcome } } }));
+        this.note((chosen ? `Allowed (${chosen.name || chosen.optionId})` : "Denied") + " agent action for " + hostOf(p.client));
+        return this.broadcast();
       }
       case "agent-config": {
         d.agent = { mode: msg.mode, token: msg.fresh || !d.agent.token ? rand(24) : d.agent.token };
@@ -554,8 +589,12 @@ export class Hub {
     const agent = this.agentSocket();
     const toAgent = (out) => agent.send(JSON.stringify({ ch: "acp", msg: { jsonrpc: "2.0", ...out } }));
     if (m.method === undefined) {
-      // The site is answering something the agent asked.
-      if (agent && typeof m.id === "string" && m.id.startsWith("a|")) toAgent({ ...m, id: JSON.parse(m.id.slice(2)) });
+      // The site is answering something the agent asked, bound to this exact grant.
+      const req = typeof m.id === "string" ? this.agentRequests.get(m.id) : null;
+      if (agent && req && req.grantId === grant.id) {
+        this.agentRequests.delete(m.id);
+        toAgent({ ...m, id: req.agentId });
+      }
       return;
     }
     const fail = (message) => m.id !== undefined && send({ id: m.id, error: { code: -32000, message } });
@@ -609,7 +648,9 @@ export class Hub {
         return;
       }
       const parts = String(m.id).split("|");
-      const kind = parts[0], socketId = parts[1], grantId = parts[2], original = JSON.parse(parts.slice(3).join("|") || "null");
+      const kind = parts[0], socketId = parts[1], grantId = parts[2];
+      let original;
+      try { original = JSON.parse(parts.slice(3).join("|") || "null"); } catch { return; }
       if (kind === "n" && m.result && m.result.sessionId && d.grants[grantId]) { d.sessions[m.result.sessionId] = grantId; this.save("sessions"); }
       return toSite(grantId, socketId, m.error ? { id: original, error: m.error } : { id: original, result: m.result });
     }
@@ -619,7 +660,30 @@ export class Hub {
       if (m.id !== undefined) ws.send(JSON.stringify({ ch: "acp", msg: { jsonrpc: "2.0", id: m.id, error: { code: -32602, message: "Unknown session" } } }));
       return;
     }
-    toSite(grantId, null, m.id === undefined ? m : { ...m, id: "a|" + JSON.stringify(m.id) });
+    // Permission prompts for the local agent are decided by the person in their
+    // hub, never by the website that sent the prompt.
+    if (m.method === "session/request_permission" && m.id !== undefined) {
+      const owners = this.state.getWebSockets("owner").filter((s) => s.readyState === 1 && s !== this.leaving);
+      if (!owners.length) {
+        this.note("Denied an agent permission request for " + hostOf(d.grants[grantId].client) + " (open your hub to approve agent actions)");
+        ws.send(JSON.stringify({ ch: "acp", msg: { jsonrpc: "2.0", id: m.id, result: { outcome: { outcome: "cancelled" } } } }));
+        return;
+      }
+      const id = rand(9);
+      const options = Array.isArray(m.params && m.params.options) ? m.params.options.slice(0, 12).map((o) => ({
+        optionId: String((o && o.optionId) || ""), name: String((o && (o.name || o.optionId)) || "").slice(0, 80), kind: String((o && o.kind) || "").slice(0, 32),
+      })).filter((o) => o.optionId) : [];
+      const tc = m.params && m.params.toolCall && typeof m.params.toolCall === "object" ? {
+        title: String(m.params.toolCall.title || "").slice(0, 200), kind: String(m.params.toolCall.kind || "").slice(0, 40),
+      } : null;
+      this.permissions.set(id, { id, agentId: m.id, grantId, client: d.grants[grantId].client, sessionId: m.params && m.params.sessionId, toolCall: tc, options, at: Date.now() });
+      this.note("Your agent asked permission" + (tc && tc.title ? ` (${tc.title})` : "") + " while answering " + hostOf(d.grants[grantId].client));
+      return this.broadcast();
+    }
+    if (m.id === undefined) return toSite(grantId, null, m);
+    const reqId = "a|" + rand(12);
+    this.agentRequests.set(reqId, { grantId, agentId: m.id });
+    toSite(grantId, null, { ...m, id: reqId });
   }
 
   // The built-in agent has no language model. It matches words in the prompt
@@ -850,9 +914,14 @@ export class Router {
       }
       let site;
       try { site = new URL(String(body.site)).origin; } catch { return Response.json({ ok: false, why: "bad site" }, { status: 400 }); }
-      if (Object.keys(grants).length >= 200) return Response.json({ ok: false, why: "too many grants, revoke some first" }, { status: 400 });
+      if (String(body.secret || "").length < 20) return Response.json({ ok: false, why: "weak secret" }, { status: 400 });
+      const active = Object.values(grants).filter((g) => g.site !== site && state(g) === "active");
+      if (active.length >= 200) return Response.json({ ok: false, why: "too many grants, revoke some first" }, { status: 400 });
       // One live grant per site: a new one replaces the old.
       for (const old of Object.values(grants)) if (old.site === site && !old.revoked) { old.revoked = true; delete old.wrap; }
+      // Keep stored history bounded at 200 entries by pruning the oldest inactive grants first.
+      const inactive = Object.values(grants).filter((g) => state(g) !== "active").sort((a, b) => a.made - b.made);
+      while (Object.keys(grants).length >= 200 && inactive.length) delete grants[inactive.shift().id];
       const clamp = (n, lo, hi, d) => Math.min(hi, Math.max(lo, Math.round(Number(n)) || d));
       const g = {
         id: rand(9), secret: await sha(String(body.secret || "")), wrap: rand(32), site,
@@ -860,7 +929,6 @@ export class Router {
         requests: clamp(body.requests, 1, 100000, 20), used: 0, tokensIn: 0, tokensOut: 0,
         made: Date.now(), expires: Date.now() + clamp(body.days, 1, 365, 7) * 86400000, last: 0,
       };
-      if (String(body.secret || "").length < 20) return Response.json({ ok: false, why: "weak secret" }, { status: 400 });
       grants[g.id] = g;
       await save();
       return Response.json({ ok: true, id: g.id, wrap: g.wrap, grant: view(g) });

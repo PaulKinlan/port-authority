@@ -94,7 +94,7 @@
         app.innerHTML = `<p class="muted">Adding ${esc(host(client))}.</p>`;
         respond(true, await credentials());
       };
-      if (remembered("pa-services").includes(client)) return go();
+      if (remembered("pa-services").includes(client) && sb.state.services.some((s) => s.origin === client)) return go();
       consent({
         title: `Add ${esc(request.name || "this site")} to your hub?`,
         body: `${esc(request.description || "It wants to offer tools.")} Your hub will remember its tools, and other sites reach them only when you pick it.`,

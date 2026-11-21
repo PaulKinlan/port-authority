@@ -259,6 +259,26 @@ test("`only` limits what can be reached", async () => {
   await assert.rejects(async () => await api.admin, /not available/);
 });
 
+test("`only` cannot be bypassed by passing a forbidden path back as an argument", async () => {
+  const { api } = link({ echo: (v) => v, secret: "top-secret", secretFn: () => "leaked" }, { only: ["echo"] });
+  const propErr = await api.echo(api.secret).catch((e) => e);
+  assert.equal(propErr.name, "NotAllowedError");
+  const fnErr = await api.echo(api.secretFn).catch((e) => e);
+  assert.equal(fnErr.name, "NotAllowedError");
+});
+
+test("cyclic plain objects and arrays cross without overflowing the stack", async () => {
+  const { api } = link({ echo: (v) => v });
+  const obj = { name: "loop" }; obj.self = obj;
+  const echoed = await api.echo(obj);
+  assert.equal(echoed.name, "loop");
+  assert.equal(echoed.self, echoed);
+  const arr = [1]; arr.push(arr);
+  const echoedArr = await api.echo(arr);
+  assert.equal(echoedArr[0], 1);
+  assert.equal(echoedArr[1], echoedArr);
+});
+
 test("port() mints a narrowed port for a third party, and a signal revokes it", async () => {
   let n = 0;
   const { api } = link({ counter: { read: () => n, add: () => ++n } });

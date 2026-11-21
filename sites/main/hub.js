@@ -383,12 +383,11 @@ export async function agent() {
   }));
   const updates = new Set();
   peer.onNotification((method, params) => { if (method === "session/update") for (const fn of updates) fn(params); });
-  // Agents may ask before running a tool. Sites can replace this handler.
-  peer.onRequest(async (method, params) => {
-    if (method === "session/request_permission") {
-      const allow = params.options?.find((o) => o.kind?.startsWith("allow")) || params.options?.[0];
-      return { outcome: allow ? { outcome: "selected", optionId: allow.optionId } : { outcome: "cancelled" } };
-    }
+  // Permission prompts from a local agent are decided by the person in their
+  // hub, never auto-approved by the requesting site. If a peer ever sends one
+  // directly, cancel it unless the site explicitly handles it.
+  peer.onRequest(async (method) => {
+    if (method === "session/request_permission") return { outcome: { outcome: "cancelled" } };
     throw Object.assign(new Error("Method not found"), { code: -32601 });
   });
   return {

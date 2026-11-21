@@ -24,6 +24,7 @@ function sharesMemory(value, seen = new Set()) {
   if (ArrayBuffer.isView(value)) return kind(value.buffer) === "SharedArrayBuffer";
   if (type === "Map") return [...value].some(([k, v]) => sharesMemory(k, seen) || sharesMemory(v, seen));
   if (type === "Set") return [...value].some((v) => sharesMemory(v, seen));
+  if (value instanceof Error) return sharesMemory(value.cause, seen) || (Array.isArray(value.errors) && value.errors.some((e) => sharesMemory(e, seen)));
   if (type === "Array" || type === "Object") return Object.values(value).some((v) => sharesMemory(v, seen));
   return false;
 }

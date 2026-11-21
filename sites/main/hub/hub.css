@@ -2,6 +2,9 @@
 .dash h2 { font-size: var(--step-2); }
 .service { background: var(--panel); border-radius: 14px; padding: 1rem 1.2rem; border-left: 8px solid var(--line); }
 .service.live { border-left-color: var(--accent); }
+.perm { background: var(--panel); border-radius: 14px; padding: 1rem 1.2rem; border-left: 8px solid var(--accent); display: grid; gap: 0.7rem; }
+.perm p { margin: 0; display: flex; flex-wrap: wrap; gap: 0.3rem 0.8rem; align-items: baseline; }
+.perm .actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
 .service header { display: flex; flex-wrap: wrap; gap: 0.3rem 1rem; align-items: baseline; justify-content: space-between; }
 .tools { list-style: none; margin: 0.7rem 0 0; padding: 0; display: grid; gap: 0.35rem; font-size: var(--step--1); }
 .grants { list-style: none; margin: 0; padding: 0; }

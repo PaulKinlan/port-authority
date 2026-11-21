@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+
+  e2e:
+    runs-on: ubuntu-latest
+    needs: unit
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm install -g playwright && playwright install chromium
+      - name: Start wrangler dev and run core E2E suites
+        env:
+          NODE_PATH: /usr/local/lib/node_modules
+        run: |
+          NODE_PATH=$(npm root -g)
+          export NODE_PATH
+          npx wrangler dev --port 8787 > /tmp/wrangler.log 2>&1 &
+          WRANGLER_PID=$!
+          trap 'kill $WRANGLER_PID 2>/dev/null || true' EXIT
+          for i in $(seq 1 30); do
+            curl -fsS http://127.0.0.1:8787/_sites.js > /dev/null && break
+            sleep 1
+          done
+          node test/e2e.mjs
+          node test/relay.mjs
+          node test/rtc.mjs
+          node test/airouter.mjs
+          node test/hawser.mjs

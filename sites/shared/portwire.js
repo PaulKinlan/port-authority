@@ -21,6 +21,7 @@
 // stream's source. onmessage is called with an ArrayBuffer or Uint8Array.
 
 const FRAME = 15000;          // bytes of one frame. Data channels are only sure to carry 16 KiB.
+const MAX_MESSAGE = 64 << 20; // cap reassembled message bytes so malformed streams cannot grow without bound
 // A key says who made the thing: L for this side, R for the other. On the wire it is flipped.
 const flip = (key) => (key === "0" ? key : (key[0] === "L" ? "R" : "L") + key.slice(1));
 const kind = (value) => Object.prototype.toString.call(value).slice(8, -1);
@@ -59,22 +60,32 @@ export function bridge(pipe, { onerror = () => {}, onclose = () => {} } = {}) {
     return line;
   };
 
-  let parts = [];
+  let parts = [], partsBytes = 0;
   pipe.onmessage = (data) => {
     const frame = data instanceof Uint8Array ? data : new Uint8Array(data);
+    if (!frame.byteLength) return;
     stats.received += frame.byteLength;
-    parts.push(frame.subarray(1));
+    const chunk = frame.subarray(1);
+    partsBytes += chunk.byteLength;
+    if (partsBytes > MAX_MESSAGE) { parts = []; partsBytes = 0; return onerror(new Error("message exceeds size limit")); }
+    parts.push(chunk);
     if (!frame[0]) return;
-    const whole = new Uint8Array(parts.reduce((sum, p) => sum + p.byteLength, 0));
+    const whole = new Uint8Array(partsBytes);
     let at = 0;
     for (const p of parts) { whole.set(p, at); at += p.byteLength; }
-    parts = [];
+    parts = []; partsBytes = 0;
     try {
+      if (whole.byteLength < 4) throw new Error("truncated message");
       const headLength = new DataView(whole.buffer).getUint32(0);
+      if (4 + headLength > whole.byteLength) throw new Error("truncated header");
       const head = JSON.parse(new TextDecoder().decode(whole.subarray(4, 4 + headLength)));
+      if (!head || !Array.isArray(head.b)) throw new Error("malformed header");
       let from = 4 + headLength;
       // Each block gets a buffer of its own, so it can be transferred onwards.
-      const blobs = head.b.map((length) => { const b = whole.slice(from, from + length); from += length; return b; });
+      const blobs = head.b.map((length) => {
+        if (!Number.isInteger(length) || length < 0 || from + length > whole.byteLength) throw new Error("invalid blob length");
+        const b = whole.slice(from, from + length); from += length; return b;
+      });
       receive(head.m, blobs);
     } catch (err) { onerror(err); }
   };
@@ -124,9 +135,16 @@ export function bridge(pipe, { onerror = () => {}, onclose = () => {} } = {}) {
       case "M": return new Map(a.map(([k, v]) => [decode(k, blobs, transfer), decode(v, blobs, transfer)]));
       case "S": return new Set(a.map((item) => decode(item, blobs, transfer)));
       case "o": return Object.fromEntries(Object.entries(a).map(([k, v]) => [k, decode(v, blobs, transfer)]));
-      case "b": transfer.push(blobs[a].buffer); return blobs[a].buffer;
+      case "b": {
+        const bytes = blobs[a];
+        if (!bytes) throw new Error("missing bytes on the wire");
+        transfer.push(bytes.buffer);
+        return bytes.buffer;
+      }
       case "t": {
+        if (!VIEWS.includes(a)) throw new Error("unknown typed array on the wire");
         const bytes = blobs[b];
+        if (!bytes) throw new Error("missing bytes on the wire");
         transfer.push(bytes.buffer);
         if (a === "DataView") return new DataView(bytes.buffer);
         const View = globalThis[a];

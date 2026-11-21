@@ -18,7 +18,7 @@ const worker = new Worker("/frame-worker.js", { type: "module" });
 
 worker.onmessage = (event) => {
   // The worker found out the grant is no longer good, or the site asked to forget it.
-  if (event.data.t === "forget") { grant = null; localStorage.removeItem(KEY); }
+  if (event.data.t === "forget") { grant = null; try { localStorage.removeItem(KEY); } catch { /* third-party storage blocked */ } }
 };
 
 // A worker cannot use the browser's built-in model, so the frame lends it a
@@ -59,7 +59,7 @@ addEventListener("message", (event) => {
       const data = answer.data || {};
       if (data.t === "grant" && data.grant && site && data.grant.site === site) {
         grant = data.grant;
-        localStorage.setItem(KEY, JSON.stringify(grant));
+        try { localStorage.setItem(KEY, JSON.stringify(grant)); } catch { /* third-party storage blocked */ }
         worker.postMessage({ t: "grant", grant, info: data.info });
         line.postMessage({ t: "stored" });
       }

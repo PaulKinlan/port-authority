@@ -278,24 +278,36 @@ class Link {
 
   // -------------------------------------------------------------- receiving
 
-  revive(value) {
+  revive(value, seen = new WeakSet()) {
     if (value === null || typeof value !== "object") return value;
-    if (Array.isArray(value)) { for (let i = 0; i < value.length; i++) value[i] = this.revive(value[i]); return value; }
+    if (Array.isArray(value)) {
+      if (seen.has(value)) return value;
+      seen.add(value);
+      for (let i = 0; i < value.length; i++) value[i] = this.revive(value[i], seen);
+      return value;
+    }
     if (!isPlain(value)) return value;
     const kind = value[TAG];
-    if (kind === undefined) { for (const key of Object.keys(value)) value[key] = this.revive(value[key]); return value; }
+    if (kind === undefined) {
+      if (seen.has(value)) return value;
+      seen.add(value);
+      for (const key of Object.keys(value)) value[key] = this.revive(value[key], seen);
+      return value;
+    }
     switch (kind) {
       case "ref": return this.importRef(value.id);
       case "back": {
         const entry = this.exports.get(value.id);
         if (!entry) throw new ReferenceError("That object is no longer held on this side");
+        if (!Array.isArray(value.path)) throw new TypeError("Malformed reference");
+        if (!permitted(entry.allows, value.path)) throw new DOMException(`"${value.path.join(".")}" is not available on this link`, "NotAllowedError");
         return value.path.reduce((object, key) => step(object, key), entry.target);
       }
       case "iter": return remoteIterator(this.importRef(value.id));
       case "signal": {
         let controller = this.signalsIn.get(value.sid);
         if (!controller) this.signalsIn.set(value.sid, (controller = new AbortController()));
-        if (value.aborted) { controller.abort(this.revive(value.reason)); this.signalsIn.delete(value.sid); }
+        if (value.aborted) { controller.abort(this.revive(value.reason, seen)); this.signalsIn.delete(value.sid); }
         return controller.signal;
       }
       case "error": {
@@ -303,7 +315,14 @@ class Link {
         if (error instanceof Error && value.name && error.name !== value.name) Object.defineProperty(error, "name", { value: value.name, configurable: true, writable: true });
         return error;
       }
-      case "esc": { const inner = value.v; for (const key of Object.keys(inner)) if (key !== TAG) inner[key] = this.revive(inner[key]); return inner; }
+      case "esc": {
+        const inner = value.v;
+        if (inner && typeof inner === "object" && !seen.has(inner)) {
+          seen.add(inner);
+          for (const key of Object.keys(inner)) if (key !== TAG) inner[key] = this.revive(inner[key], seen);
+        }
+        return inner;
+      }
       default: return value;
     }
   }

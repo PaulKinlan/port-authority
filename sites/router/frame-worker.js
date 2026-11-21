@@ -53,16 +53,19 @@ async function run(message, reply, budget) {
   reply.onmessage = (event) => { if (event.data && event.data.t === "cancel") stop.abort(new DOMException("cancelled", "AbortError")); };
   const fail = (code, text) => { reply.postMessage({ t: "error", code, message: text }); reply.close(); };
   if (!grant) return fail("no-grant", "This site has no model yet. Ask the person to choose one.");
-  if (budget && budget.left <= 0) return fail("limit", "This port was lent for a fixed number of requests and has used them all.");
+  if (budget) {
+    if (budget.left <= 0) return fail("limit", "This port was lent for a fixed number of requests and has used them all.");
+    budget.left--;
+  }
   let allowed;
-  try { allowed = await ask("use"); } catch { return fail("offline", "The router server could not be reached."); }
+  try { allowed = await ask("use"); } catch { if (budget) budget.left++; return fail("offline", "The router server could not be reached."); }
   if (!allowed.ok) {
+    if (budget) budget.left++;
     const why = allowed.why;
     forget(); announce();
     return fail(why === "used up" ? "limit" : "no-grant", why === "used up" ? "This site has used all the requests it was given." : `The grant for this site is ${why}.`);
   }
   info = allowed.grant;
-  if (budget) budget.left--;
   let usage = null;
   try {
     const pieces = grant.provider === "builtin"

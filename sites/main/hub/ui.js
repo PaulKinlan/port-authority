@@ -74,7 +74,11 @@ export function mountDashboard(root, sb, view = "tools") {
       <a href="/hub/" ${view === "tools" ? 'aria-current="page"' : ""}>Sites and their tools</a>
       <a href="/hub/agent/" ${view === "agent" ? 'aria-current="page"' : ""}>Your agent</a>
     </nav>`;
-  root.innerHTML = view === "agent" ? `${tabs}
+  const perms = `<section class="stack" data-part="permissions-wrap" aria-labelledby="d-perms" hidden>
+      <h2 id="d-perms">Your agent is asking permission</h2>
+      <div data-part="permissions" class="stack"></div>
+    </section>`;
+  root.innerHTML = view === "agent" ? `${tabs}${perms}
     <section class="stack" aria-labelledby="d-agent">
       <h2 id="d-agent">Which agent sites get</h2>
       <div data-part="agent" class="stack"></div>
@@ -86,7 +90,7 @@ export function mountDashboard(root, sb, view = "tools") {
     <section class="stack" aria-labelledby="d-log">
       <h2 id="d-log">What happened</h2>
       <ul class="log" data-part="log"></ul>
-    </section>` : `${tabs}
+    </section>` : `${tabs}${perms}
     <section class="stack" aria-labelledby="d-sites">
       <h2 id="d-sites">Sites offering tools</h2>
       <div data-part="services" class="stack"></div>
@@ -105,9 +109,16 @@ export function mountDashboard(root, sb, view = "tools") {
   root.addEventListener("click", (event) => {
     const button = event.target.closest("button[data-act]");
     if (!button) return;
-    const { act, id } = button.dataset;
+    const { act, id, opt } = button.dataset;
     if (act === "revoke") sb.send({ t: "revoke", grantId: id });
-    if (act === "forget") sb.send({ t: "forget", origin: id });
+    if (act === "forget") {
+      try {
+        const saved = JSON.parse(localStorage.getItem("pa-services") || "[]");
+        localStorage.setItem("pa-services", JSON.stringify(saved.filter((o) => o !== id)));
+      } catch {}
+      sb.send({ t: "forget", origin: id });
+    }
+    if (act === "perm") sb.send({ t: "permission", id, optionId: opt || null });
     if (act === "copy") navigator.clipboard?.writeText(root.querySelector("[data-command]").textContent).then(() => { button.textContent = "Copied"; });
     if (act === "new-room" && confirm("Make a new address? The bridge you are running now will stop working.")) sb.send({ t: "agent-config", mode: "relay", fresh: true });
   });
@@ -197,6 +208,18 @@ node bridge.mjs "${wss}" -- ${esc(example)}</pre>
         <button class="tiny quiet" data-act="revoke" data-id="${g.id}">Revoke</button></li>`).join("")}</ul>`
       : view === "agent" ? `<p class="muted">No site has been let talk to your agent. A site has to ask, and you have to say yes in the hub window. One to try: the <a data-site="planner" target="_blank">planner</a>.</p>`
       : `<p class="muted">No site has been given the registry or your agent. Direct lines to a single tool are not listed here: they are made on your machine and your hub is not part of them.</p>`;
+
+    const perms = state.permissions || [];
+    part("permissions-wrap").hidden = !perms.length;
+    part("permissions").innerHTML = perms.map((p) => `
+      <article class="perm">
+        <p><strong>${esc(p.toolCall?.title || "Run an action on your machine")}</strong>
+          <span class="muted small">requested while answering ${esc(host(p.client))}</span></p>
+        <div class="actions">
+          ${p.options.map((o) => `<button class="${o.kind?.startsWith("allow") ? "accent" : "quiet"} tiny" data-act="perm" data-id="${esc(p.id)}" data-opt="${esc(o.optionId)}">${esc(o.name || o.optionId)}</button>`).join("")}
+          <button class="tiny quiet" data-act="perm" data-id="${esc(p.id)}">Cancel</button>
+        </div>
+      </article>`).join("");
 
     const agentKey = JSON.stringify(state.agent);
     if (agentKey !== lastAgentKey) { lastAgentKey = agentKey; renderAgent(state); }

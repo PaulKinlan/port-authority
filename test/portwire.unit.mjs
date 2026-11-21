@@ -224,3 +224,30 @@ test("when the pipe closes, the ports and streams riding on it end", async () =>
   assert.ok(aborted);
   l.done();
 });
+
+test("malformed frames and unknown typed-array tags are rejected safely", async () => {
+  const errors = [];
+  const pipe = { send() {}, close() {}, onmessage: null, onclose: null };
+  const b = bridge(pipe, { onerror: (e) => errors.push(e) });
+  let received = 0;
+  b.port.onmessage = () => received++;
+
+  // Untrusted constructor name in a typed-array tag ("t") must not touch globalThis.
+  const head = new TextEncoder().encode(JSON.stringify({ m: { t: "m", p: "0", v: ["t", "Date", 0] }, b: [8] }));
+  const badView = new Uint8Array(1 + 4 + head.byteLength + 8);
+  badView[0] = 1;
+  new DataView(badView.buffer, 1).setUint32(0, head.byteLength);
+  badView.set(head, 5);
+  pipe.onmessage(badView);
+
+  // Truncated frame with a header length larger than the payload.
+  const truncated = new Uint8Array([1, 0, 0, 1, 0, 123, 125]);
+  pipe.onmessage(truncated);
+
+  await sleep(10);
+  assert.equal(received, 0);
+  assert.equal(errors.length, 2);
+  assert.match(errors[0].message, /unknown typed array/);
+  assert.match(errors[1].message, /truncated header/);
+  b.close(); b.port.close();
+});
