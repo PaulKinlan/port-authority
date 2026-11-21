@@ -20,6 +20,7 @@ Live: https://port-authority.dev
 | `sites/main/comlink/` | The Comlink chapter. Three demos that do real work, each with Comlink 4.4.2 beside Hawser: a fractal on two workers (`render-worker.js`), a third-party widget on another origin (`sites/shared/comlink/widget.html`), and a journal in a locked OPFS file (`journal-worker.js`). Then how Comlink works and what has changed |
 | `sites/shared/portwire.js` | A `MessagePort` over anything that carries bytes in order. Data, bytes, ports and streams posted into it are rebuilt on the other side. No dependencies |
 | `sites/shared/farport.js` | A `MessagePort` whose other end is on another device: a pairing code, a WebRTC data channel, and `portwire.js` on top. The page the other device opens is `sites/main/far/` |
+| `sites/shared/alive.js` | Knowing whether the other side of a port is still there, on a second port kept for health checks: `watch()` / `answer()` (ping and answer), `beat()` / `listen()` (one-way beats), `holdLock()` / `whenReleased()` (a Web Lock, one origin only), and `announce()` (a goodbye on `pagehide`, a pause on `freeze` and the back/forward cache). Demos in `sites/main/patterns/alive.js`, far side in `sites/shared/alive-far.js` |
 | `sites/shared/oneway.js` | `oneWay()`: two channels and a valve, for a port link that carries messages in one direction only |
 | `sites/shared/qr.js` | A small QR encoder, for the link a phone scans |
 | `sites/shared/` | CSS and the patch-bay diagram component used by the demos |
@@ -57,8 +58,8 @@ other) and changes what the platform now allows:
 
 - Calls reject with `LinkClosedError` when the other side goes away. A closing
   page says goodbye on `pagehide`, the port `close` event is used where it
-  exists (Chromium 157 keeps it behind `MessagePortCloseEvent`), and an
-  optional heartbeat catches a crash. There is also a per-link `timeout`.
+  exists (only behind a flag in Chromium; it was removed from the HTML
+  standard in October 2026), and an optional heartbeat catches a crash. There is also a per-link `timeout`.
 - Functions, class instances and async generators cross by reference with no
   marking, multiplexed on the one port with reference counts. They are released
   by `Symbol.dispose`, by a `FinalizationRegistry`, or when the link closes.

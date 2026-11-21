@@ -258,7 +258,7 @@ port.postMessage({ id: "4f1c…", type: "RAW", value: 3 });</pre>
         <table class="then-now">
           <thead><tr><th scope="col">Platform feature</th><th scope="col">Comlink 4</th><th scope="col">Here</th></tr></thead>
           <tbody>
-            <tr><th scope="row">Port <code>close</code> event</th><td>Not used. Calls to a dead port hang.</td><td>Pending and later calls reject. The event is in the HTML standard but Chromium 157 still keeps it behind the <code>MessagePortCloseEvent</code> flag, so a goodbye on <code>pagehide</code> and an optional heartbeat cover for it.</td></tr>
+            <tr><th scope="row">Port <code>close</code> event</th><td>Not used. Calls to a dead port hang.</td><td>Pending and later calls reject. No browser fires a port <code>close</code> event (it was taken out of the HTML standard in October 2026), so a goodbye on <code>pagehide</code> and an optional heartbeat do the job. Hawser still listens for the event, for builds that have it behind a flag. <a href="/patterns/alive-signals/">How each signal compares.</a></td></tr>
             <tr><th scope="row"><code>AbortSignal</code></th><td>Cannot be sent.</td><td>Crosses as a working signal. Aborts when the caller goes away.</td></tr>
             <tr><th scope="row"><code>FinalizationRegistry</code></th><td>Added late, per port.</td><td>Reference counted per object on one port. Disposal reaches the real object.</td></tr>
             <tr><th scope="row"><code>using</code> and <code>Symbol.dispose</code></th><td><code>proxy[releaseProxy]()</code></td><td>Every proxy is disposable. Disposing the root closes the link.</td></tr>

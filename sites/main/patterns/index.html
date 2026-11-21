@@ -13,7 +13,7 @@
   <div class="wrap">
     <header class="site-bar">
       <a class="wordmark" href="/">Port Authority</a>
-      <nav><a href="/guide/">The guide</a><a href="/">Experiments</a><a href="#further">More to carry</a><a href="#threads-intro">Across threads</a><a href="#origins-intro">Real sites</a><a href="#places-intro">Further</a><a href="#census">Census</a><a href="/patterns/" aria-current="page">Port patterns</a><a href="/comlink/">Comlink today</a><a href="/hub/">Your hub</a></nav>
+      <nav><a href="/guide/">The guide</a><a href="/">Experiments</a><a href="#further">More to carry</a><a href="#threads-intro">Across threads</a><a href="#origins-intro">Real sites</a><a href="#places-intro">Further</a><a href="#alive-intro">Still there?</a><a href="#census">Census</a><a href="/patterns/" aria-current="page">Port patterns</a><a href="/comlink/">Comlink today</a><a href="/hub/">Your hub</a></nav>
     </header>
     <div class="stack" style="padding-block:2.5rem 2rem; --gap:1.2rem">
       <h1 style="font-size:var(--step-3)">The six basic patterns</h1>
@@ -46,6 +46,11 @@
       <p>The other end of a port can be on another device, behind a path on your own site, in a worker that every tab shares, or on the thread that makes sound. The code that holds the port is the same each time.</p>
     </div>
     <div id="places"></div>
+    <div class="stack" id="alive-intro" style="padding-block:clamp(3rem,8vw,5rem) 2rem; --gap:1.2rem; border-top:2px solid var(--ink)">
+      <h1 style="font-size:var(--step-3)">Knowing the other side is still there</h1>
+      <p>A port does not tell you when its other end has gone. The page that held it can be closed, navigated, frozen or stuck, and posting into the port works exactly as before, with nothing coming back. These keep the work on one port and put health checks on a second port, so the code that does the work never has to know about them.</p>
+    </div>
+    <div id="alive"></div>
     <section class="pattern" id="sync">
       <h2>Block on a port: a synchronous call with no await</h2>
       <div class="text">
@@ -69,7 +74,7 @@
       <ul class="stack" style="max-width:62ch; padding-left:1.1rem">
         <li>A port you attach with <code>addEventListener</code> stays silent until you call <code>port.start()</code>. Setting <code>onmessage</code> starts it for you.</li>
         <li>Messages posted before the other side is listening are not lost. They wait in the port. You can send a port and start talking into it straight away.</li>
-        <li>Nothing tells you when the other end has gone. A <code>close</code> event for ports has been specified, but Chromium 157 only has it behind the <code>MessagePortCloseEvent</code> flag. Between pages on one origin, hold a Web Lock in the page and wait on it from the worker. Across origins, send a ping and treat silence as the answer.</li>
+        <li>Nothing tells you when the other end has gone. A <code>close</code> event for ports was added to the HTML standard in 2024, never switched on in any browser, and removed again in October 2026. Put health checks on a second port: <a href="/patterns/health-pair/">pings</a> or <a href="/patterns/health-beats/">beats</a>, with a goodbye on <code>pagehide</code>. On one origin, a Web Lock held by the other side is released the moment it is destroyed. <a href="/patterns/alive-signals/">Which signal notices what.</a></li>
         <li>A SharedWorker inside a cross-site iframe is partitioned by the top-level site, so a hidden hub iframe is a different hub on every site. A window of its own is first party and reaches the real one. Ports that have already been handed over are not affected.</li>
         <li>A transferred port is gone from the sender. Post it twice and the second call throws.</li>
         <li>A stream that is passed on through a middle context keeps flowing through it. If the middle goes away the reader stalls: no error, no end. Send streams down a direct port.</li>
@@ -85,6 +90,7 @@
     import { origins } from "/patterns/origins.js";
     import { oneway } from "/patterns/oneway.js";
     import { places } from "/patterns/places.js";
+    import { alive } from "/patterns/alive.js";
     import { groups } from "/patterns/all.js";
     import { legend } from "/wire.js";
     document.querySelector("[data-legend]").innerHTML = legend();
@@ -93,7 +99,7 @@
     import { runCensus } from "/patterns/census.js";
     const census = document.querySelector("table.census");
     new IntersectionObserver((entries, io) => { if (entries[0].isIntersecting) { io.disconnect(); runCensus(census); } }, { rootMargin: "200px" }).observe(census);
-    for (const [demo, main] of [...demos.map((d) => [d, document.getElementById("patterns")]), ...more.map((d) => [d, document.getElementById("more")]), ...threads.map((d) => [d, document.getElementById("threads")]), ...[...origins, oneway].map((d) => [d, document.getElementById("origins")]), ...places.map((d) => [d, document.getElementById("places")])]) {
+    for (const [demo, main] of [...demos.map((d) => [d, document.getElementById("patterns")]), ...more.map((d) => [d, document.getElementById("more")]), ...threads.map((d) => [d, document.getElementById("threads")]), ...[...origins, oneway].map((d) => [d, document.getElementById("origins")]), ...places.map((d) => [d, document.getElementById("places")]), ...alive.map((d) => [d, document.getElementById("alive")])]) {
       const section = document.createElement("section");
       section.className = "pattern";
       section.id = demo.id;
