@@ -53,8 +53,18 @@ onconnect = (event) => {
   const port = event.ports[0];
   port.onmessage = ({ data }) => {
     if (data.watch) { watchers.add(port); return report(); }
-    // Close the socket from this end, as a failed network would.
-    if (data.drop) { if (socket) socket.close(); return; }
+    // Close the socket from this end, as a failed network would. The close
+    // event can be slow to arrive, or never arrive, when the server does not
+    // answer the closing handshake. So give the socket up now and connect again.
+    if (data.drop) {
+      if (!socket) return;
+      const old = socket;
+      socket = null;
+      old.close();
+      report();
+      if (tabs.size) setTimeout(connect, 300);
+      return;
+    }
     if (data.join) {
       const name = "tab " + ++n;
       tabs.set(port, name);
