@@ -36,6 +36,12 @@ for (const [label, args] of [["one process", []], ["isolated frames", isolate]])
     return out.textContent;
   });
   check(`${label}: the canvas check ${args.length ? "finds the frame dead" : "draws"}`, args.length ? /stopped answering for good/.test(canvas) : /worked there/.test(canvas), canvas);
+  // The effects demo: the same pictures to another origin as ImageBitmap and as VideoFrame.
+  await page.locator("#effects [data-start]").click();
+  await page.waitForFunction(() => document.querySelector('[data-note="frame"]').dataset.state && /\d+ pictures back/.test(document.querySelector('[data-note="bitmap"]').textContent), null, { timeout: 15000 });
+  const lanes = await page.evaluate(() => ["bitmap", "frame"].map((k) => document.querySelector(`[data-note="${k}"]`).textContent));
+  check(`${label}: effects come back from the other origin when sent as ImageBitmap`, /pictures back/.test(lanes[0]), lanes[0]);
+  check(`${label}: the VideoFrame version fails on the first frame, and says how`, /messageerror event and no VideoFrame/.test(lanes[1]), lanes[1]);
   if (!args.length) {
     check("no sideways scroll on a phone", await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
     await page.waitForSelector("#references, .references, footer", { timeout: 5000 });

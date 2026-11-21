@@ -37,6 +37,15 @@
     td[data-probe][data-state="gap"], td[data-probe][data-state="works"] { box-shadow: none; margin: 0; padding-left: 0; }
     td[data-probe][data-state="gap"] { color: var(--red); }
     td[data-probe][data-state="works"] { color: var(--teal); }
+    .fx { border: 2px solid var(--ink); border-radius: 18px; padding: clamp(.8rem, 3vw, 1.4rem); background: color-mix(in srgb, var(--yellow) 10%, var(--paper)); display: grid; gap: .9rem; grid-template-columns: minmax(0, 1fr); }
+    .fx h4 { font: 800 var(--step-1)/1.1 var(--display); letter-spacing: -0.01em; text-transform: none; color: inherit; margin: 0; }
+    .fx-grid { display: grid; gap: .9rem; grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr)); }
+    .fx figure { margin: 0; display: grid; gap: .4rem; align-content: start; }
+    .fx canvas, .fx iframe { width: 100%; aspect-ratio: 16 / 9; height: auto; display: block; border: 2px solid var(--ink); border-radius: 10px; background: var(--panel); }
+    .fx figcaption { font-size: var(--step--1); display: grid; gap: .15rem; }
+    .fx figcaption span { overflow-wrap: anywhere; }
+    .fx figcaption [data-state="gap"] { color: var(--red); font-weight: 600; }
+    .fx .controls { display: flex; flex-wrap: wrap; gap: .5rem; margin: 0; }
     #tally { font-weight: 600; }
   </style>
 </head>
@@ -56,6 +65,7 @@
         <li><a href="#data">1. Rich data cannot cross origins</a>
           <ul>
             <li><a href="#frames">Video frames and audio data</a></li>
+            <li><a href="#effects">Running: webcam effects from another origin</a></li>
             <li><a href="#track">A camera or microphone track</a></li>
             <li><a href="#others">File handles, data channels and media sources</a></li>
             <li><a href="#canvas">A canvas that ends the frame it is sent to</a></li>
@@ -113,6 +123,12 @@
             <span data-probe="audiodata-other"></span>
             <span data-probe="chunk-other"></span>
           </div>
+          <div class="fx demo" id="effects">
+            <h4>Running: webcam effects from another origin, sent two ways</h4>
+            <p>The frame in this demo is an effects service on another origin. It has no camera and cannot reach this page. This page sends it the same pictures two ways at the same time: as <code>VideoFrame</code>, which is what I want to use, and as <code>ImageBitmap</code>, which is what crosses origins today. Press Start. It uses a drawing unless you choose your camera.</p>
+            <div id="effects-demo"></div>
+            <p class="small">The code is in <a href="/missing/effects-demo.js">effects-demo.js</a> and <a href="/effects.html">effects.html</a>.</p>
+          </div>
           <h4>How I know</h4>
           <ul>
             <li><a href="/lab/">The lab</a> on this site sends 45 kinds of object to 13 places and records what happens. See <a href="/lab/results/">the results</a>.</li>
@@ -131,7 +147,7 @@
             <li>A codec or a transcoder on another origin, taking encoded chunks in and giving frames back.</li>
           </ul>
           <h4>What you have to do today</h4>
-          <p>Send an <code>ImageBitmap</code>, or copy the pixels into an <code>ArrayBuffer</code> and send that. Both work, and both lose the timestamp, the colour information and the pixel format, and can cost a read back from the graphics card for every frame.</p>
+          <p>Send an <code>ImageBitmap</code>, or copy the pixels into an <code>ArrayBuffer</code> and send that. Both work. In the demo above the bitmap route costs about a millisecond for each small picture in the Chromium this was built with, so at that size speed is not what is lost. What is lost is everything else a frame carries: the timestamp, the duration, the colour information and the pixel format. A frame from a camera or a decoder also has to be turned into a bitmap first, and a result that should go to an encoder has to be turned back.</p>
           <div class="now">
             <b>In your browser, now</b>
             <span data-probe="imagebitmap-other"></span>
@@ -413,6 +429,8 @@
   </div>
   <script type="module">
     import { runAll, show, PROBES, otherHost } from "/missing/probes.js";
+    import { mount } from "/missing/effects-demo.js";
+    mount(document.getElementById("effects-demo"));
     for (const el of document.querySelectorAll("[data-host]")) el.textContent = otherHost;
     const tally = document.getElementById("tally");
     const count = () => {

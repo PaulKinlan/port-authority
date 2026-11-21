@@ -1,0 +1,62 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Video effects, as a frame</title>
+<style>
+  html { color-scheme: light dark; }
+  body { margin: 0; padding: .45rem .6rem; font: 12px/1.35 system-ui, sans-serif; }
+  b { display: block; }
+  p { margin: .3rem 0 0; }
+</style>
+<b>Effects, on <span id="where"></span></b>
+<p id="said">Waiting for a port.</p>
+<p id="count"></p>
+<script>
+  // A video effects service that runs as a frame on its own origin. It is given
+  // a port. Pictures come in on the port and changed pictures go back. It has
+  // no camera, and it cannot reach the page that embeds it.
+  //
+  // It answers in the type it was sent: a VideoFrame for a VideoFrame, an
+  // ImageBitmap for an ImageBitmap.
+  document.getElementById("where").textContent = location.host;
+  const said = document.getElementById("said"), count = document.getElementById("count");
+  const EFFECTS = {
+    mosaic(ctx, picture, w, h, small) {
+      small.getContext("2d").drawImage(picture, 0, 0, small.width, small.height);
+      ctx.imageSmoothingEnabled = false; ctx.drawImage(small, 0, 0, w, h);
+    },
+    invert(ctx, picture, w, h) {
+      ctx.drawImage(picture, 0, 0, w, h);
+      ctx.globalCompositeOperation = "difference"; ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, w, h);
+      ctx.globalCompositeOperation = "source-over";
+    },
+    mirror(ctx, picture, w, h) {
+      ctx.drawImage(picture, 0, 0, w, h);
+      ctx.save(); ctx.translate(w, 0); ctx.scale(-1, 1); ctx.drawImage(picture, 0, 0, w / 2, h, 0, 0, w / 2, h); ctx.restore();
+    },
+  };
+  let done = 0, lost = 0;
+  const report = () => { count.textContent = `${done} pictures changed and sent back, none kept.${lost ? ` ${lost} arrived that I could not read.` : ""}`; };
+  addEventListener("message", (event) => {
+    if (!event.data || !event.data.effects || !event.ports[0]) return;
+    const port = event.ports[0];
+    let canvas = null, ctx = null, small = null;
+    said.textContent = "I hold a port. I cannot see the page that gave it to me.";
+    port.onmessage = ({ data }) => {
+      const picture = data.frame || data.bitmap;
+      if (!picture) return;
+      const w = picture.displayWidth || picture.width, h = picture.displayHeight || picture.height;
+      if (!canvas) { canvas = new OffscreenCanvas(w, h); ctx = canvas.getContext("2d"); small = new OffscreenCanvas(Math.round(w / 8), Math.round(h / 8)); }
+      (EFFECTS[data.effect] || EFFECTS.mosaic)(ctx, picture, w, h, small);
+      const timestamp = picture.timestamp;
+      picture.close();
+      if (data.frame) { const frame = new VideoFrame(canvas, { timestamp }); port.postMessage({ id: data.id, frame }, [frame]); }
+      else { const bitmap = canvas.transferToImageBitmap(); port.postMessage({ id: data.id, bitmap }, [bitmap]); }
+      done++; report();
+    };
+    // The event says nothing about what failed, so that is all this can pass on.
+    port.onmessageerror = () => { lost++; report(); port.postMessage({ unreadable: true }); };
+    port.postMessage({ ready: true });
+  });
+  parent.postMessage({ effects: "ready" }, "*");
+</script>
