@@ -13,7 +13,7 @@
   <div class="wrap">
     <header class="site-bar">
       <a class="wordmark" href="/">Port Authority</a>
-      <nav><a href="/guide/">The guide</a><a href="/">Experiments</a><a href="/patterns/">Port patterns</a><a href="/isolated/" aria-current="page">Isolated room</a><a href="/hub/">Your hub</a></nav>
+      <nav><a href="/guide/">The guide</a><a href="/">Experiments</a><a href="/patterns/">Port patterns</a><a href="/isolated/" aria-current="page">Isolated room</a><a href="/reading/">Further reading</a><a href="/hub/">Your hub</a></nav>
     </header>
     <div class="stack" style="padding-block:2.5rem 2rem; --gap:1.2rem">
       <h1 style="font-size:var(--step-3)">The isolated room</h1>
@@ -156,5 +156,6 @@ Atomics.notify(new Int32Array(memory, 0, 1), 0);</pre>
       },
     }, { sync: { steps: [["Give the port to a slow service", "The worker runs three blocking questions. Another worker answers each one after a pause, by writing into shared memory.", 4200]], then: "Now press Run it, and answer it yourself. The worker will stop on one line until you do." } });
   </script>
+  <script type="module" src="/refs.js"></script>
 </body>
 </html>

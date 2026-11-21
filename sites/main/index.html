@@ -31,7 +31,7 @@
   <div class="wrap">
     <header class="site-bar">
       <a class="wordmark" href="/">Port Authority</a>
-      <nav><a href="/guide/">The guide</a><a href="#experiments">Experiments</a><a href="/patterns/">Port patterns</a><a href="/comlink/">Comlink today</a><a href="/hub/">Your hub</a></nav>
+      <nav><a href="/guide/">The guide</a><a href="#experiments">Experiments</a><a href="/patterns/">Port patterns</a><a href="/comlink/">Comlink today</a><a href="/reading/">Further reading</a><a href="/hub/">Your hub</a></nav>
     </header>
 
     <section class="hero">
@@ -231,5 +231,6 @@ await line.call({ bouquet: "ember", recipient: "Ada" });</pre>
     for (const a of document.querySelectorAll("a[data-site]")) a.href = sites[a.dataset.site] + "/";
     mount(document.getElementById("hero-demo"), { id: "introduce", setup: introduce });
   </script>
+  <script type="module" src="/refs.js"></script>
 </body>
 </html>

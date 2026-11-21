@@ -43,7 +43,7 @@
   <div class="wrap">
     <header class="site-bar">
       <a class="wordmark" href="/">Port Authority</a>
-      <nav><a href="/">Experiments</a><a href="/patterns/">Port patterns</a><a href="/comlink/" aria-current="page">Comlink today</a><a href="/hub/">Your hub</a></nav>
+      <nav><a href="/">Experiments</a><a href="/patterns/">Port patterns</a><a href="/comlink/" aria-current="page">Comlink today</a><a href="/reading/">Further reading</a><a href="/hub/">Your hub</a></nav>
     </header>
 
     <div class="stack lede" style="--gap:1.2rem">
@@ -303,7 +303,7 @@ give(object)                <span class="c">// by reference, and theirs to dispo
 transfer(buffer)            <span class="c">// move, do not copy</span>
 offer(window, origin)       <span class="c">// give a window a port, origin required</span>
 accept(origins, callback)   <span class="c">// take ports only from these origins</span></pre>
-        <p>Source: <a href="/hawser.js">hawser.js</a> and its types, <a href="/hawser.d.ts">hawser.d.ts</a>. The behaviour above is pinned down by 31 unit tests and a browser run of this page, both in the <a href="https://github.com/PaulKinlan/port-authority">repository</a>. Comlink is by Surma and the Chrome Labs team, and is used here under its Apache 2.0 licence.</p>
+        <p>Source: <a href="/hawser.js">hawser.js</a> and its types, <a href="/hawser.d.ts">hawser.d.ts</a>. The behaviour above is pinned down by 31 unit tests and a browser run of this page, both in the <a href="https://github.com/PaulKinlan/port-authority">repository</a>. <a href="https://github.com/GoogleChromeLabs/comlink">Comlink</a> is by Surma and the Chrome Labs team, and is used here under its <a href="https://github.com/GoogleChromeLabs/comlink/blob/main/LICENSE">Apache 2.0 licence</a>.</p>
       </div>
     </section>
 
@@ -313,5 +313,6 @@ accept(origins, callback)   <span class="c">// take ports only from these origin
     import { mountAll } from "/comlink/demos.js";
     mountAll();
   </script>
+  <script type="module" src="/refs.js"></script>
 </body>
 </html>
