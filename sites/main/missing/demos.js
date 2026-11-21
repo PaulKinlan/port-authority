@@ -31,7 +31,7 @@ const next = (port, test, ms = 2500) => new Promise((resolve) => {
 const fig = (title, inner, note = "") => `<figure>${inner}<figcaption><b>${title}</b><span data-note>${note}</span></figcaption></figure>`;
 const frameFig = (title, role, origin = sites.florist) => fig(title, `<iframe title="${title}" data-role="${role}"></iframe>`, `${origin}/missing-peer.html?role=${role}`);
 const build = (root, figures, buttons) => {
-  root.innerHTML = `<div class="fx-grid">${figures.join("")}</div><ul class="lanes"></ul><p class="controls">${buttons.map(([id, label], i) => `<button data-do="${id}"${i ? ' class="quiet"' : ""}>${label}</button>`).join(" ")}</p>`;
+  root.innerHTML = `<div class="fx-grid">${figures.join("")}</div><ul class="lanes"></ul><p class="controls">${buttons.map(([id, label], i) => `<button data-do="${id}" disabled${i ? ' class="quiet"' : ""}>${label}</button>`).join(" ")}</p>`;
   const lanes = root.querySelector(".lanes");
   // One line of result for each way of doing the job.
   const lane = (label) => {
@@ -41,8 +41,10 @@ const build = (root, figures, buttons) => {
     const span = li.querySelector("span");
     return { set: (text, state) => { span.textContent = text; if (state) li.dataset.state = state; else delete li.dataset.state; }, li };
   };
-  const on = (id, fn) => root.querySelector(`[data-do="${id}"]`).addEventListener("click", async (event) => { event.target.disabled = true; try { await fn(event.target); } catch (err) { lane("The demo").set(`could not run: ${err.message || err}.`, "gap"); } });
-  return { lane, on, $: (s) => root.querySelector(s), frames: [...root.querySelectorAll("iframe")] };
+  // A button cannot be pressed until its handler is there. `hold` keeps it off for the demo to turn on.
+  const held = new Set();
+  const on = (id, fn) => { const button = root.querySelector(`[data-do="${id}"]`); button.disabled = held.has(id); button.addEventListener("click", async (event) => { event.target.disabled = true; try { await fn(event.target); } catch (err) { lane("The demo").set(`could not run: ${err.message || err}.`, "gap"); } }); };
+  return { lane, on, hold: (id) => held.add(id), $: (s) => root.querySelector(s), frames: [...root.querySelectorAll("iframe")] };
 };
 const refused = (err) => `postMessage threw ${err.name}.`;
 const UNREADABLE = "postMessage did not throw. The frame got a messageerror event and nothing else.";
@@ -62,7 +64,7 @@ export const DEMOS = {
     const show = async () => { shown.textContent = await (await handle.getFile()).text(); };
     await write("Buy tulips for Thursday."); await show();
     const A = ui.lane("Send the file handle:"), B = ui.lane("Send a copy of the text:");
-    ui.$('[data-do="type"]').disabled = true;
+    ui.hold("type");
     let a, b, aOpen = false;
     ui.on("start", async () => {
       [a, b] = await Promise.all([peer(ui.frames[0], "editor"), peer(ui.frames[1], "editor")]);
@@ -87,7 +89,7 @@ export const DEMOS = {
     ], [["start", "Give each plug-in the connection"], ["close", "Close the connection"]]);
     const far = ui.$("[data-far]");
     const A = ui.lane("Send the RTCDataChannel:"), B = ui.lane("Send a port, and copy every message across in this page:");
-    ui.$('[data-do="close"]').disabled = true;
+    ui.hold("close");
     let pc1, pc2;
     ui.on("start", async () => {
       pc1 = new RTCPeerConnection(); pc2 = new RTCPeerConnection();
