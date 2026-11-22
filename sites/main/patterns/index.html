@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Port patterns | Port Authority</title>
-  <meta name="description" content="Eleven things you can do with MessageChannel and MessagePort, each running live across real origins.">
+  <meta name="description" content="Eleven things you can do with MessageChannel and MessagePort, each running live in your browser.">
   <link rel="stylesheet" href="/base.css">
   <link rel="stylesheet" href="/patterns/patterns.css">
   <script src="/errors.js"></script>
@@ -17,7 +17,7 @@
     </header>
     <div class="stack" style="padding-block:2.5rem 2rem; --gap:1.2rem">
       <h1 style="font-size:var(--step-3)">The six basic patterns</h1>
-      <p>Everything else on this site is built from these. Each box below is a real page, frame or worker. A cable appears when a port arrives, and each dot is a real message.</p>
+      <p>Everything else on this site is built from these. Each box below is a real page, frame or worker. A solid cable appears when a port arrives, and each dot is a real message. A dashed line is something that is not a port, such as a stream, and says what it is.</p>
     </div>
     <div class="stack" id="key" style="padding-bottom:2rem; --gap:.8rem">
       <h2 style="font-size:var(--step-1)">How to read the diagrams</h2>
@@ -38,7 +38,7 @@
     <div id="threads"></div>
     <div class="stack" id="origins-intro" style="padding-block:clamp(3rem,8vw,5rem) 2rem; --gap:1.2rem; border-top:2px solid var(--ink)">
       <h1 style="font-size:var(--step-3)">Between real sites</h1>
-      <p>Most boxes on this page are sandboxes with no origin of their own. In this part the outer boxes are the florist's and the library's actual sites, embedded here, each with its own address and its own storage. They show what you hand over and whether you can get it back.</p>
+      <p>Most frames on this page are sandboxed frames that this page wrote. Each has an opaque origin, so it is cross-origin to this page and to every other frame, but it is not a site: it has no address and no storage. In this part the outer boxes are the florist's and the library's actual sites, embedded here, each with its own address and its own storage. They show what you hand over and whether you can get it back.</p>
     </div>
     <div id="origins"></div>
     <div class="stack" id="places-intro" style="padding-block:clamp(3rem,8vw,5rem) 2rem; --gap:1.2rem; border-top:2px solid var(--ink)">

@@ -27,7 +27,7 @@ Live: https://port-authority.dev
 | `sites/shared/pair-sw.js`, `pair/` | The service worker of one site joined to the service worker of another by a port that pages carry across, with time limits and rejoining for when the browser stops a worker. `pair-shared.js` and `pair/tab.html` do the same with shared workers. Explained at `/patterns/swpair/` (`sites/main/patterns/pairs.js`), tested by `test/pairs.mjs` |
 | `sites/shared/refs.js` | Links the first mention of a platform feature in each section to MDN, and adds a References list to the foot of the page with what each feature is, its MDN page and its specification. A page opts in with one script tag. `node scripts/check-refs.mjs` checks every address and spec anchor |
 | `sites/shared/qr.js` | A small QR encoder, for the link a phone scans |
-| `sites/shared/` | CSS and the patch-bay diagram component used by the demos |
+| `sites/shared/` | CSS and the patch-bay diagram component used by the demos (`wire.js`). A box made with `stage.frame()` is a sandboxed `srcdoc` iframe with an opaque origin, and is never called a site. A box that is called a site loads `actor.html` from one of the demo origins, and `actor.js` holds the part it plays. `stage.cable()` takes the kind of line: only the default is a `MessageChannel`, and a stream, a fetch, a plain `postMessage` and a WebRTC connection are each drawn as what they are |
 | `src/worker.js` | Cloudflare Worker: picks a site folder by hostname, and runs the hub (one Durable Object per person) |
 
 ## How the hub works

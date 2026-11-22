@@ -123,7 +123,7 @@ port.onmessage = ({ data }) => {
             const timestamp = frame.timestamp;
             frame.close();
             const out = new VideoFrame(canvas, { timestamp });
-            send(port, "back", { frame: out }, [out]);
+            send(port, "there", { frame: out }, [out]);
             if (++done % 30 === 0) log(`filtered ${done} frames, kept none`);
           };
         }),
@@ -147,7 +147,6 @@ port.onmessage = ({ data }) => {
       const channel = new MessageChannel();
       stage.post("filter", { cmd: "port" }, [channel.port2]);
       stage.cable("there", "page", "filter", "yellow");
-      stage.cable("back", "filter", "out", "yellow");
       // One frame in flight at a time: the next leaves when the last comes back.
       const sendFrame = (t) => {
         try {
