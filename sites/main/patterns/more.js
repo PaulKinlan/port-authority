@@ -147,7 +147,7 @@ port.postMessage(buffer, [buffer]);  <span class="c">// transfer: buffer.byteLen
   {
     id: "tearoff",
     title: "Tear a live widget off into its own window",
-    blurb: "A port does not care which window holds it. The meter here is fed by a service on another origin. Tear it off and the port is posted to a new window, which carries on from the next tick with no reconnect, because there was never a connection to this page as such. Put it back and it returns the port.",
+    blurb: "A port works the same in whichever window holds it. The meter here is fed by a service on another origin. Tear it off and the port is posted to a new window, which carries on from the next tick with no reconnect. Put it back and it returns the port.",
     code: `const win = window.open("/meter.html", "", "popup");
 <span class="c">// once it says it is ready</span>
 win.postMessage({ feed: port }, location.origin, [port]);`,
@@ -293,7 +293,7 @@ direct.postMessage({ stream }, [stream]);`,
   {
     id: "pipeline",
     title: "Back-pressure across three origins",
-    blurb: "A transform can be a service. This page hands its stream to another origin, which returns a transformed stream, which goes to a third origin to be read. Nothing is buffered without limit: pause the reader and, a few chunks later, the source stops being asked for more. Three origins, one pipe, and the slowest end sets the pace.",
+    blurb: "This page hands its stream to another origin, which returns a transformed stream, which goes to a third origin to be read. Nothing is buffered without limit: pause the reader and, a few chunks later, the source stops being asked for more.",
     code: `<span class="c">// the transformer, on its own origin</span>
 port.onmessage = ({ data }) => {
   const out = data.readable.pipeThrough(new TransformStream({ transform: shout }));
@@ -352,7 +352,7 @@ port.onmessage = ({ data }) => {
   {
     id: "reload",
     title: "Keep a port across a page reload",
-    blurb: "A port cannot be saved. IndexedDB, sessionStorage and history state all refuse it, because a port can be moved but never copied. It can be left with someone, though. As this frame unloads it posts its port to a SharedWorker, and when it loads again it asks for it back. The worker is created with <code>extendedLifetime</code>, so it outlives the page even when that page was its only client. The feed never knew: ticks sent during the reload waited in the port, and the count has no gaps.",
+    blurb: "A port cannot be saved. IndexedDB, sessionStorage and history state all refuse it, because a port can be moved but never copied. But you can leave it with a SharedWorker. As this frame unloads it posts its port to the worker, and when it loads again it asks for it back. The worker is created with <code>extendedLifetime</code>, so it outlives the page even when that page was its only client. The feed doesn't notice. Ticks sent during the reload waited in the port, and the count has no gaps.",
     code: `const bank = new SharedWorker("/bank.js", { extendedLifetime: true });
 addEventListener("pagehide", () => bank.port.postMessage({ deposit: key }, [port]));
 

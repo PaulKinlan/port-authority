@@ -139,7 +139,7 @@ onmessage = ({ source, ports: [data] }) => {
   {
     id: "health-beats",
     title: "Send a beat each way on two one-way ports",
-    blurb: "Nobody asks and nobody answers here. Each side makes a channel, keeps the end it posts into and gives the other side the end to listen on. Then it posts a beat on a timer and never reads its own port. Each side only listens to the other's. Both sides learn whether the other is there, with half the messages of ping and answer, and neither side's code has to match an answer to a question. Each beat says how often beats will come, and whether the page that sent it is hidden, because a browser slows the timers of a hidden page.",
+    blurb: "Each side makes a channel, keeps the end it posts into and gives the other side the end to listen on. Then it posts a beat on a timer and never reads its own port. Each side only listens to the other's. Both sides learn whether the other is there, with half the messages of ping and answer, and neither side's code has to match an answer to a question. Each beat says how often beats will come, and whether the page that sent it is hidden, because a browser slows the timers of a hidden page.",
     code: `import { beat, listen } from "/alive.js";
 
 <span class="c">// each side does the same</span>

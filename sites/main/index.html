@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Port Authority: experiments with MessagePort, intents and agents</title>
-  <meta name="description" content="Experiments in what the web can do when sites hand each other MessagePorts: Web Intents for the agent era, a registry of WebMCP tools, and your own agent on any site.">
+  <meta name="description" content="What you can do when sites hand each other MessagePorts: Web Intents with agents, a registry of WebMCP tools, your own agent on any site, and running demos of each.">
   <link rel="stylesheet" href="/base.css">
   <link rel="stylesheet" href="/patterns/patterns.css">
   <style>
@@ -38,9 +38,8 @@
       <h1>What you can do with a MessagePort</h1>
       <div class="intro">
         <p>Hello, I'm <a href="https://paul.kinlan.me">Paul Kinlan</a>. I've been working on the web for a long time, and I think message channels and message ports are massively underserved. Most people don't know what they can do.</p>
-        <p>A MessagePort can be handed to another window, another origin or a worker, and passed on again. Whoever holds it can talk, and nothing in between has to stay open.</p>
-        <p>I'm exploring the future of the web and where the web meets AI, and I made this site along the way. It explains how ports work, and it gives you patterns, best practices and tools for thinking about advanced communication on the web.</p>
-        <p>I write about the web at <a href="https://paul.kinlan.me">paul.kinlan.me</a> and about the web and AI at <a href="https://aifoc.us">aifoc.us</a>.</p>
+        <p>You can hand a MessagePort to another window, another origin or a worker, and they can pass it on again. Whoever holds it can talk to the other end, and nothing in between has to stay open.</p>
+        <p>I made this site while exploring where the web meets AI. It explains how ports work, with demos you can run and code you can copy. I also write about the web at <a href="https://paul.kinlan.me">paul.kinlan.me</a> and about the web and AI at <a href="https://aifoc.us">aifoc.us</a>.</p>
       </div>
       <div class="hero-demo">
         <p>Three real origins. Site A and Site B have never met. Press <strong>Next</strong> to introduce them, let them talk, then remove the one in the middle.</p>
@@ -51,7 +50,7 @@
     <section id="experiments">
       <div class="section-head">
         <h2>Experiments</h2>
-        <p>Each one runs here, across separate origins, in your browser. Start with the hub: the other three sit on top of it.</p>
+        <p>Everything here runs in your browser, across separate origins. The first four use the hub.</p>
       </div>
       <ol class="experiments">
         <li class="experiment">
@@ -60,14 +59,14 @@
             <p class="state"><span class="jack on"></span>Working</p>
           </div>
           <div class="body">
-            <p>A site says what it needs in plain words. You choose which site answers. The picker opens that site, hands each side one end of a channel, and closes. The call runs on your machine over that port, and it keeps working with the network unplugged. Sites declare tools once and they are offered to WebMCP as well.</p>
-            <p class="go"><a data-site="planner">Open the planner</a><a data-site="florist">the florist</a><a data-site="library">the library</a></p>
+            <p>A site says what it needs in plain words and you choose which site answers. The picker opens that site, gives each side one end of a channel and closes. The call then runs on your machine, even with the network off. The same tools are offered to WebMCP.</p>
             <pre><span class="c">// a site with something to offer</span>
 serve({ name: "Stem and Petal", tools: [{ name: "book_delivery", description, inputSchema, execute }] });
 
 <span class="c">// a site that needs something, and has never heard of the florist</span>
 const line = await pick("send flowers to a friend");
 await line.call({ bouquet: "ember", recipient: "Ada" });</pre>
+            <p class="go"><a data-site="planner">Open the planner</a><a data-site="florist">the florist</a><a data-site="library">the library</a></p>
           </div>
         </li>
         <li class="experiment">
@@ -76,7 +75,7 @@ await line.call({ bouquet: "ember", recipient: "Ada" });</pre>
             <p class="state"><span class="jack on"></span>Working</p>
           </div>
           <div class="body">
-            <p>Sites submit their tools to your hub, a small server that is yours, every time they load. So the picker can list everything you have ever added with nothing open, and you never keep a tab around for it. A site you trust can ask for the whole registry and gets a Model Context Protocol connection over a single port.</p>
+            <p>Sites send their tools to your hub (a small server that is yours) each time they load, so the picker can list them without any tab being open. A site you trust can ask for the whole registry and gets a Model Context Protocol connection over one port.</p>
             <p class="go"><a href="/hub/">Open your hub</a></p>
           </div>
         </li>
@@ -86,7 +85,7 @@ await line.call({ bouquet: "ember", recipient: "Ada" });</pre>
             <p class="state"><span class="jack on"></span>Working, tested with a stand-in agent</p>
           </div>
           <div class="body">
-            <p>A site asks for an agent and receives a port that speaks the Agent Client Protocol. Which agent is yours to decide. Run the bridge beside Claude Code, Gemini CLI or anything else that speaks ACP, and it connects out to your hub. The agent is handed the registry too, so it can use tools in your open tabs. With nothing set up you get a built-in agent that has no model and only matches words.</p>
+            <p>A site asks for an agent and gets a port that speaks the Agent Client Protocol. You choose the agent by running the bridge next to Claude Code, Gemini CLI or anything else that speaks ACP. The agent gets the registry too, so it can use tools in your open tabs. If you set nothing up you get a built-in agent that has no model and only matches words.</p>
             <p class="go"><a href="/hub/agent/">Choose your agent</a><a href="/bridge.mjs">Read the bridge</a></p>
           </div>
         </li>
@@ -96,7 +95,7 @@ await line.call({ bouquet: "ember", recipient: "Ada" });</pre>
             <p class="state"><span class="jack on"></span>Working</p>
           </div>
           <div class="body">
-            <p>An ordinary link whose address is a wish: <code>&lt;a href="intent:find a book about raising chickens"&gt;</code>. A click asks your hub who can do that.</p>
+            <p>A link whose address is a request: <code>&lt;a href="intent:find a book about raising chickens"&gt;</code>. Clicking it asks your hub who can do that.</p>
             <p class="go"><a data-site="planner">Try the links on the planner</a></p>
           </div>
         </li>
@@ -106,7 +105,7 @@ await line.call({ bouquet: "ember", recipient: "Ada" });</pre>
             <p class="state"><span class="jack on"></span>Working</p>
           </div>
           <div class="body">
-            <p>The building blocks, each live: a channel, an introduction, reply ports, giving away less than you have, a SharedWorker exchange, and streams down the wire.</p>
+            <p>A channel, an introduction, reply ports, giving away less than you have, a SharedWorker exchange and streams. Each one runs on the page.</p>
             <p class="go"><a href="/patterns/">See the patterns</a></p>
           </div>
         </li>
@@ -116,7 +115,7 @@ await line.call({ bouquet: "ember", recipient: "Ada" });</pre>
             <p class="state"><span class="jack on"></span>Working</p>
           </div>
           <div class="body">
-            <p>Another origin painting into a canvas on your page. A function lent across origins and taken back. 64 MB moved in a few milliseconds. A stream pipeline across three origins where pausing the reader stops the source. And a table that tests, in your browser, which of twenty-three kinds of object will go down a port.</p>
+            <p>A canvas that another origin paints into, a function lent across origins, 64 MB moved in a few milliseconds, and a stream pipeline across three origins. There is also a table that tests which of twenty-three kinds of object your browser will send down a port.</p>
             <p class="go"><a href="/patterns/canvas/">Paint across origins</a><a href="/patterns/pipeline/">The pipeline</a><a href="/patterns/#census">The census</a></p>
           </div>
         </li>
@@ -126,17 +125,17 @@ await line.call({ bouquet: "ember", recipient: "Ada" });</pre>
             <p class="state"><span class="jack on"></span>Working</p>
           </div>
           <div class="body">
-            <p>In a new window: tear a live widget off the page and it carries on. In a Service Worker: one tab becomes the web server for every other tab. In a bank: a port cannot be stored, but it can be left with a SharedWorker and collected after a reload with nothing lost.</p>
+            <p>Tear a widget off into a new window and it carries on working. Make one tab the web server for the other tabs. Leave a port with a SharedWorker and collect it after a reload.</p>
             <p class="go"><a href="/patterns/tearoff/">Tear-off</a><a href="/patterns/tabserver/">Tab as server</a><a href="/patterns/reload/">Survive a reload</a></p>
           </div>
         </li>
         <li class="experiment">
           <div>
-            <h3>Across threads, and the use of a key</h3>
+            <h3>Workers, video and signing keys</h3>
             <p class="state"><span class="jack on"></span>Working</p>
           </div>
           <div class="body">
-            <p>Two workers that keep talking, and painting, while the page is frozen solid. Live video sent frame by frame through a filter on another origin. A signing key nobody can read, reached through a port that can be narrowed and taken back. And a worker that makes a blocking call down a port and waits for you to answer.</p>
+            <p>Two workers that keep talking while the page is frozen, live video filtered on another origin, a signing key that is used through a port and never read, and a worker that blocks on a port until you answer.</p>
             <p class="go"><a href="/patterns/frozen/">Freeze the page</a><a href="/patterns/filter/">Video filter</a><a href="/patterns/signer/">The key that stays</a><a href="/isolated/">Blocking call</a></p>
           </div>
         </li>
@@ -146,7 +145,7 @@ await line.call({ bouquet: "ember", recipient: "Ada" });</pre>
             <p class="state"><span class="jack on"></span>Working</p>
           </div>
           <div class="body">
-            <p>Forty-five kinds of object, sent for real to thirteen places a message can go: workers of every sort, the audio thread, frames on this origin, another origin and no origin, and the places that take no transfer list. Each one is used where it lands. Your browser's results are added to everyone's, so the table shows where browsers disagree.</p>
+            <p>Forty-five kinds of object sent to thirteen places a message can go, including every sort of worker, the audio thread, and frames on this origin, another origin and no origin. Your browser's results are added to everyone else's, so the table shows where browsers disagree.</p>
             <p class="go"><a href="/lab/">Run the lab</a><a href="/lab/results/">What browsers reported</a><a href="/isolated/lab/">The isolated lab</a></p>
           </div>
         </li>
@@ -156,7 +155,7 @@ await line.call({ bouquet: "ember", recipient: "Ada" });</pre>
             <p class="state"><span class="jack on"></span>Working</p>
           </div>
           <div class="body">
-            <p>Four experiments where the other side is a real site with its own storage. A signing key posted to another origin, which keeps it after a reload and cannot be made to give it back. Half a stream as a permission to listen or to speak. Your data piped through another site's transform and back. And a network connection lent to a widget that has no network.</p>
+            <p>Here the other side is a real site with its own storage. Send it a signing key, one side of a stream, your data to transform and send back, or a network connection to borrow.</p>
             <p class="go"><a href="/patterns/keycopy/">Send a key</a><a href="/patterns/halves/">Send one side of a stream</a><a href="/patterns/roundtrip/">Pipe through another site</a><a href="/patterns/lend/">Lend a connection</a><a href="/patterns/oneway/">A port that only goes one way</a></p>
           </div>
         </li>
@@ -166,7 +165,7 @@ await line.call({ bouquet: "ember", recipient: "Ada" });</pre>
             <p class="state"><span class="jack on"></span>Working</p>
           </div>
           <div class="body">
-            <p>Four experiments where the other end of the port is somewhere else. Your phone holding a port to a frame on your laptop, joined by a pairing code and connected directly. Another site mounted at a path on this one, answering requests with streamed bodies from a page that is the server. One connection to the server shared by every tab. And a worker that plays music straight into the audio thread while the page is frozen.</p>
+            <p>A port from your phone to a frame on your laptop, another site mounted at a path on this one, one server connection shared by every tab, and a worker that plays music straight into the audio thread.</p>
             <p class="go"><a href="/patterns/far/">A port to another device</a><a href="/patterns/mounted/">Mount a site at a path</a><a href="/patterns/socket/">One socket for every tab</a><a href="/patterns/audio/">The audio thread</a></p>
           </div>
         </li>
@@ -176,7 +175,7 @@ await line.call({ bouquet: "ember", recipient: "Ada" });</pre>
             <p class="state"><span class="jack on"></span>Growing</p>
           </div>
           <div class="body">
-            <p>Everything here written down in one place: where a message can go, what can be sent and what happens to it, ports as permissions, streams, threads, keys, and the list of things that will bite you. Every claim links to something running.</p>
+            <p>All of this written down in one place: where a message can go, what can be sent, ports as permissions, streams, threads, keys and the things that go wrong. Every claim links to a running demo.</p>
             <p class="go"><a href="/guide/">Read the guide</a></p>
           </div>
         </li>
@@ -195,17 +194,17 @@ await line.call({ bouquet: "ember", recipient: "Ada" });</pre>
 
     <section>
       <div class="section-head">
-        <h2>What we know so far</h2>
+        <h2>What I've learned so far</h2>
       </div>
       <ul class="stack" style="max-width:62ch; padding-left:1.1rem; --gap:.9rem">
-        <li>A hidden hub iframe does not work any more. Browsers partition a SharedWorker in a cross-site iframe by the top-level site, so each site would get its own empty hub. The hub has to be a window of its own, which turns out to be the old Web Intents picker, and gives you somewhere to say yes.</li>
-        <li>A port handed over through that window keeps working after the window closes, and with the network off. The introduction is the only moment the hub is needed.</li>
-        <li>Nothing has to stay open. A port only lives while both pages do, so the list of who offers what lives on a server, and the picker opens the tool's page when you choose it.</li>
-        <li>A site keeps its link to your hub in its own storage, which partitioning does not touch, and the server only accepts it from that site's origin.</li>
-        <li>An agent on a website needs a middle. The hub rewrites the session so a site cannot pick the agent's folder or give it servers, and cannot see another site's session.</li>
-        <li>A stream that is relayed through an introducer stalls, silently, when the introducer goes. A port does not. Introduce with a port, then send the stream down it.</li>
-        <li>A port can survive its page reloading. It cannot be stored, but it can be posted to a SharedWorker made with <code>extendedLifetime</code> as the page unloads and collected on the next load.</li>
-        <li>Two unrelated tabs have no way to pass a port. So when you pick a tool whose site is already open in a tab, your hub server introduces the two tabs and they open a WebRTC channel between themselves. That line carries JSON only: ports and streams cannot ride on it.</li>
+        <li>A hidden hub iframe doesn't work any more. Browsers partition a SharedWorker in a cross-site iframe by the top-level site, so each site would get its own empty hub. The hub has to be a window of its own, which is the old Web Intents picker, and that gives you somewhere to say yes.</li>
+        <li>A port handed over through that window keeps working after the window closes, and with the network off. The hub is only needed for the introduction.</li>
+        <li>A port only lives while both pages do. So the list of who offers what is kept on a server, and the picker opens the tool's page when you choose it.</li>
+        <li>A site keeps its link to your hub in its own storage, which partitioning doesn't touch. The server only accepts it from that site's origin.</li>
+        <li>An agent on a website needs something in the middle. The hub rewrites the session so a site can't pick the agent's folder, give it servers or see another site's session.</li>
+        <li>A stream relayed through an introducer stalls silently when the introducer goes away. A port doesn't. Introduce with a port, then send the stream down it.</li>
+        <li>A port can survive its page reloading. Post it to a SharedWorker made with <code>extendedLifetime</code> as the page unloads and collect it on the next load.</li>
+        <li>Two unrelated tabs can't pass a port. When you pick a tool whose site is already open in a tab, your hub server introduces the two tabs and they open a WebRTC channel. That channel carries JSON only, so no ports or streams.</li>
       </ul>
     </section>
 

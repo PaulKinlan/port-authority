@@ -17,7 +17,7 @@
     </header>
     <div class="stack" style="padding-block:2.5rem 2rem; --gap:1.2rem">
       <h1 style="font-size:var(--step-3)">The isolated room</h1>
-      <p>This page is cross-origin isolated, which is the price of <code>SharedArrayBuffer</code>. In return, a port can carry memory that both ends see at once, and a thread can stop and wait on it.</p>
+      <p>This page is cross-origin isolated, which you need for <code>SharedArrayBuffer</code>. With it, a port can carry memory that both ends see at the same time, and a thread can stop and wait on it.</p>
       <p class="small muted" id="state"></p>
     </div>
     <main>
@@ -25,7 +25,7 @@
         <h2>Block on a port: a synchronous call with no await</h2>
         <div class="demo"></div>
         <div class="text">
-          <p>The worker runs three lines of plain blocking code. Each <code>ask()</code> posts the question down a port along with a small piece of shared memory, then sleeps on that memory. Whoever holds the other end of the port writes the answer into it and wakes the worker. The worker never yields, so it cannot receive a message. It does not need to: the answer is already in its memory when it wakes. The other end can be you, or another worker doing slow asynchronous work, and the blocking code cannot tell.</p>
+          <p>The worker runs three lines of plain blocking code. Each <code>ask()</code> posts the question down a port along with a small piece of shared memory, then sleeps on that memory. Whoever holds the other end of the port writes the answer into it and wakes the worker. The worker never yields, so it can't receive a message, but the answer is already in its memory when it wakes. The other end can be you, or another worker doing slow asynchronous work, and the blocking code cannot tell.</p>
           <pre><span class="c">// in the worker: no async, no await, no callback</span>
 function ask(question) {
   const memory = new SharedArrayBuffer(516);
@@ -41,16 +41,16 @@ Atomics.notify(new Int32Array(memory, 0, 1), 0);</pre>
         </div>
       </section>
       <section class="pattern">
-        <h2>Why this matters</h2>
+        <h2>What it is for</h2>
         <ul class="stack" style="max-width:62ch; padding-left:1.1rem">
           <li>Code compiled from C, Python or anything else that expects blocking calls can run in a worker and reach asynchronous browser APIs, other workers, other origins or a person, through one port.</li>
-          <li>The port decides who answers. Hand the other end to someone else and the blocked code is now waiting on them. It is the same introduction as everywhere else on this site.</li>
+          <li>The port decides who answers. Hand the other end to someone else and the blocked code is now waiting on them.</li>
           <li>Shared memory only crosses to contexts on the same site in the same isolated group. The question can be passed on to another origin over an ordinary port, and the answer written into the memory by whoever passed it on.</li>
-          <li>An isolated page cannot hold a reference to a window on a page that is not isolated, so it cannot open your hub's picker and get an answer back. That is why this is a room of its own.</li>
+          <li>An isolated page cannot hold a reference to a window on a page that is not isolated, so it cannot open your hub's picker and get an answer back. That is why this demo has its own page.</li>
         </ul>
       </section>
     </main>
-    <footer class="small muted" style="padding-block:2rem 4rem">A working name and a work in progress.</footer>
+    <footer class="small muted" style="padding-block:2rem 4rem">Port Authority is a working name. By <a href="https://paul.kinlan.me">Paul Kinlan</a>.</footer>
   </div>
   <script type="module">
     import { mount } from "/patterns/demos.js";

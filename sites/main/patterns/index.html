@@ -17,50 +17,50 @@
     </header>
     <div class="stack" style="padding-block:2.5rem 2rem; --gap:1.2rem">
       <h1 style="font-size:var(--step-3)">The six basic patterns</h1>
-      <p>Everything else on this site is built from these. Each box below is a real page, frame or worker, the cables appear when a port actually lands, and the dots are real messages. Press the buttons.</p>
+      <p>Everything else on this site is built from these. Each box below is a real page, frame or worker. A cable appears when a port arrives, and each dot is a real message.</p>
     </div>
     <div class="stack" id="key" style="padding-bottom:2rem; --gap:.8rem">
       <h2 style="font-size:var(--step-1)">How to read the diagrams</h2>
-      <p class="small">Every box is drawn as what it is, and every page and frame shows its address. Under each diagram is a key to the shapes in it.</p>
+      <p class="small">Windows, frames and workers are drawn differently, and each page and frame shows its address. There is a key under each diagram.</p>
       <div data-legend></div>
     </div>
     <nav class="contents" id="contents" aria-label="All the patterns" style="padding-bottom:2rem"></nav>
     <main id="patterns"></main>
     <div class="stack" id="further" style="padding-block:clamp(3rem,8vw,5rem) 2rem; --gap:1.2rem; border-top:2px solid var(--ink)">
       <h1 style="font-size:var(--step-3)">More things a port can carry</h1>
-      <p>What a port can carry, and where it can end up. These lean on newer parts of the platform, so some will say no in some browsers.</p>
+      <p>What a port can carry and where it can end up. These use newer parts of the platform, so some won't work in every browser.</p>
     </div>
     <div id="more"></div>
     <div class="stack" id="threads-intro" style="padding-block:clamp(3rem,8vw,5rem) 2rem; --gap:1.2rem; border-top:2px solid var(--ink)">
       <h1 style="font-size:var(--step-3)">Across threads</h1>
-      <p>A port is not tied to a page. It can live in a worker, and what travels over it can be video, or the use of a key. These are about what that makes possible.</p>
+      <p>A port can be held by a worker, and it can carry video frames or requests to sign with a key.</p>
     </div>
     <div id="threads"></div>
     <div class="stack" id="origins-intro" style="padding-block:clamp(3rem,8vw,5rem) 2rem; --gap:1.2rem; border-top:2px solid var(--ink)">
       <h1 style="font-size:var(--step-3)">Between real sites</h1>
-      <p>Most boxes on this page are sandboxes with no origin of their own. In this part the outer boxes are the florist's and the library's actual sites, embedded here, each with its own address and its own storage. These are about what you hand over, and whether you can get it back.</p>
+      <p>Most boxes on this page are sandboxes with no origin of their own. In this part the outer boxes are the florist's and the library's actual sites, embedded here, each with its own address and its own storage. They show what you hand over and whether you can get it back.</p>
     </div>
     <div id="origins"></div>
     <div class="stack" id="places-intro" style="padding-block:clamp(3rem,8vw,5rem) 2rem; --gap:1.2rem; border-top:2px solid var(--ink)">
       <h1 style="font-size:var(--step-3)">Other devices, service workers, sockets and audio</h1>
-      <p>The other end of a port can be on another device, behind a path on your own site, in a worker that every tab shares, or on the thread that makes sound. The code that holds the port is the same each time.</p>
+      <p>The other end of a port can be on another device, behind a path on your own site, in a worker that every tab shares, or on the thread that makes sound. The code that holds the port doesn't change.</p>
     </div>
     <div id="places"></div>
     <div class="stack" id="alive-intro" style="padding-block:clamp(3rem,8vw,5rem) 2rem; --gap:1.2rem; border-top:2px solid var(--ink)">
       <h1 style="font-size:var(--step-3)">Knowing the other side is still there</h1>
-      <p>A port does not tell you when its other end has gone. The page that held it can be closed, navigated, frozen or stuck, and posting into the port works exactly as before, with nothing coming back. These keep the work on one port and put health checks on a second port, so the code that does the work never has to know about them.</p>
+      <p>A port does not tell you when its other end has gone. The page that held it can be closed, navigated, frozen or stuck, and posting into the port still works but nothing comes back. These demos put health checks on a second port, so the code that does the work doesn't have to know about them.</p>
     </div>
     <div id="alive"></div>
     <section class="pattern" id="sync">
       <h2>Block on a port: a synchronous call with no await</h2>
       <div class="text">
-        <p>Ports are asynchronous, and a great deal of old code is not. Add a few bytes of shared memory and a worker can ask a question down a port and stop dead on that line until the answer is written, even when the answer is a person pressing a button. Shared memory needs a cross-origin isolated page, so this one has a room of its own.</p>
+        <p>Ports are asynchronous and a lot of old code isn't. With a few bytes of shared memory, a worker can ask a question down a port and block on that line until the answer is written, even when the answer is a person pressing a button. Shared memory needs a cross-origin isolated page, so this demo has its own page.</p>
         <p><a class="button" href="/isolated/">Open the isolated room</a></p>
       </div>
     </section>
     <section class="pattern" id="census">
       <h2>What will go down a port in your browser</h2>
-      <p>Nothing here is looked up. When you scroll to this table, each kind of object is made, then really sent to a worker, really sent to a frame on another origin, and really written to IndexedDB. The answers are your browser's.</p>
+      <p>When you scroll to this table, each kind of object is made, sent to a worker, sent to a frame on another origin and written to IndexedDB. The answers come from your browser, not from a lookup table.</p>
       <div style="overflow-x:auto">
         <table class="census">
           <thead><tr><th scope="col">Kind</th><th scope="col">To a worker</th><th scope="col">To another origin</th><th scope="col">Into IndexedDB</th></tr></thead>
@@ -77,11 +77,11 @@
         <li>Nothing tells you when the other end has gone. A <code>close</code> event for ports was added to the HTML standard in 2024, never switched on in any browser, and removed again in October 2026. Put health checks on a second port: <a href="/patterns/health-pair/">pings</a> or <a href="/patterns/health-beats/">beats</a>, with a goodbye on <code>pagehide</code>. On one origin, a Web Lock held by the other side is released the moment it is destroyed. <a href="/patterns/alive-signals/">Which signal notices what.</a></li>
         <li>A SharedWorker inside a cross-site iframe is partitioned by the top-level site, so a hidden hub iframe is a different hub on every site. A window of its own is first party and reaches the real one. Ports that have already been handed over are not affected.</li>
         <li>A transferred port is gone from the sender. Post it twice and the second call throws.</li>
-        <li>A stream that is passed on through a middle context keeps flowing through it. If the middle goes away the reader stalls: no error, no end. Send streams down a direct port.</li>
+        <li>A stream that is passed on through a middle context keeps flowing through it. If the middle goes away the reader stalls with no error and no end. Send streams down a direct port.</li>
         <li>A port cannot be saved anywhere. IndexedDB, sessionStorage and history state all refuse it. To keep one across a reload, post it to a SharedWorker in <code>pagehide</code> and ask for it back. Create the worker with <code>extendedLifetime: true</code>, or it dies with its last page.</li>
       </ul>
     </section>
-    <footer class="small muted" style="padding-block:2rem 4rem">A working name and a work in progress.</footer>
+    <footer class="small muted" style="padding-block:2rem 4rem">Port Authority is a working name. By <a href="https://paul.kinlan.me">Paul Kinlan</a>.</footer>
   </div>
   <script type="module">
     import { demos, mount } from "/patterns/demos.js";
@@ -103,7 +103,7 @@
       const section = document.createElement("section");
       section.className = "pattern";
       section.id = demo.id;
-      section.innerHTML = `<h2><a href="/patterns/${demo.id}/">${demo.title}</a></h2><div class="demo"></div><div class="text"><p>${demo.blurb}</p><pre>${demo.code}</pre><p class="more"><a class="button quiet" href="/patterns/${demo.id}/">The full page on this: how it works, what to build, what bites \u203a</a></p></div>`;
+      section.innerHTML = `<h2><a href="/patterns/${demo.id}/">${demo.title}</a></h2><div class="demo"></div><div class="text"><p>${demo.blurb}</p><pre>${demo.code}</pre><p class="more"><a class="button quiet" href="/patterns/${demo.id}/">The full page on this: how it works, what to build, common mistakes \u203a</a></p></div>`;
       main.append(section);
       // Start each demo when it scrolls near, so six sets of frames do not all boot at once.
       new IntersectionObserver((entries, io) => { if (entries[0].isIntersecting) { io.disconnect(); mount(section.querySelector(".demo"), demo); } }, { rootMargin: "300px" }).observe(section);

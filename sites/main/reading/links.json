@@ -488,7 +488,7 @@
   {
    "id": "posts",
    "title": "Posts about ports, frames and shared workers",
-   "intro": "There are not many articles that go past the basics. These are the ones we found.",
+   "intro": "There are not many articles that go past the basics. These are the ones I found.",
    "items": [
     {
      "t": "Messing with MessageChannel",
@@ -906,7 +906,7 @@
   {
    "id": "papers-security",
    "title": "Research papers: security of messaging",
-   "intro": "We found no paper that is only about MessageChannel. The research is about postMessage, frames and workers, and several papers cover ports as part of that.",
+   "intro": "I found no paper that is only about MessageChannel. The research is about postMessage, frames and workers, and several papers cover ports as part of that.",
    "items": [
     {
      "t": "Protection and Communication Abstractions for Web Browsers in MashupOS",
@@ -1175,8 +1175,8 @@
   },
   {
    "id": "paul",
-   "title": "Paul Kinlan's writing",
-   "intro": "The author of this site has written about these ideas since 2011.",
+   "title": "My writing",
+   "intro": "I have written about these ideas since 2011.",
    "items": [
     {
      "t": "WebMessaging is broken",

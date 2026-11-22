@@ -106,7 +106,7 @@ const send = (port, message) => port.postMessage(message, Object.values(message)
   {
     id: "bite-unreadable", bite: true,
     title: "A message that cannot be rebuilt, and a sender that finds out",
-    blurb: "A compiled WebAssembly module can be posted to a worker of the same page, and cannot be rebuilt in a shared worker. The call to <code>postMessage</code> succeeds either way. Sent carelessly, the module vanishes and the sender waits for ever. Sent with the three habits below, the sender is told within a moment: the receiver listens for <code>messageerror</code> and says so, every message is acknowledged, and the sender puts a time limit on the wait.",
+    blurb: "A compiled WebAssembly module can be posted to a worker of the same page, and cannot be rebuilt in a shared worker. The call to <code>postMessage</code> succeeds either way. Sent with no checks, the module disappears and the sender waits for ever. Sent with the three checks below, the sender is told straight away: the receiver listens for <code>messageerror</code> and says so, every message is acknowledged, and the sender puts a time limit on the wait.",
     code: `<span class="c">// the receiver: answer what you could read, and report what you could not</span>
 port.onmessage = ({ data }) => { handle(data.value); port.postMessage({ ack: data.id }); };
 port.onmessageerror = () => port.postMessage({ unreadable: true });

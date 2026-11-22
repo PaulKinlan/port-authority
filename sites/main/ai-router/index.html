@@ -81,7 +81,7 @@
       <section id="what">
         <h2>What it is for</h2>
         <p>Today a site that wants to use a model has two choices. It can pay for the model itself and run a server that hides its key. Or it can ask you to paste your API key into its page, where its scripts can read it and send it anywhere.</p>
-        <p>The router is a third choice. You give your key to one place that you choose to trust. Every other site asks that place for access and gets a port. A port can be used and cannot be read: there is no key inside it to copy.</p>
+        <p>With the router you give your key to one place that you choose to trust. Every other site asks that place for access and gets a port. A site can use the port, but there is no key in it to copy.</p>
         <ul>
           <li>You add each key once, at the router's address.</li>
           <li>A site asks. You see its address, pick an account and a model, and set a limit in requests and days.</li>
@@ -215,7 +215,7 @@ onmessage = async (event) =&gt; {
           <li>The router's pages and its worker are served with a Content-Security-Policy. They can run only the router's own scripts and can connect only to the router and to Anthropic, OpenAI, OpenRouter, Google Gemini and an Ollama on your own computer. A changed or injected script could not send your key anywhere else.</li>
           <li>There is one small server, and it exists because browsers give a frame separate storage inside each site. The list of grants is the only thing that has to be seen from everywhere, so that Stop works and the router page can show usage. It holds no keys and sees no prompts or answers.</li>
           <li>It only works for providers that accept calls from a browser. Anthropic does when the request carries the <code>anthropic-dangerous-direct-browser-access</code> header. A provider that sends no CORS headers cannot be used.</li>
-          <li>Your key is visible in your own browser's network tools when the frame calls the provider. It is your key and your browser. Other sites still cannot see it.</li>
+          <li>Your key is visible in your own browser's network tools when the frame calls the provider. Other sites still can't see it.</li>
           <li>Limits are counted in requests and days, not money. A site with 20 requests can still send 20 long prompts.</li>
           <li>The site sees every answer. The router controls who pays and how much. It does not control what the site does with the text.</li>
           <li>The Anthropic path was tested against a stand-in server, not with a real key. The OpenAI, OpenRouter, Gemini and Ollama paths have not been run at all yet. Only Chromium has been tested.</li>
@@ -223,7 +223,7 @@ onmessage = async (event) =&gt; {
         </ul>
       </section>
     </main>
-    <footer class="small muted" style="padding-block:2rem 4rem">A working name and a work in progress.</footer>
+    <footer class="small muted" style="padding-block:2rem 4rem">Port Authority is a working name. By <a href="https://paul.kinlan.me">Paul Kinlan</a>.</footer>
   </div>
   <script type="module">
     import { sites as listed } from "/_sites.js";

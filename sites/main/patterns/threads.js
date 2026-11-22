@@ -93,7 +93,7 @@ while (performance.now() < until) {}`,
   {
     id: "filter",
     title: "Run live video through a filter on another origin",
-    blurb: "A <code>VideoFrame</code> is transferable, so video can leave your page one frame at a time and come back changed. The filter here lives on another origin in a sandbox. It has no camera, cannot see this page, and holds each frame only until it sends it on. Frames are moved, not copied: after sending, this page's own handle to the frame is empty. A plug-in system for video where the plug-in gets pixels and nothing else.",
+    blurb: "A <code>VideoFrame</code> is transferable, so video can leave your page one frame at a time and come back changed. The filter here lives on another origin in a sandbox. It has no camera, cannot see this page, and holds each frame only until it sends it on. Frames are moved, not copied: after sending, this page's own handle to the frame is empty. It is a way to build video plug-ins that get pixels and nothing else.",
     code: `const frame = new VideoFrame(source, { timestamp });
 port.postMessage({ frame }, [frame]);          <span class="c">// frame is now closed here</span>
 
@@ -176,7 +176,7 @@ port.onmessage = ({ data }) => {
   {
     id: "signer",
     title: "Let another origin sign with your key without giving it the key",
-    blurb: "The vault makes a signing key the browser will not let anyone read, itself included. It gives this page a port that signs. This page lends the shop a weaker port: orders only, three uses. The shop gets real signatures that anyone can check against the public key, and at no point does the key, or the full port, move. Authority is handed on by passing ports, and narrowed at each hop by whoever is passing.",
+    blurb: "The vault makes a signing key the browser will not let anyone read, itself included. It gives this page a port that signs. This page lends the shop a weaker port: orders only, three uses. The shop gets real signatures that anyone can check against the public key, and at no point does the key, or the full port, move.",
     code: `<span class="c">// the vault</span>
 const { privateKey, publicKey } = await crypto.subtle.generateKey(ECDSA, false, ["sign", "verify"]);
 port.onmessage = async ({ data }) => port.postMessage({ id: data.id, signature: await sign(privateKey, data.text) });
