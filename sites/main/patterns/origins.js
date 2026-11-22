@@ -49,7 +49,7 @@ await crypto.subtle.sign(ECDSA, key, bytes); <span class="c">// signs as you</sp
       const reload = ui.button("Reload the florist", () => { keeper.frame.src = keeper.frame.src; say("the florist's page was thrown away and loaded again"); }, true);
       ui.button("Send the key itself to the florist", (btn) => {
         stage.post("keeper", { cmd: "key", key: pair.privateKey });
-        stage.cable("gift", "page", "keeper", "red");
+        stage.cable("gift", "page", "keeper", "red", "post");
         say("sent the key. It was copied, so I still hold mine.");
         btn.disabled = true; sign.disabled = forget.disabled = reload.disabled = false;
       }, false, true);
@@ -78,14 +78,14 @@ box.error(new Error("shut"));               <span class="c">// later: their next
       const give = ui.button("Give the florist the writing half", (btn) => {
         const writable = new WritableStream({ start(controller) { shut = controller; }, write(note) { say("found in the box: " + note); } });
         stage.post("dropper", { cmd: "box", writable }, [writable]);
-        stage.cable("box", "dropper", "page", "red");
+        stage.cable("box", "dropper", "page", "red", "stream");
         btn.disabled = true; drop.disabled = shutBtn.disabled = false;
       }, true);
       ui.button("Give the library the listening half", (btn) => {
         const readable = new ReadableStream({ start(controller) { feed = controller; } });
         timer = setInterval(() => { if (!listener.frame.isConnected) return clearInterval(timer); feed.enqueue(`tick ${++n}`); }, 900);
         stage.post("listener", { cmd: "feed", readable }, [readable]);
-        stage.cable("feed", "page", "listener", "teal");
+        stage.cable("feed", "page", "listener", "teal", "stream");
         say("gave away the readable half, kept the controller");
         btn.disabled = true; give.disabled = close.disabled = false;
       }, false, true);
@@ -113,8 +113,8 @@ myLines.pipeThrough({ readable, writable }).pipeTo(screen);`,
         writer = data.writable.getWriter();
         const list = out.node.querySelector("ul"); list.innerHTML = "";
         data.readable.pipeTo(new WritableStream({ write(line) { const li = document.createElement("li"); li.textContent = line; list.prepend(li); stage.pulse("back", "redactor"); } }));
-        stage.cable("there", "page", "redactor", "teal");
-        stage.cable("back", "redactor", "out", "teal");
+        stage.cable("there", "page", "redactor", "teal", "stream");
+        stage.cable("back", "redactor", "out", "teal", "stream");
         say("holding both ends of the library's transform");
         send.disabled = false;
       });
@@ -159,7 +159,7 @@ const { value } = await readable.getReader().read();   <span class="c">// the se
           });
           on("say", async () => {
             if (!writer) return log("I have nothing to speak into");
-            try { await writer.write(`hello ${++n} from the widget`); log(`said hello ${n}`); tell("pulse", { cable: "lent" }); }
+            try { await writer.write(`hello ${++n} from the widget`); log(`said hello ${n}`); tell("pulse", { cable: "lent-out" }); }
             catch { log("the connection is gone"); writer = null; }
           });
         },
@@ -177,12 +177,12 @@ const { value } = await readable.getReader().read();   <span class="c">// the se
       const alone = ui.button("Widget: try to connect by itself", () => stage.post("widget", { cmd: "own", url: echo }));
       const lend = ui.button("Lend the widget the connection", (btn) => {
         stage.post("widget", { cmd: "line", readable: line.readable, writable: line.writable }, [line.readable, line.writable]);
-        stage.cable("lent", "page", "widget", "red");
+        stage.cable("lent", "page", "widget", "red", "stream"); stage.cable("lent-out", "widget", "page", "red", "stream");
         say("handed over both streams. I kept the socket itself.");
         btn.disabled = true; hello.disabled = back.disabled = false;
       }, true);
       const hello = ui.button("Widget: say hello to the server", () => stage.post("widget", { cmd: "say" }), true);
-      const back = ui.button("Close the connection", (btn) => { line.close(); btn.disabled = true; stage.cut("lent"); say("closed the socket. The widget is cut off."); }, true);
+      const back = ui.button("Close the connection", (btn) => { line.close(); btn.disabled = true; stage.cut("lent"); stage.cut("lent-out"); say("closed the socket. The widget is cut off."); }, true);
       ui.button("Open a connection to the server", async (btn) => {
         btn.disabled = true;
         try { line = await open(); say(`connected, using ${line.how}`); lend.disabled = false; }

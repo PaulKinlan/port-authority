@@ -19,10 +19,12 @@ const routerBox = (stage, title, what, extra = "") => {
 
 // The windows around the router, and the buttons that make them speak.
 const windowBoxes = (stage, via) => Object.fromEntries(NAMES.map((name) => [name, stage.box(name, { src: `/patterns/route.html?name=${name}&via=${via}` })]));
-async function windows(stage, ui, boxes) {
+// `line` is what joins a window to the router: a port to a shared worker, or
+// plain postMessage to a service worker, which keeps no port.
+async function windows(stage, ui, boxes, line = "cable") {
   stage.on((name, data) => { if (data.wire === "sent") stage.pulse("c-" + name, name); if (data.wire === "got") stage.pulse("c-" + name, "router"); });
   await Promise.all(Object.values(boxes).map((box) => box.whenReady));
-  for (const name of NAMES) stage.cable("c-" + name, name, "router", COLORS[name]);
+  for (const name of NAMES) stage.cable("c-" + name, name, "router", COLORS[name], line);
   const say = (from, to) => () => stage.boxes.get(from).frame?.contentWindow?.postMessage({ cmd: "send", to }, location.origin);
   ui.button("Orders: send to the kitchen", say("orders", "kitchen"), false, true);
   ui.button("Kitchen: send to the driver", say("kitchen", "driver"));
@@ -104,7 +106,7 @@ onmessage = async (event) => {
     const worker = registration.active || registration.waiting || registration.installing;
     if (worker.state !== "activated") await new Promise((resolve) => worker.addEventListener("statechange", () => worker.state === "activated" && resolve()));
     registration.active.postMessage({ forget: true });   // start from an empty table each time
-    await windows(stage, ui, boxes);
+    await windows(stage, ui, boxes, "post");
     registration.active.postMessage({ watch: true });
     ui.button("Make the service worker forget", () => registration.active.postMessage({ forget: true }));
     ui.link("Open a fourth window for real", "/patterns/route.html?name=florist&via=sw");

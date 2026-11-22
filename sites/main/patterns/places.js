@@ -156,7 +156,7 @@ port.onmessage = ({ data }) => show(data.count);`,
             // This page keeps nothing, and the two talk without it.
             stage.post("tool", { cmd: "port" }, [port]);
             if (!farBox.frame) { farBox.node.dataset.link = "up"; farBox.node.innerHTML = `<div class="here"><h4>Another device</h4><p class="small">Connected. It is a real device, so its screen is not shown here.</p></div>`; }
-            stage.cable("air", "far", "page", "teal");
+            stage.cable("air", "far", "page", "teal", "rtc");
             stage.cable("port", "page", "tool", "yellow");
             me.say("gave the far port to the counter");
             standIn.disabled = true; hang.disabled = false;
@@ -213,7 +213,7 @@ return new Response(answer.body, answer);`,
         if (event.data?.mounted) { sw.say(`${event.data.status} ${event.data.site}/${event.data.mounted}, asked the ${event.data.site}`); stage.pulse("down", "view"); stage.pulse(mounts[event.data.site]?.cable, "sw"); }
       };
       navigator.serviceWorker.addEventListener("message", onMessage);
-      const load = (name, file) => { stage.cable("down", "view", "sw", "ink"); return embed(view, `/patterns/mounted/${name}/${file}?${Date.now()}`, `A page on this origin, served by the ${name}`); };
+      const load = (name, file) => { stage.cable("down", "view", "sw", "ink", "fetch"); return embed(view, `/patterns/mounted/${name}/${file}?${Date.now()}`, `A page on this origin, served by the ${name}`); };
       const mount = async (name) => {
         const m = mounts[name];
         try {

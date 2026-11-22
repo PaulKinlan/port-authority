@@ -44,7 +44,7 @@ export function openLine(stage, ui, { makeMe, openLabel = "Open a line to your p
       },
       onPort(port) {
         if (!state.standIn) { farBox.node.dataset.link = "up"; farBox.node.innerHTML = `<div class="here"><h4>Your phone</h4><p class="small">Connected. It is a real device, so its screen is not shown here.</p></div>`; }
-        stage.cable("air", "far", "page", "teal");
+        stage.cable("air", "far", "page", "teal", "rtc");
         stand.disabled = true; hang.disabled = false;
         state.line.route().then((route) => me.say(`connected directly${route ? ", " + route : ""}. The server is out of it.`));
         onPort(port, state);
@@ -89,7 +89,7 @@ for await (const chunk of body) show(chunk);`,
             if (!data.file) return;
             me.say(`${data.file.name}, ${size(data.file.size)}, is arriving as a ${data.body.constructor.name}. Passed it to the viewer unread.`);
             stage.post("viewer", { cmd: "show", file: data.file, body: data.body }, [data.body]);
-            stage.cable("view", "page", "viewer", "yellow");
+            stage.cable("view", "page", "viewer", "yellow", "stream");
           };
           sample.disabled = !line.standIn;
         },
@@ -244,7 +244,7 @@ toPhone.port1.close();`,
   {
     pattern: "oneway", use: [1], id: "built-figures",
     title: "Give a chart widget your figures on a port it cannot answer on",
-    blurb: "The widget is someone else's code in a sandboxed frame, with a rule that forbids it any network access. This page sends it a month of spending to draw. The widget receives the figures on a real port, and then tries two ways to send them somewhere: a network request, and a message back into the port. The browser blocks the first. The second reaches this page's valve and stops there, and this page counts it.",
+    blurb: "The widget stands in for someone else's code. It is a sandboxed frame with an opaque origin and a Content Security Policy that forbids it any network access. This page sends it a month of spending to draw. The widget receives the figures on a real port, and then tries two ways to send them somewhere: a network request, and a message back into the port. The browser blocks the first. The second reaches this page's valve and stops there, and this page counts it.",
     code: `const link = oneWay();
 widget.postMessage({ cmd: "feed" }, "*", [link.receive]);
 
@@ -407,7 +407,7 @@ for (const bit of bits) { await wait(bit ? 360 : 120); await reader.read(); }`,
         }, { highWaterMark: 0 });
         last = performance.now();
         stage.post("reader", { cmd: "stream", readable }, [readable]);
-        stage.cable("ticks", "page", "reader", "red");
+        stage.cable("ticks", "page", "reader", "red", "stream");
         say("gave away the readable side only");
         spell.disabled = false;
       }, false, true);
