@@ -59,7 +59,7 @@ const html = `<!doctype html>
     </header>
     <div class="stack" style="padding-block:2.5rem 1.5rem; --gap:1.1rem">
       <h1 style="font-size:var(--step-3)">Further reading on message ports</h1>
-      <p>This site is built on other people's work. This page lists ${count} places to read more about <code>MessageChannel</code>, <code>MessagePort</code>, <code>postMessage</code>, transferable objects and <code>SharedWorker</code>: the reference pages, the specifications, articles, libraries, talks and research papers. Each link has one line on what it covers.</p>
+      <p>This site builds on a lot of other people's work. Here are ${count} places to read more about <code>MessageChannel</code>, <code>MessagePort</code>, <code>postMessage</code>, transferable objects and <code>SharedWorker</code>: the reference pages, the specifications, articles, libraries, talks and research papers. Each link has one line on what it covers.</p>
       <p>Not much has been written about message ports on their own. Most of the writing and nearly all of the research is about <code>window.postMessage</code> and workers, so those are here too.</p>
       <p class="small muted">The links were last checked on ${esc(data.checked)}. If one is broken, or something good is missing, please <a href="https://github.com/PaulKinlan/port-authority/issues">open an issue</a>.</p>
       <ul class="toc">

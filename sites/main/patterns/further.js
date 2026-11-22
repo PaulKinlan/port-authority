@@ -62,7 +62,7 @@ export const further = [
   {
     pattern: "far", use: [3], id: "built-farfile",
     title: "Send a photo from your phone to this page as a stream",
-    blurb: "The phone picks a picture and posts <code>file.stream()</code> into its port. A stream cannot be moved to another machine, so the port on this side hands over a new <code>ReadableStream</code> and feeds it with the bytes as they arrive over the direct connection. This page does not read it. It transfers the stream to a sandboxed viewer, which reads it chunk by chunk and draws the picture at the end. The phone's file is read only as fast as the viewer reads. No server sees a byte of it.",
+    blurb: "The phone picks a picture and posts <code>file.stream()</code> into its port. A stream cannot be moved to another machine, so the port on this side hands over a new <code>ReadableStream</code> and feeds it with the bytes as they arrive over the direct connection. This page does not read it. It transfers the stream to a sandboxed viewer, which reads it chunk by chunk and draws the picture at the end. The phone's file is read only as fast as the viewer reads. No server sees any of it.",
     code: `<span class="c">// phone</span>
 const body = file.stream();
 port.postMessage({ file: { name: file.name, size: file.size }, body }, [body]);

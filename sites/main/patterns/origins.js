@@ -21,7 +21,7 @@ export const origins = [
   {
     id: "keycopy",
     title: "Send a key to another site: it gets a copy you cannot take back",
-    blurb: "A <code>CryptoKey</code> can be posted to another origin. This page makes a signing key that cannot be read, and sends the key itself to the florist's site. The florist can now sign as you. It cannot read the key either, but it can keep it: it saves the key in its own IndexedDB, and after a reload it still has it. Nothing this page does can undo that. Compare the experiment above, where the key stays put and only a port travels. A copied key is a gift. A port is a loan.",
+    blurb: "A <code>CryptoKey</code> can be posted to another origin. This page makes a signing key that cannot be read, and sends the key itself to the florist's site. The florist can now sign as you. It cannot read the key either, but it can keep it: it saves the key in its own IndexedDB, and after a reload it still has it. Nothing this page does can undo that. Compare the experiment above, where the key stays put and only a port travels.",
     code: `const { privateKey } = await crypto.subtle.generateKey(ECDSA, false, ["sign"]);
 floristWindow.postMessage({ key: privateKey }, floristOrigin);   <span class="c">// a copy, not a move</span>
 
@@ -58,7 +58,7 @@ await crypto.subtle.sign(ECDSA, key, bytes); <span class="c">// signs as you</sp
   {
     id: "halves",
     title: "Send only the readable side of a stream",
-    blurb: "A stream has a direction, and you can hand over one direction without the other. The library's site gets only something to read from: it can listen and has nothing to speak into. The florist's site gets only something to write into: it can post notes through the slot and cannot see what else is inside. Each half is also a switch its owner keeps. Close the feed and the listener is told it has ended. Shut the box and the next write fails. No roles, no access lists: what you hold is what you may do.",
+    blurb: "A stream has a direction, and you can hand over one direction without the other. The library's site gets only something to read from: it can listen and has nothing to speak into. The florist's site gets only something to write into: it can post notes through the slot and cannot see what else is inside. The owner can cut either one off. Close the feed and the listener is told it has ended. Shut the box and the next write fails.",
     code: `<span class="c">// listen only</span>
 library.postMessage({ readable }, origin, [readable]);
 
@@ -94,7 +94,7 @@ box.error(new Error("shut"));               <span class="c">// later: their next
   {
     id: "roundtrip",
     title: "Pipe your data through another site, and get it back",
-    blurb: "A transform has two ends, and both can be given away. The library's site makes one that blacks out email addresses and long numbers, and hands this page the end to write into and the end to read from. From here it is an ordinary <code>pipeThrough</code>: your lines go in, cross to the library's origin, are changed by code this page never loads or sees, and come back. Back-pressure crosses with them. A service you call by piping.",
+    blurb: "A transform has two ends, and both can be given away. The library's site makes one that blacks out email addresses and long numbers, and hands this page the end to write into and the end to read from. From here it is an ordinary <code>pipeThrough</code>: your lines go in, cross to the library's origin, are changed by code this page never loads or sees, and come back. Back-pressure crosses with them.",
     code: `<span class="c">// the library, on its own origin</span>
 const { readable, writable } = new TransformStream({ transform: redact });
 parent.postMessage({ readable, writable }, "*", [readable, writable]);
@@ -125,7 +125,7 @@ myLines.pipeThrough({ readable, writable }).pipeTo(screen);`,
   {
     id: "lend",
     title: "Lend someone a network connection you opened",
-    blurb: "The widget on the right is locked down so that it cannot reach the network at all. This page opens a WebSocket to the server and hands the widget the two streams that are the connection: one to write to, one to read from. The widget is now talking to the server. It never learns the address, it cannot open a second connection, and it keeps talking only until this page closes the socket. Hand over just the readable stream and it becomes a tap that can listen and not speak. Network access, delegated one connection at a time.",
+    blurb: "The widget on the right is locked down so that it cannot reach the network at all. This page opens a WebSocket to the server and hands the widget the two streams that are the connection: one to write to, one to read from. The widget is now talking to the server. It never learns the address, it cannot open a second connection, and it keeps talking only until this page closes the socket. Hand over just the readable stream and it becomes a tap that can listen and not speak.",
     code: `const { readable, writable } = await new WebSocketStream(url).opened;
 widget.postMessage({ readable, writable }, "*", [readable, writable]);
 

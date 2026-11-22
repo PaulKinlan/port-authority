@@ -39,7 +39,7 @@ port1.postMessage("ping");`,
   {
     id: "introduce",
     title: "Connect two frames to each other, then remove yourself",
-    blurb: "A port can be passed on by whoever holds it. So a third party that knows two sites can make a channel, give each of them an end, and step away. Remove the introducer here and the other two do not notice. This one move is the whole idea behind the hub.",
+    blurb: "A port can be passed on by whoever holds it. So a third party that knows two sites can make a channel, give each of them an end, and step away. Remove the introducer here and the other two do not notice. This is how the hub works.",
     code: `<span class="c">// in the introducer, which holds a port to each side</span>
 const { port1, port2 } = new MessageChannel();
 toLeft.postMessage({ meet: "right" }, [port1]);
@@ -50,7 +50,7 @@ toRight.postMessage({ meet: "left" }, [port2]);
   {
     id: "reply",
     title: "Send a reply port with each request",
-    blurb: "Instead of matching replies to requests with ids, make a new channel for each request and send one end along with it. The answer comes back on a port that only this request ever had. Slow answers cannot cross, and nobody else can answer in your place.",
+    blurb: "Instead of matching replies to requests with ids, make a new channel for each request and send one end along with it. The answer comes back on a port that only this request ever had. Answers can't get mixed up, and nobody else can answer in your place.",
     code: `function ask(service, question) {
   const { port1, port2 } = new MessageChannel();
   service.postMessage(question, [port2]);
@@ -100,7 +100,7 @@ toRight.postMessage({ meet: "left" }, [port2]);
   {
     id: "attenuate",
     title: "Give a frame limited access, then revoke it",
-    blurb: "A port is a capability: holding it is the permission. The owner here does not hand out its real line. It makes a new channel, keeps one end, and only answers <code>read</code> on it. To revoke, it closes its end. No account, no token, no list of who is allowed.",
+    blurb: "Holding a port is the permission to use it. The owner here doesn't hand out its real port. It makes a new channel, keeps one end, and only answers <code>read</code> on it. To revoke, it closes its end. It needs no account, token or list of who is allowed.",
     code: `function readOnly(counter) {
   const { port1, port2 } = new MessageChannel();
   port1.onmessage = (e) => port1.postMessage(e.data === "read" ? counter.value : "denied");
@@ -192,7 +192,7 @@ onconnect = ({ ports: [port] }) => {
   {
     id: "stream",
     title: "Send a stream to another frame",
-    blurb: "Ports carry more than messages. A <code>ReadableStream</code> is transferable too, so you can hand another origin a live stream and it reads with back-pressure, as if the source were local. Chrome and Firefox can do this today.",
+    blurb: "A <code>ReadableStream</code> is transferable too, so you can hand another origin a live stream and it reads with back-pressure, as if the source were local. Chrome and Firefox can do this today.",
     code: `const stream = new ReadableStream({ pull(controller) { controller.enqueue(nextChunk()); } });
 port.postMessage({ stream }, [stream]);
 

@@ -102,7 +102,7 @@ port.postMessage({ frame }, [frame]);`,
   {
     pattern: "attenuate", use: [1], id: "built-expiry",
     title: "Access that runs out after eight seconds",
-    blurb: "The owner lends the guest a port to its diary, and starts a clock. While the clock runs, the guest's questions are answered. When it stops, the owner closes its end. The guest still holds a port. Nothing comes back from it. There was no token to expire and no session to clean up: the permission was the wire, and the wire is gone.",
+    blurb: "The owner lends the guest a port to its diary, and starts a clock. While the clock runs, the guest's questions are answered. When it stops, the owner closes its end. The guest still holds a port. Nothing comes back from it. There was no token to expire and no session to clean up.",
     code: `const { port1, port2 } = new MessageChannel();
 port1.onmessage = () => port1.postMessage(diary.today());
 guest.postMessage({ cmd: "port" }, "*", [port2]);
@@ -146,7 +146,7 @@ setTimeout(() => port1.close(), 8000);      <span class="c">// that is the whole
   {
     pattern: "reply", use: [1, 2], id: "built-progress",
     title: "A long job that reports progress, and can be cancelled",
-    blurb: "The reply port does not have to carry one answer. This page asks a slow service for a job and keeps the reply port open. Progress arrives on it, ten per cent at a time. To cancel, this page says so on the same port and closes it. The service stops work, because the only party that wanted the result has let go of the wire.",
+    blurb: "The reply port does not have to carry one answer. This page asks a slow service for a job and keeps the reply port open. Progress arrives on it, ten per cent at a time. To cancel, this page says so on the same port and closes it. The service stops work, because nobody is waiting for the result any more.",
     code: `const { port1, port2 } = new MessageChannel();
 service.postMessage({ job: "render" }, [port2]);
 port1.onmessage = ({ data }) => data.done ? finish(data) : showProgress(data.percent);
@@ -205,7 +205,7 @@ port1.close();`,
   {
     pattern: "halves", use: [1], id: "built-sealed",
     title: "A sealed bid box that two rivals write into",
-    blurb: "Two bidders on two origins each get something to write into, and nothing to read from. Their bids land in this page. Neither can see the other's bid, or even whether the other has bid. When the owner closes the box, both writers are refused from then on. A sealed auction with no server and no trust between the bidders.",
+    blurb: "Two bidders on two origins each get something to write into, and nothing to read from. Their bids land in this page. Neither can see the other's bid, or even whether the other has bid. When the owner closes the box, both writers are refused from then on. It is a sealed auction with no server.",
     code: `const slot = (who) => new WritableStream({
   start(controller) { slots.push(controller); },
   write(bid) { bids.push({ who, bid }); },
@@ -254,7 +254,7 @@ slots.forEach((s) => s.error(new Error("bidding has closed")));`,
   {
     pattern: "functions", use: [0], id: "built-listener",
     title: "An event listener that lives on another origin",
-    blurb: "<code>addEventListener</code> takes a function, and a function cannot cross origins. A port can. This page listens to its own button and posts each press down a port. The analytics frame on another origin counts presses of a button it cannot see, in a page it cannot read. Close the port and it is unsubscribed, whether it likes it or not.",
+    blurb: "<code>addEventListener</code> takes a function, and a function cannot cross origins. A port can. This page listens to its own button and posts each press down a port. The analytics frame on another origin counts presses of a button it cannot see, in a page it cannot read. Close the port and it is unsubscribed.",
     code: `<span class="c">// the other origin wants: button.addEventListener("click", theirFunction)</span>
 const { port1, port2 } = new MessageChannel();
 button.addEventListener("click", () => port1.postMessage({ type: "click", at: Date.now() }));
@@ -346,7 +346,7 @@ for await (const word of answer) page.append(word + " ");`,
   {
     pattern: "signer", use: [2], id: "built-cap",
     title: "A wallet the shop can charge, up to a limit you set",
-    blurb: "The wallet is a frame on its own origin that pays whoever asks down its port. This page holds that port and does not pass it on. It gives the shop a port of its own, and forwards a charge to the wallet only if the running total stays under fifty. The shop cannot go around it, because the only wire the shop has ends in this page.",
+    blurb: "The wallet is a frame on its own origin that pays whoever asks down its port. This page holds that port and does not pass it on. It gives the shop a port of its own, and forwards a charge to the wallet only if the running total stays under fifty. The shop cannot go around it, because the only port the shop has ends in this page.",
     code: `let spent = 0;
 shopPort.onmessage = ({ data }) => {
   if (spent + data.amount > 50) return shopPort.postMessage({ refused: "over the limit" });
@@ -510,7 +510,7 @@ writer.write("hello");`,
   {
     pattern: "introduce", use: [1, 2], id: "built-wire",
     title: "Two vendors' widgets, wired together by the page that embeds them",
-    blurb: "A list of places from one vendor and a map from another, each in its own frame on its own origin. Neither has heard of the other and neither loads the other's code. The page that embeds them makes a channel, gives each widget an end, and is finished. Pick a place in the list and the map moves, with nothing passing through the page.",
+    blurb: "A list of places from one vendor and a map from another, each in its own frame on its own origin. Neither has heard of the other and neither loads the other's code. The page that embeds them makes a channel, and gives each widget an end. Pick a place in the list and the map moves, with nothing passing through the page.",
     code: `const { port1, port2 } = new MessageChannel();
 listFrame.postMessage({ cmd: "port" }, "*", [port1]);
 mapFrame.postMessage({ cmd: "port" }, "*", [port2]);
@@ -649,7 +649,7 @@ navigator.locks.request(lock, () => leave(port));   <span class="c">// runs when
   {
     pattern: "filter", use: [0], id: "built-watermark",
     title: "A captions and watermark plug-in that only ever sees pixels",
-    blurb: "The plug-in is a frame on another origin. Each frame of this page's video is handed to it, it draws a caption and a watermark on top, and hands the frame back. It has no access to the camera, the page or the network path the video came from. It is given a picture, and it returns a picture.",
+    blurb: "The plug-in is a frame on another origin. Each frame of this page's video is handed to it, it draws a caption and a watermark on top, and hands the frame back. It has no access to the camera, the page or the network path the video came from.",
     code: `<span class="c">// the plug-in</span>
 port.onmessage = ({ data }) => {
   ctx.drawImage(data.frame, 0, 0); data.frame.close();
@@ -815,7 +815,7 @@ lines.pipeThrough(seal).pipeTo(storage);`,
   {
     pattern: "stream", use: [0, 2], id: "built-bigfile",
     title: "Stream 64 MB to a worker a megabyte at a time",
-    blurb: "This page produces a large file a megabyte at a time and gives the worker a stream of it. The worker reads, adds up a checksum and asks for more. The page makes the next megabyte only when asked, so neither side ever holds more than a chunk or two. The progress bar needs no extra messages: the chunks arriving are the progress.",
+    blurb: "This page produces a large file a megabyte at a time and gives the worker a stream of it. The worker reads, adds up a checksum and asks for more. The page makes the next megabyte only when asked, so neither side ever holds more than a chunk or two. The progress bar needs no extra messages, because it counts the chunks.",
     code: `const file = new ReadableStream({ pull(controller) {
   made < TOTAL ? controller.enqueue(nextMegabyte()) : controller.close();   <span class="c">// only when asked</span>
 } });
@@ -859,7 +859,7 @@ for await (const chunk of file) { sum = checksum(sum, chunk); postMessage({ read
   {
     pattern: "keycopy", use: [1], id: "built-keyworker",
     title: "Make a key on the page, then keep it only in a worker",
-    blurb: "Giving a key away is permanent, and sometimes that is what you want. This page makes a signing key and posts it to its own worker, then drops its copy. From here on the page cannot sign anything by itself. A script injected into the page finds no key to use. It can only ask the worker, which can say no.",
+    blurb: "Giving a key away is permanent, which is sometimes what you want. This page makes a signing key and posts it to its own worker, then drops its copy. From here on the page cannot sign anything by itself. A script injected into the page finds no key to use. It can only ask the worker, which can say no.",
     code: `const { privateKey, publicKey } = await crypto.subtle.generateKey(ECDSA, false, ["sign", "verify"]);
 worker.postMessage({ key: privateKey });     <span class="c">// a copy goes to the worker</span>
 <span class="c">// let the page's copy go out of scope: the worker now holds the only one</span>
@@ -901,7 +901,7 @@ worker.postMessage({ sign: "order 1" });     <span class="c">// the page can ask
   {
     pattern: "functions", use: [1], id: "built-method",
     title: "Lend one method of an object, and not the object",
-    blurb: "This page has a cart with three methods: add, clear and total. A badge from another origin needs the total. It is given a port that calls <code>cart.total()</code> and nothing else. The badge can ask for the total as often as it likes. It cannot add, and it cannot clear, because those methods are not on the wire it holds.",
+    blurb: "This page has a cart with three methods: add, clear and total. A badge from another origin needs the total. It is given a port that calls <code>cart.total()</code> and nothing else. The badge can ask for the total as often as it likes. It cannot add, and it cannot clear, because the port it holds doesn't offer those methods.",
     code: `const cart = { items: [], add(item) {…}, clear() {…}, total() {…} };
 const { port1, port2 } = new MessageChannel();
 port1.onmessage = ({ data }) =>
@@ -939,7 +939,7 @@ badge.postMessage({ cmd: "port" }, "*", [port2]);`,
   {
     pattern: "reply", use: [0], id: "built-rpc",
     title: "Call a function on another origin and await the answer",
-    blurb: "Twelve lines turn the reply pattern into <code>await call(\"add\", 2, 3)</code>. Each call makes a channel, sends one end with the question, and returns a promise that settles when the other end speaks. Errors come back as rejections. Three calls made at once come back to the right callers, even when the slow one finishes last, because each has its own wire.",
+    blurb: "Twelve lines turn the reply pattern into <code>await call(\"add\", 2, 3)</code>. Each call makes a channel, sends one end with the question, and returns a promise that settles when the other end speaks. Errors come back as rejections. Three calls made at once come back to the right callers, even when the slow one finishes last, because each has its own channel.",
     code: `const call = (method, ...args) => new Promise((resolve, reject) => {
   const { port1, port2 } = new MessageChannel();
   port1.onmessage = ({ data }) => { "error" in data ? reject(new Error(data.error)) : resolve(data.result); port1.close(); };
@@ -1116,7 +1116,7 @@ onconnect = ({ ports: [port] }) => {
   {
     pattern: "canvas", use: [1], id: "built-render",
     title: "The same heavy drawing, on the page's thread and then on a worker's",
-    blurb: "Both canvases get the same job: two seconds of zooming into the Mandelbrot set, frame after frame. Drawn by the page, the page can do nothing else: its counter stops, and you see only the last frame. Drawn by a worker that was handed the canvas, every frame appears as it is finished, and the page's counter never misses a beat.",
+    blurb: "Both canvases get the same job: two seconds of zooming into the Mandelbrot set, frame after frame. Drawn by the page, the page can do nothing else: its counter stops, and you see only the last frame. Drawn by a worker that was handed the canvas, every frame appears as it is finished, and the page's counter keeps going.",
     code: `const surface = canvas.transferControlToOffscreen();
 worker.postMessage({ surface }, [surface]);
 
@@ -1210,7 +1210,7 @@ sieve.byteLength;                                          <span class="c">// 0:
     pattern: "pipeline", use: [0], id: "built-stages",
     also: { roundtrip: [2] },   // the same demo also runs on that pattern's page
     title: "Three parties each supply one stage, and none of them sees the others",
-    blurb: "A zipped order needs unzipping, turning from bytes into text, and its card number hiding before it is shown. Each of those is a stream stage supplied by a different origin. This page asks each for a stage, joins the three end to end, and pours the file in. Each party sees only what flows through its own stage, and none of them needs to know the others exist.",
+    blurb: "A zipped order needs unzipping, turning from bytes into text, and its card number hiding before it is shown. Each of those is a stream stage supplied by a different origin. This page asks each for a stage, joins the three end to end and sends the file through. Each party sees only what flows through its own stage, and none of them needs to know the others exist.",
     code: `<span class="c">// each party</span>
 const stage = new TransformStream({ transform(chunk, out) { out.enqueue(work(chunk)); } });
 parent.postMessage({ stage }, "*", [stage.readable, stage.writable]);
@@ -1319,7 +1319,7 @@ out.postMessage({ pixels }, [pixels.buffer]);`,
   {
     pattern: "halves", use: [2], id: "built-roles",
     title: "One feed, with a writing role and a reading role",
-    blurb: "A greenhouse sensor should be able to report and never read. A dashboard should be able to read and never report. This page makes one stream and gives the writing end to the sensor and the reading end to the dashboard. The roles are not a rule that somebody checks. The sensor holds an object with no way to read, and the dashboard holds one with no way to write.",
+    blurb: "A greenhouse sensor should be able to report and never read. A dashboard should be able to read and never report. This page makes one stream and gives the writing end to the sensor and the reading end to the dashboard. Nobody has to check the roles. The sensor holds an object with no way to read, and the dashboard holds one with no way to write.",
     code: `const { readable, writable } = new TransformStream();
 sensor.postMessage({ feed: writable }, "*", [writable]);       <span class="c">// can write, cannot read</span>
 dashboard.postMessage({ feed: readable }, "*", [readable]);    <span class="c">// can read, cannot write</span>`,
@@ -1363,7 +1363,7 @@ dashboard.postMessage({ feed: readable }, "*", [readable]);    <span class="c">/
   {
     pattern: "lend", use: [1], id: "built-delegate",
     title: "Sign in on the page, then hand the open session to a worker",
-    blurb: "The page signs in to an account service on another origin and gets back a port: the open session. The page does not need it. Its worker does, to keep the balance fresh in the background. So the page posts the port to the worker. The session is not copied and nobody signs in twice. The worker now holds it, and the page's own variable points at nothing.",
+    blurb: "The page signs in to an account service on another origin and gets back a port: the open session. The page does not need it. Its worker does, to keep the balance fresh in the background. So the page posts the port to the worker. The session is not copied and nobody signs in twice. The worker now holds it, and the page's own variable holds a dead port.",
     code: `const session = await signIn(password);         <span class="c">// a port to the account service</span>
 worker.postMessage({ session }, [session]);     <span class="c">// the worker has it now</span>
 session.postMessage({ ask: "balance" });        <span class="c">// goes nowhere: this end has left</span>`,

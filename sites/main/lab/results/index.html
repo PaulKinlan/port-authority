@@ -17,7 +17,7 @@
     </header>
     <div class="stack" style="padding-block:2.5rem 1.5rem; --gap:1.1rem">
       <h1 style="font-size:var(--step-3)">What browsers reported</h1>
-      <p>Every browser that runs <a href="/lab/">the lab</a> sends back what it saw. This page adds those reports up by browser and version, and points at the tests where they disagree. The data is public as JSON: <a href="/lab/data/summary"><code>/lab/data/summary</code></a>, <a href="/lab/data/reports"><code>/lab/data/reports</code></a>, <a href="/lab/data/errors"><code>/lab/data/errors</code></a>.</p>
+      <p>Every browser that runs <a href="/lab/">the lab</a> sends back what it saw. This page adds the reports up by browser and version and lists the tests where they disagree. The data is public as JSON: <a href="/lab/data/summary"><code>/lab/data/summary</code></a>, <a href="/lab/data/reports"><code>/lab/data/reports</code></a>, <a href="/lab/data/errors"><code>/lab/data/errors</code></a>.</p>
     </div>
     <main class="stack" style="--gap:1.6rem; padding-bottom:3rem">
       <section class="stack" aria-labelledby="h-browsers">
@@ -41,7 +41,7 @@
       </section>
       <section class="stack" aria-labelledby="h-errors">
         <h2 id="h-errors" style="font-size:var(--step-2)">Errors, crashes and browser warnings seen on this site</h2>
-        <p class="small muted">Any page here that throws an error tells the server, with the browser's name. The browser also reports for itself, through the Reporting API, when a page crashes, when it blocks or slows something, and when a page uses a feature that is going away. Those are marked "browser report". This is how a browser where an experiment does not work shows up.</p>
+        <p class="small muted">Any page here that throws an error tells the server, with the browser's name. The browser also reports for itself, through the Reporting API, when a page crashes, when it blocks or slows something, and when a page uses a feature that is going away. Those are marked "browser report". That is how I find out that an experiment doesn't work in some browser.</p>
         <ul class="log" id="errors" style="max-height:18rem"><li class="muted">Loading.</li></ul>
       </section>
     </main>

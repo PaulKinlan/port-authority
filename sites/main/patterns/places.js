@@ -89,7 +89,7 @@ export const places = [
   {
     id: "far",
     title: "A port whose other end is on another device",
-    blurb: "A port does not have to end in this browser. This page meets another device through a pairing code, the two connect directly with WebRTC, and each side wraps its end of that connection in a <code>MessagePort</code>. Then this page does what it does everywhere else on this site: it hands its port to someone. The counter at the end of the yellow cable is a sandboxed frame that was given a port and knows nothing more. Your phone is now pressing its buttons. The server carried a few messages so the two could find each other, and nothing since. The port carries more than text: bytes, other ports and streams can be posted into it, and each is rebuilt on the other device. Two demos further down this page do that.",
+    blurb: "This page meets another device through a pairing code, the two connect directly with WebRTC, and each side wraps its end of that connection in a <code>MessagePort</code>. Then this page hands its port on. The counter at the end of the yellow cable is a sandboxed frame that was given a port and knows nothing more. Your phone is now pressing its buttons. The server carried a few messages so the two could find each other, and nothing since. The port carries more than text: bytes, other ports and streams can be posted into it, and each is rebuilt on the other device. Two demos further down this page do that.",
     code: `<span class="c">// both devices</span>
 const port = await far({ code });               <span class="c">// a real MessagePort</span>
 
@@ -171,7 +171,7 @@ port.onmessage = ({ data }) => show(data.count);`,
   {
     id: "mounted",
     title: "Mount another site at a path on yours",
-    blurb: "A service worker can answer a request by asking a port, and the other end of that port can be on another origin. This page introduces a service worker to the florist's site. From then on, every request under <code>/patterns/mounted/florist/</code> is answered by the florist: pages, images, and a file whose body is a stream that the florist is still writing while this origin reads it. The florist's server is never contacted. Its page, open in a frame, is the server. Nothing in this is particular to the florist. The same worker script, registered again for <code>/patterns/mounted/library/</code> and given a port to the library's site, mounts that site beside it. What is mounted here runs as this origin, so mount only what you would let act as you.",
+    blurb: "A service worker can answer a request by asking a port, and the other end of that port can be on another origin. This page introduces a service worker to the florist's site. From then on, every request under <code>/patterns/mounted/florist/</code> is answered by the florist: pages, images, and a file whose body is a stream that the florist is still writing while this origin reads it. The florist's server is never contacted. Its page, open in a frame, is the server. The same worker script, registered again for <code>/patterns/mounted/library/</code> and given a port to the library's site, mounts that site beside it. What is mounted here runs as this origin, so mount only what you would let act as you.",
     code: `<span class="c">// this page: a worker for the path, and a port to the site that will serve it</span>
 const reg = await navigator.serviceWorker.register("/mount-sw.js", { scope: "/mounted/florist/" });
 const { port1, port2 } = new MessageChannel();
@@ -298,7 +298,7 @@ socket.onclose = () => setTimeout(connect, 300);`,
   {
     id: "audio",
     title: "A worker that plays music while this page is frozen",
-    blurb: "Sound is made on a thread of its own, and that thread accepts a port. This page starts an audio processor and a worker, gives each one end of a channel, and steps away. The worker writes the tune and sends each note straight to the audio thread, which plays it and says so. Freeze this page for three seconds: the buttons die and its counter stops, and the music keeps perfect time, because none of it passes through here. The audio thread has no DOM, no timers and no network. A port is the only way to reach it, and anything that holds the other end can.",
+    blurb: "Sound is made on a thread of its own, and that thread accepts a port. This page starts an audio processor and a worker, gives each one end of a channel, and steps away. The worker writes the tune and sends each note straight to the audio thread, which plays it and says so. Freeze this page for three seconds: the buttons stop working and its counter stops, but the music keeps time because none of it passes through here. The audio thread has no DOM, no timers and no network. A port is the only way to reach it, and anything that holds the other end can.",
     code: `const node = new AudioWorkletNode(audio, "bell");
 const { port1, port2 } = new MessageChannel();
 composerWorker.postMessage({}, [port1]);
