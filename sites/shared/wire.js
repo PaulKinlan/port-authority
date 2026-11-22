@@ -159,7 +159,10 @@ export class Stage {
   // out, it is worked out from the name and the heading. `url` is the address
   // shown for it: a worker's script, or "blob:" for one made from a string.
   // A box that is given an iframe later becomes an iframe, with that address.
-  box(name, { html = "", src = null, kind = null, url = null, scope = null, wide = false } = {}) {
+  // `as: "window"` is for a frame that stands for a site's own window: it is
+  // drawn as a window with the frame's address in its bar, and the key says
+  // that it is a frame in this page.
+  box(name, { html = "", src = null, kind = null, url = null, scope = null, wide = false, as = null } = {}) {
     const wrap = document.createElement("div");
     wrap.className = "ctx" + (wide ? " wide" : "");
     wrap.innerHTML = `<div class="ctx-shape"><div class="ctx-in"><div class="ctx-bar"></div><div class="box"></div><div class="ctx-foot"></div></div></div>`;
@@ -175,7 +178,7 @@ export class Stage {
     }
     this.el.append(wrap);
     let ready;
-    const box = { name, node, wrap, kind: kind || (src ? "iframe" : guess(name, html)), url, scope, frame: node.querySelector("iframe"), whenReady: new Promise((r) => (ready = r)), ready };
+    const box = { name, node, wrap, as, kind: kind || (src ? "iframe" : guess(name, html)), url, scope, frame: node.querySelector("iframe"), whenReady: new Promise((r) => (ready = r)), ready };
     this.boxes.set(name, box);
     this.describe(box);
     box.watch = new MutationObserver(() => this.describe(box));
@@ -192,13 +195,13 @@ export class Stage {
       box.frame = frame;
       box.sandboxed = frame.hasAttribute("sandbox");
       box.url = frame.getAttribute("src") ? frame.src : "about:srcdoc";
-      if (box.kind !== "device") box.kind = "iframe";
+      if (box.kind !== "device") box.kind = box.as === "window" ? "window" : "iframe";
     }
     const { kind } = box, bar = box.wrap.querySelector(".ctx-bar"), foot = box.wrap.querySelector(".ctx-foot");
     box.wrap.dataset.kind = kind;
     let label = KINDS[kind].label, where = address(box.url), full = box.url || "";
     if (kind === "window") {
-      full = location.href;
+      full = box.url || location.href;
       bar.innerHTML = `<span class="dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="ctx-url" title="${esc(full)}">${address(box.url || location.origin + location.pathname)}</span>`;
     } else {
       if (kind === "iframe") {
@@ -222,7 +225,8 @@ export class Stage {
     // Frames are always inside this page. When the page has no box of its own, the key says so.
     const all = [...this.boxes.values()];
     const hidden = all.some((box) => box.kind === "iframe") && !all.some((box) => box.kind === "window");
-    const html = this.boxes.size ? legend(kinds, false) + (hidden ? `<p class="stage-note">Not drawn: this page, ${address(location.origin + location.pathname)}, which embeds every frame above.</p>` : "") : "";
+    const standIns = all.some((box) => box.as === "window" && box.frame);
+    const html = this.boxes.size ? legend(kinds, false) + (hidden ? `<p class="stage-note">Not drawn: this page, ${address(location.origin + location.pathname)}, which embeds every frame above.</p>` : "") + (standIns ? `<p class="stage-note">Each window above is shown as a frame inside this page, ${address(location.origin + location.pathname)}. It loads the address in its bar.</p>` : "") : "";
     if (this.key.innerHTML !== html) this.key.innerHTML = html;
   }
 

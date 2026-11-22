@@ -40,7 +40,7 @@ port1.postMessage("ping");`,
   {
     id: "introduce",
     title: "Connect two sites to each other, then remove yourself",
-    blurb: "A port can be passed on by whoever holds it. So a third party that knows two sites can make a channel, give each of them an end, and step away. The three boxes are iframes loaded from three different sites, and their addresses are written under them. This page embeds them, and at the start it gives Site A and Site B one channel each to the introducer, keeping no end itself. Remove the introducer and the other two do not notice. This is how the hub works.",
+    blurb: "A port can be passed on by whoever holds it. So a third party that knows two sites can make a channel, give each of them an end, and step away. The three windows are three different sites, and each address is in its bar. So that you can see all three at once, each is shown as a frame inside this page. This page gives Site A and Site B one channel each to the introducer at the start, and keeps no end itself. Between real windows the introducer gets those lines itself, because it opened the sites or they opened it. Remove the introducer and the other two do not notice. This is how the hub works.",
     code: `<span class="c">// in the introducer, which holds a port to each side</span>
 const { port1, port2 } = new MessageChannel();
 toLeft.postMessage({ meet: "right" }, [port1]);
@@ -231,12 +231,15 @@ port.onmessage = async ({ data }) => { for await (const chunk of data.stream) us
   },
 ];
 
-// Three real sites. Each box is an iframe that loads /actor.html from a
-// different origin, so the ports cross between sites that share no storage
-// and no code beyond that one page. What each part does is in /actor.js.
+// Three real sites. The pattern is about windows: two sites and something
+// like a picker window that knows both. Here each window is a frame that
+// loads /actor.html from a different origin, so all three can be seen at
+// once, and it is drawn as a window with that address in its bar. The ports
+// cross between sites that share no storage and no code beyond that one page.
+// What each part does is in /actor.js.
 export async function introduce(stage, ui) {
   const part = (name, site, role, title, color) => {
-    const box = stage.box(name, { src: `${sites[site]}/actor.html?role=${role}&title=${encodeURIComponent(title)}&color=${encodeURIComponent(color)}` });
+    const box = stage.box(name, { as: "window", src: `${sites[site]}/actor.html?role=${role}&title=${encodeURIComponent(title)}&color=${encodeURIComponent(color)}` });
     box.frame.title = title;
     return box.whenReady;
   };
@@ -256,7 +259,7 @@ export async function introduce(stage, ui) {
   let met = 0;
   const talkA = ui.button("Site A says hello", () => stage.post("left", { cmd: "talk" }), true);
   const talkB = ui.button("Site B says hello", () => stage.post("right", { cmd: "talk" }), true);
-  const removeBtn = ui.button("Remove the introducer", (btn) => { stage.remove("intro"); btn.disabled = true; }, true);
+  const removeBtn = ui.button("Close the introducer", (btn) => { stage.remove("intro"); btn.disabled = true; }, true);
   stage.on((name, data) => {
     if (data.wire === "met" && ++met === 2) { stage.cable("direct", "left", "right", "yellow"); talkA.disabled = talkB.disabled = removeBtn.disabled = false; }
   });
@@ -267,7 +270,7 @@ export async function introduce(stage, ui) {
 // A step is [start of the button's label, what happens, pause after in ms].
 export const TOURS = {
   hello: { steps: [["Open a channel", "A channel is made. One end stays in this page and the other is posted to the frame."], ["Send a ping", "A message goes down the wire, and the frame answers on the same wire."]] },
-  introduce: { steps: [["Introduce them", "The introducer makes a channel and gives one end to each site."], ["Site A says hello", "A talks to B directly, on the yellow cable. Nothing passes through the introducer."], ["Site B says hello", "B answers the same way."], ["Remove the introducer", "The introducer is destroyed."], ["Site A says hello", "The two sites still talk. The line was never the introducer's."]] },
+  introduce: { steps: [["Introduce them", "The introducer makes a channel and gives one end to each site."], ["Site A says hello", "A talks to B directly, on the yellow cable. Nothing passes through the introducer."], ["Site B says hello", "B answers the same way."], ["Close the introducer", "The introducer's window is closed."], ["Site A says hello", "The two sites still talk. The line was never the introducer's."]] },
   reply: { steps: [["Client one asks", "Client one sends a question, and with it a fresh port to answer on."], ["Client two asks", "Client two does the same. Each answer returns on its own port, so they cannot be mixed up."]] },
   attenuate: { steps: [["Share read-only", "The owner gives the guest a port that can read the counter and do nothing else."], ["Guest reads", "The guest reads the counter through its port."], ["Guest tries to add", "The guest asks to change it and is denied. Its port does not do that."], ["Owner adds one", "The owner still can."], ["Revoke", "The owner closes its end of the guest's port."], ["Guest reads", "The guest asks again and hears nothing. Its port goes nowhere now."]] },
   stream: { steps: [["Send a stream", "A stream is transferred. The frame reads it chunk by chunk while this page is still producing it."]] },
