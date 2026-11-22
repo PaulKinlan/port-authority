@@ -16,12 +16,12 @@ const wait = (ms) => page.waitForTimeout(ms);
 await page.goto(root + "/");
 await page.waitForSelector("#hero-demo .controls button");
 // The text says three sites, so the three boxes must be pages on three different hosts.
-const heroFeet = await page.locator("#hero-demo .ctx-foot").allInnerTexts();
-check("hero: the three boxes are frames from three different sites", new Set(heroFeet.map((foot) => foot.trim().split("/")[0])).size === 3 && heroFeet.every((foot) => !/srcdoc/.test(foot)), heroFeet.join(" | "));
+const heroFeet = await page.locator("#hero-demo .ctx-bar").allInnerTexts();
+check("hero: the three boxes are drawn as windows on three different sites, and the key says they are frames", (await page.locator("#hero-demo .ctx[data-kind=window]").count()) === 3 && /shown as a frame inside this page/.test(await page.locator("#hero-demo .stage-note").innerText()) && new Set(heroFeet.map((foot) => foot.trim().split("/")[0])).size === 3 && heroFeet.every((foot) => !/srcdoc/.test(foot)), heroFeet.join(" | "));
 await click("#hero-demo", "Introduce them"); await wait(700);
 await click("#hero-demo", "Site A says hello"); await wait(300);
 check("hero: B hears A directly", /Site A says hello 1/.test(await frameText("#hero-demo", "right")));
-await click("#hero-demo", "Remove the introducer"); await wait(300);
+await click("#hero-demo", "Close the introducer"); await wait(300);
 await click("#hero-demo", "Site B says hello"); await wait(300);
 check("hero: still talking after the introducer is gone", /Site B says hello 1/.test(await frameText("#hero-demo", "left")));
 if (process.argv[2]) await page.screenshot({ path: process.argv[2] + "/home.png", fullPage: true });

@@ -23,7 +23,7 @@ export const deep = {
       "A broker normally stays in the path of every message. Here it is only needed for the introduction.",
       "Think of two sites in two tabs. Neither has a reference to the other's window, so neither could have reached the other alone. The introducer has a line to both and chooses to connect them. In the demo the three sites are frames in this page, so this page hands out the first two lines, one from each site to the introducer.",
     ],
-    tryIt: ["Introduce them, remove the introducer, then make both sites talk. Count the dots that pass through the middle box: none.", "Press Start again and remove the introducer first. The sites can never meet."],
+    tryIt: ["Introduce them, close the introducer, then make both sites talk. Count the dots that pass through the middle box: none.", "Press Start again and close the introducer first. The sites can never meet."],
     uses: ["A picker or hub that connects a site to a tool the person chose, then closes. This site's hub does that.", "Connecting two widgets from different vendors on one page without either loading the other's code.", "A parent page that wires its iframes together and then stays out of their conversation."],
     traps: ["The introducer cannot take the introduction back. If it needs to, it should keep a link in the chain and forward, as in the attenuate pattern.", "Nothing tells either side that the other has gone. Send a ping and treat silence as the answer."],
     measured: "Chromium 157: messages keep flowing between two frames on different sites after the introducing frame, on a third site, is removed from the document.",
