@@ -41,7 +41,7 @@
     </header>
     <div class="stack" style="padding-block:2.5rem 1.5rem; --gap:1.1rem">
       <h1 style="font-size:var(--step-3)">The guide to message ports</h1>
-      <p>Everything this site has worked out about sending things between pages, frames, workers and origins. Each section has its examples running in place, and each claim links to the full page on it. Where a line says "measured", it came from <a href="/lab/">the lab</a>, in the Chromium this was built with. Other browsers are being filled in as people run it, and <a href="/lab/results/">the results page</a> shows where they differ.</p>
+      <p>This is what I've worked out about sending things between pages, frames, workers and origins. Every section has running examples. "Measured" means it came from <a href="/lab/">the lab</a> in the Chromium I built this with. <a href="/lab/results/">The results page</a> shows where other browsers differ.</p>
       <ul class="toc">
         <li><a href="#model">1. The model in five sentences</a></li>
         <li><a href="#where">2. Where a message can go</a></li>
@@ -59,17 +59,17 @@
     </div>
     <div class="stack" id="key" style="padding-bottom:1.5rem; --gap:.8rem">
       <h2 style="font-size:var(--step-1)">How to read the diagrams</h2>
-      <p class="small">Every box is drawn as what it is, and every page and frame shows its address. Under each diagram is a key to the shapes in it.</p>
+      <p class="small">Windows, frames and workers are drawn differently, and each page and frame shows its address. There is a key under each diagram.</p>
       <div data-legend></div>
     </div>
     <main>
       <section id="model">
         <h2>1. The model in five sentences</h2>
         <ol>
-          <li><code>new MessageChannel()</code> makes two ports that are the two ends of one private wire.</li>
+          <li><code>new MessageChannel()</code> makes two ports, which are the two ends of one private connection.</li>
           <li>Whatever is posted into one port comes out of the other, wherever that other port now is.</li>
           <li>A port can be sent through <code>postMessage</code>, including through another port, and after that the sender no longer has it.</li>
-          <li>Nothing else identifies a port: no name, no address, no way to look one up. To use a wire you must have been handed an end of it.</li>
+          <li>A port has no name or address and you can't look one up. To use a channel, someone has to hand you an end of it.</li>
           <li>So holding a port is the permission to use it, and passing a port on is how permission is given.</li>
         </ol>
         <p class="see">Running: <a href="/patterns/hello/">opening a channel</a>, <a href="/patterns/introduce/">connecting two frames and removing yourself</a>.</p>
@@ -82,8 +82,8 @@
         <div class="scroll"><table>
           <thead><tr><th>Call</th><th>Reaches</th><th>Worth knowing</th></tr></thead>
           <tbody>
-            <tr><td><code>window.postMessage</code></td><td>Any frame, popup or opener, on any origin</td><td>The only door between origins inside a browser. You need a reference to the window: one you opened, your opener, or a frame.</td></tr>
-            <tr><td><code>port.postMessage</code></td><td>The other end of the wire</td><td>Works the same wherever the two ends have travelled.</td></tr>
+            <tr><td><code>window.postMessage</code></td><td>Any frame, popup or opener, on any origin</td><td>The only way between origins inside a browser. You need a reference to the window: one you opened, your opener, or a frame.</td></tr>
+            <tr><td><code>port.postMessage</code></td><td>The other end of the channel</td><td>Works the same wherever the two ends have been sent.</td></tr>
             <tr><td><code>worker.postMessage</code></td><td>A dedicated worker, and back</td><td>The worker's thread owns what it receives. The page can stall without stalling it.</td></tr>
             <tr><td><code>sharedWorker.port</code></td><td>One worker shared by every tab of an origin</td><td>Inside a frame on another site it is partitioned: a different worker per top-level site.</td></tr>
             <tr><td><code>serviceWorker.postMessage</code>, <code>client.postMessage</code></td><td>The origin's service worker, and from it any open window of the origin</td><td>The worker is stopped when idle and forgets its ports. Have it ask for a new one when it wakes.</td></tr>
@@ -91,19 +91,19 @@
             <tr><td><code>structuredClone(v, { transfer })</code></td><td>The same context</td><td>Useful for detaching a buffer, and for testing what is cloneable.</td></tr>
           </tbody>
         </table></div>
-        <p>These take data only. They copy, and they refuse anything that has to be moved.</p>
+        <p>These only copy data. They refuse anything that has to be moved.</p>
         <ul>
           <li><code>BroadcastChannel</code>, IndexedDB, <code>history.state</code> and storage events. Measured: a port is refused by all three that could be tested.</li>
-          <li>WebSocket, WebRTC data channels and WebTransport carry bytes and strings. They are how you leave the machine. A port at each end with a bridge between gives you <a href="#far">a port that crosses machines</a>.</li>
+          <li>WebSocket, WebRTC data channels and WebTransport carry bytes and strings. They are how you get off the machine. A port at each end with a bridge between them gives you <a href="#far">a port that crosses machines</a>.</li>
         </ul>
-        <p>Outside the browser's own pages, the same idea appears as real ports between an Android app and its WebView, between an extension's content script and the page it runs in, and between Electron's processes. This site has not tested those.</p>
+        <p>There are also real ports between an Android app and its WebView, between an extension's content script and its page, and between Electron's processes. I haven't tested those.</p>
         <p class="see">Running: <a href="/lab/">the lab</a> sends to thirteen of these places. <a href="/patterns/exchange/">A SharedWorker as the exchange</a>. <a href="/patterns/tabserver/">A tab that is a web server for other tabs</a>. <a href="/patterns/socket/">A shared worker holding the only socket</a>. <a href="/patterns/audio/">A worker sending notes to the audio thread</a>.</p>
         <div class="live-set" data-demos="exchange router built-swroute built-queue built-everyone built-toolroute built-sync built-leader socket built-feed tabserver built-notes built-files"><h3>See it run</h3></div>
       </section>
 
       <section id="what">
         <h2>3. What can be sent</h2>
-        <p>Two different things happen, and it matters which. Something in the transfer list is <strong>moved</strong>: the sender loses it. Anything else is <strong>copied</strong>: both sides hold one. Moved things cannot be stored, because storing is copying.</p>
+        <p>Anything in the transfer list is <strong>moved</strong> and the sender loses it. Anything else is <strong>copied</strong> and both sides have one. Things that can only be moved can't be stored, because storing is copying.</p>
         <div class="scroll"><table>
           <thead><tr><th>Kind</th><th>How</th><th>Measured, to a frame on another origin</th></tr></thead>
           <tbody>
@@ -123,23 +123,23 @@
             <tr><td>Functions, promises, DOM nodes, symbols, proxies, <code>URL</code>, <code>Response</code>, <code>MediaStream</code>, <code>AbortSignal</code>, workers</td><td>Neither</td><td>Refused with <code>DataCloneError</code>. <a href="/patterns/functions/">A port can stand in for a function.</a></td></tr>
           </tbody>
         </table></div>
-        <p class="measured">The full table has 45 kinds against 13 destinations, and each test uses the thing where it lands, because arriving is not the same as working. <a href="/lab/">Run it in your browser</a> or <a href="/lab/results/">see what others reported</a>.</p>
+        <p class="measured">The full table has 45 kinds against 13 destinations. Each test uses the object where it lands, because some things arrive and then don't work. <a href="/lab/">Run it in your browser</a> or <a href="/lab/results/">see what others reported</a>.</p>
         <div class="live-set" data-demos="zerocopy built-result built-pool built-chart built-render"><h3>See it run</h3></div>
       </section>
 
       <section id="authority">
         <h2>4. Ports as permissions</h2>
-        <p>Because a port can only be used by whoever holds it, the ordinary moves of access control become ordinary moves with ports.</p>
+        <p>Only whoever holds a port can use it, so you can do access control by passing ports around.</p>
         <ul>
           <li><strong>Grant</strong>: send a port.</li>
-          <li><strong>Introduce</strong>: make a channel, send one end to each of two parties, and keep nothing. They now talk without you, and removing you changes nothing. <a href="/patterns/introduce/">Running.</a></li>
+          <li><strong>Introduce</strong>: make a channel, send one end to each of two parties, and keep nothing. They now talk without you. <a href="/patterns/introduce/">Running.</a></li>
           <li><strong>Reply to exactly one asker</strong>: send a fresh port with each question, and answer on it. No request ids, and no way to answer the wrong party. <a href="/patterns/reply/">Running.</a></li>
-          <li><strong>Give less than you have</strong>: do not pass on your own port. Make a new channel, keep one end, and forward only what you choose to. The limit lives with you and the holder cannot widen it. <a href="/patterns/attenuate/">Running.</a></li>
-          <li><strong>Allow one direction only</strong>: a port always works both ways, so make two channels and stand between them. Copy messages from the first to the second and drop whatever comes back. Post the copy with no transfer list, so that a port cannot ride forward and become a way to answer. <a href="/patterns/oneway/">Running, between two real sites.</a></li>
-          <li><strong>Revoke</strong>: close your end. The other side is not told, so a client should treat silence as the answer.</li>
+          <li><strong>Give less than you have</strong>: do not pass on your own port. Make a new channel, keep one end, and forward only what you choose to. The holder can't widen the limit, because it is enforced on your side. <a href="/patterns/attenuate/">Running.</a></li>
+          <li><strong>Allow one direction only</strong>: a port always works both ways, so make two channels and stand between them. Copy messages from the first to the second and drop whatever comes back. Post the copy with no transfer list, so that a port can't be sent forward and used to answer. <a href="/patterns/oneway/">Running, between two real sites.</a></li>
+          <li><strong>Revoke</strong>: close your end. The other side is not told, so a client should treat silence as a no.</li>
           <li><strong>Delegate along a chain</strong>: each holder passes on a narrower port of its own. <a href="/patterns/signer/">A signing port narrowed to three orders.</a></li>
         </ul>
-        <p>There are no accounts, tokens or lists of who is allowed in any of these. What you hold is what you may do.</p>
+        <p>None of these need accounts, tokens or a list of who is allowed.</p>
         <div class="live-set" data-demos="attenuate built-narrow built-expiry built-chain built-cap built-quota built-method built-sealed built-roles built-listener oneway built-figures signer"><h3>Working examples</h3></div>
       </section>
 
@@ -147,10 +147,10 @@
         <h2>5. Streams</h2>
         <ul>
           <li>A stream sent down a port is read on the far side while the near side is still producing it, with back-pressure: a slow reader slows the source. <a href="/patterns/stream/">Running</a>, and <a href="/patterns/pipeline/">across three origins</a>.</li>
-          <li>A stream has a direction, and each direction can be given away separately. A readable alone is permission to listen. A writable alone is permission to speak. <a href="/patterns/halves/">Running, between real sites.</a></li>
-          <li>The owner keeps the switch. Close the controller and the listener is told the feed has ended. Error the sink and the next write fails.</li>
+          <li>A stream has a direction, and each direction can be given away separately. Give someone only the readable and they can listen. Give them only the writable and they can speak. <a href="/patterns/halves/">Running, between real sites.</a></li>
+          <li>The owner can cut either off. Close the controller and the listener is told the feed has ended. Error the sink and the next write fails.</li>
           <li>A readable stream is not a one-way link. A stream asks its source for a chunk only when the reader wants one, so the writer can see when each read happens. Measured: a sandboxed frame holding only a readable sent 16 bits to the writer by timing its reads, and all 16 were read correctly. <a href="/patterns/oneway/#built-covert">Running.</a> Where nothing may come back, use <a href="/patterns/oneway/">a one-way port</a>.</li>
-          <li>A transform has two ends and both can be given away, which makes a transform a service: <code>mine.pipeThrough(theirs)</code>, where <code>theirs</code> runs on another origin. <a href="/patterns/roundtrip/">Running.</a></li>
+          <li>A transform has two ends and both can be given away, so another origin can offer a transform as a service: <code>mine.pipeThrough(theirs)</code>, where <code>theirs</code> runs on another origin. <a href="/patterns/roundtrip/">Running.</a></li>
           <li>A network connection is two streams. Hand them to a context that has no network access and it can talk on that one connection and no other, until you close it. <a href="/patterns/lend/">Running.</a></li>
           <li>A stream does not survive the context it was passed through. If a middle party forwards a stream and then goes away, the reader stalls with no error. Send streams down a direct port. <a href="/patterns/stream-intro/">Running.</a></li>
         </ul>
@@ -162,7 +162,7 @@
         <ul>
           <li>A port given to a worker belongs to the worker's thread. Two workers introduced to each other keep talking while the page is frozen. <a href="/patterns/frozen/">Running.</a></li>
           <li>A canvas whose drawing surface has been transferred is painted without the page too, so a worker can show its state while the page is stuck.</li>
-          <li>With shared memory, a worker can post a question down a port and block on that line until the answer is written. Synchronous code can call anything asynchronous, a person included. <a href="/isolated/">Running, in the isolated room.</a></li>
+          <li>With shared memory, a worker can post a question down a port and block on that line until the answer is written. So synchronous code can call something asynchronous, including asking a person. <a href="/isolated/">Running, in the isolated room.</a></li>
           <li>A service worker can answer a fetch by asking a port, which turns a tab into the server for a set of URLs. <a href="/patterns/tabserver/">Running.</a></li>
           <li>The other end of that port can be on another origin. Introduce your service worker to another site and that site is mounted at a path on yours, streamed bodies included. Measured: a <code>ReadableStream</code> made in a frame on another origin is accepted by the service worker as a response body, and is read while it is still being written. What is mounted runs as your origin. <a href="/patterns/mounted/">Running.</a></li>
           <li>The audio thread accepts a port. Give a worker the other end and it drives sound with no help from the page. Measured: 13 notes in a 3 second freeze, at one every 230 ms, so none were lost. <a href="/patterns/audio/">Running.</a></li>
@@ -173,12 +173,12 @@
 
       <section id="keys">
         <h2>7. Keys</h2>
-        <p>There are two ways to let another origin use a key, and they are not alike.</p>
+        <p>There are two ways to let another origin use a key.</p>
         <ul>
           <li><strong>Send the key.</strong> A non-extractable <code>CryptoKey</code> can be posted to another origin. Measured: it arrives, it signs, and it still cannot be read. But it is a copy. The receiver can store it in its own IndexedDB and keep using it after you have destroyed yours. <a href="/patterns/keycopy/">Running, between real sites.</a></li>
           <li><strong>Send a port that uses the key.</strong> The key stays where it was made. The port can be limited to certain messages, counted, passed on in a weaker form, and closed. <a href="/patterns/signer/">Running.</a></li>
         </ul>
-        <p>For delegating authority you mean to be able to take back, send the port.</p>
+        <p>If you want to be able to take the access back, send the port.</p>
         <div class="live-set" data-demos="keycopy built-keyworker"><h3>Working examples</h3></div>
       </section>
 
@@ -187,7 +187,7 @@
         <ul>
           <li>A port cannot be saved. Leave it with a <code>SharedWorker</code> in <code>pagehide</code> and collect it on the next load. Create the worker with <code>extendedLifetime: true</code>, or it dies with its last page. Messages sent meanwhile wait in the port. <a href="/patterns/reload/">Running.</a></li>
           <li>A port survives its page being torn off into a new window, if it is handed to that window. <a href="/patterns/tearoff/">Running.</a></li>
-          <li>For anything that must outlive every tab, a port is the wrong tool. Keep the durable part on a server and make fresh ports when a page opens. This site's <a href="/hub/">hub</a> keeps its registry on a server for that reason.</li>
+          <li>A port can't outlive every tab. Keep the durable part on a server and make fresh ports when a page opens. This site's <a href="/hub/">hub</a> keeps its registry on a server for that reason.</li>
           <li>Two service workers on two sites can hold the two ends of one port, if a page of each site carries it across once. The browser stops an idle service worker and the port goes with it, without telling the other end, so give each question a time limit and carry a new port across when it passes. That needs a page of each site still open. <a href="/patterns/swpair/">Running.</a></li>
           <li>Two shared workers joined the same way stay joined while each site has a tab open, with no time limits. <a href="/patterns/swpair/#built-sharedpair">Running.</a></li>
           <li>A port that came over a port does not say who holds its other end: a message on it has an empty <code>origin</code> and no <code>source</code>. Ask the other end to sign a random value if you need to know. <a href="/patterns/swpair/#built-whoholds">Running.</a></li>
@@ -202,7 +202,7 @@
           <li>Keep health checks off the port that does the work. Send a second port with the first and ping on it, <a href="/patterns/health-pair/">running</a>. Or let the far side make the second channel and send a port back, so each side sets up one, <a href="/patterns/health-back/">running</a>. Or give each other one-way ports and beat on a timer, so both sides know about each other, <a href="/patterns/health-beats/">running</a>. The helpers are one small file, <a href="/alive.js">/alive.js</a>.</li>
           <li>A page that is closing or navigating says goodbye from <code>pagehide</code>, which arrives in milliseconds. If <code>event.persisted</code> is true the page is going into the back/forward cache: treat it as paused. Measured: a tab holding ports and a SharedWorker connection went into the cache, said it was paused, came back, and its ports still worked.</li>
           <li>On one origin, a Web Lock held by the far side is released by the browser the moment that side is destroyed, crashes included. It says nothing about a stuck thread. <a href="/patterns/alive-signals/">Which signal notices which ending</a>, measured in your browser.</li>
-          <li>Count missed beats, never one. A busy thread is late and then fine. If your own timer ran late, your side was the busy one, and the misses say nothing about the other side.</li>
+          <li>Wait for several missed beats, not one. A busy thread is late and then fine. If your own timer ran late, your side was the busy one, and the misses say nothing about the other side.</li>
           <li>When it is gone, start another and ask again, if the work is safe to repeat. <a href="/patterns/alive-restart/">Running.</a></li>
         </ul>
         <div class="live-set" data-demos="health-pair health-back health-beats alive-signals alive-restart"><h3>Working examples</h3></div>
@@ -221,11 +221,11 @@
 
       <section id="bites">
         <h2>11. Common mistakes, and what to do</h2>
-        <p>For each: what goes wrong, what to do about it, and where it helps, the thing happening in front of you.</p>
+        <p>For each one: what goes wrong, what to do, and a running example where that helps.</p>
         <article class="bite">
           <h3>A port that listens and hears nothing</h3>
-          <p>A port attached with <code>addEventListener</code> stays silent until you call <code>port.start()</code>. Nothing is thrown and nothing is lost: the messages wait in the port. It looks exactly like the other side never sending.</p>
-          <p class="do"><strong>What to do.</strong> Set <code>onmessage</code>, or call <code>start()</code> on the line after <code>addEventListener</code>, every time. The same waiting is useful: you can post into a port before the other side has attached anything, and it will all be there when they do.</p>
+          <p>A port attached with <code>addEventListener</code> stays silent until you call <code>port.start()</code>. Nothing is thrown and nothing is lost. The messages wait in the port, and it looks as if the other side never sent anything.</p>
+          <p class="do"><strong>What to do.</strong> Set <code>onmessage</code>, or call <code>start()</code> on the line after <code>addEventListener</code>, every time. The queueing is useful too: you can post into a port before the other side has attached a listener and the messages will be there when they do.</p>
           <pre>port.addEventListener("message", onMessage);
 port.start();                    <span class="c">// without this, nothing is delivered</span>
 
@@ -234,8 +234,8 @@ port.onmessage = onMessage;      <span class="c">// or this, which starts the po
         </article>
         <article class="bite">
           <h3>A message that cannot be rebuilt on arrival</h3>
-          <p>Some things can be sent and cannot be rebuilt where they land. A <code>VideoFrame</code> or a WebAssembly module posted to a shared worker, a service worker or a frame on another origin is one example, and <a href="/lab/">the lab</a> finds many more. The call to <code>postMessage</code> succeeds. The receiver gets a <code>messageerror</code> event with no data in it. The sender gets nothing at all.</p>
-          <p class="do"><strong>What to do.</strong> Three habits, and they are worth having on every port. The receiver always sets <code>onmessageerror</code> and tells the sender. Every message that matters is acknowledged. The sender puts a time limit on every wait. Then, before you depend on sending some kind of object to some place, send one and see: the answer differs by browser and by destination, which is what the lab measures.</p>
+          <p>Some things can be sent and cannot be rebuilt where they land. A <code>VideoFrame</code> or a WebAssembly module posted to a shared worker, a service worker or a frame on another origin is one example, and <a href="/lab/">the lab</a> finds many more. <code>postMessage</code> succeeds, the receiver gets a <code>messageerror</code> event with no data, and the sender gets nothing.</p>
+          <p class="do"><strong>What to do.</strong> Set <code>onmessageerror</code> on the receiver and tell the sender. Acknowledge every message that matters. Put a time limit on every wait. Before you depend on sending a kind of object somewhere, send one and see, because the answer differs by browser and by destination.</p>
           <pre><span class="c">// the receiver: answer what you read, report what you could not</span>
 port.onmessage = ({ data }) =&gt; { handle(data.value); port.postMessage({ ack: data.id }); };
 port.onmessageerror = () =&gt; port.postMessage({ unreadable: true });
@@ -255,7 +255,7 @@ const crosses = await send(sample).then(() =&gt; true, () =&gt; false);</pre>
         <article class="bite">
           <h3>Nothing tells you the other end has gone</h3>
           <p>Close a tab, remove a frame or stop a worker, and the port on your side looks the same as before. A <code>close</code> event was in the HTML Standard from January 2024 and was taken out again in October 2026. The Chromium this was built with does not fire one. <a href="/missing/#gone">What happened to it.</a> Posting to a dead port throws nothing.</p>
-          <p class="do"><strong>What to do.</strong> Across origins, send a ping on a timer and treat silence as the end. On one origin there is something exact: the other side takes a Web Lock and never releases it, and you queue for the same lock. The browser grants it to you at the moment they die, however they died. Listen for <code>close</code> as well, for the browsers that do fire it.</p>
+          <p class="do"><strong>What to do.</strong> Across origins, send a ping on a timer and treat silence as the end. On one origin you can be exact: the other side takes a Web Lock and never releases it, and you queue for the same lock. The browser grants it to you when they die, however they died. Listen for <code>close</code> as well, for the browsers that do fire it.</p>
           <pre><span class="c">// across origins: ask, and time the answer</span>
 let alive = true;
 const beat = setInterval(() =&gt; {
@@ -270,7 +270,7 @@ navigator.locks.request(name, () =&gt; onGone());                 <span class="c
         </article>
         <article class="bite">
           <h3>Something in the transfer list that is not in the message</h3>
-          <p>The transfer list says what to move. The message says what the receiver gets. A buffer or a stream that is in the list and not in the message is moved out of your context and delivered to nobody. Only ports are different: a port in the list turns up in <code>event.ports</code>.</p>
+          <p>The transfer list says what to move, and the message says what the receiver gets. A buffer or a stream that is in the list and not in the message is moved out of your context and delivered to nobody. Ports are the exception: a port in the list turns up in <code>event.ports</code>.</p>
           <p class="do"><strong>What to do.</strong> Build the transfer list from the message, so the two cannot disagree.</p>
           <pre>port.postMessage({ a }, [a.buffer, b.buffer]);      <span class="c">// b is moved and lost</span>
 port.postMessage({ a, b }, [a.buffer, b.buffer]);   <span class="c">// everything moved is also sent</span></pre>
@@ -279,7 +279,7 @@ port.postMessage({ a, b }, [a.buffer, b.buffer]);   <span class="c">// everythin
         <article class="bite">
           <h3>A transferred object is gone from the sender</h3>
           <p>After a transfer, your buffer has a length of zero, your stream is locked, and your port is dead. Post the same one a second time and the call throws a <code>DataCloneError</code>.</p>
-          <p class="do"><strong>What to do.</strong> Decide who owns a thing before you send it. If both sides need it, copy it first, or for a stream send one branch of <code>tee()</code>. If you only need it back later, have the other side transfer it home, as in <a href="/patterns/zerocopy/#built-pool">the buffer pool</a>.</p>
+          <p class="do"><strong>What to do.</strong> If both sides need it, copy it first, or for a stream send one branch of <code>tee()</code>. If you only need it back later, have the other side transfer it home, as in <a href="/patterns/zerocopy/#built-pool">the buffer pool</a>.</p>
           <pre>port.postMessage({ buffer }, [buffer]);
 buffer.byteLength;                                        <span class="c">// 0</span>
 port.postMessage({ buffer: buffer.slice(0) });            <span class="c">// too late: there is nothing left to copy</span>
@@ -290,7 +290,7 @@ const [mine, theirs] = stream.tee();                      <span class="c">// for
         <article class="bite">
           <h3>A write to a transferred stream that seems to succeed</h3>
           <p>When you write into a stream whose other end is in another context, the write can report success before the far side has refused the chunk. The failure arrives on the next write, or on <code>writer.closed</code>.</p>
-          <p class="do"><strong>What to do.</strong> Watch <code>writer.closed</code> from the start, and await <code>writer.ready</code> before each write. Do not treat one resolved write as proof that the chunk was accepted.</p>
+          <p class="do"><strong>What to do.</strong> Watch <code>writer.closed</code> from the start, and await <code>writer.ready</code> before each write. A resolved write doesn't mean the chunk was accepted.</p>
           <pre>const writer = writable.getWriter();
 writer.closed.catch((err) =&gt; onBroken(err));             <span class="c">// hear about a failure whenever it lands</span>
 await writer.ready;                                       <span class="c">// wait for room, which is also where an error surfaces</span>
@@ -299,7 +299,7 @@ await writer.write(chunk);</pre>
         </article>
         <article class="bite">
           <h3>Shared workers and service workers are separate for each top-level site</h3>
-          <p>A shared worker or a service worker reached from inside a frame on another site is partitioned by the top-level site. The same hidden frame embedded on two sites gets two workers that cannot see each other, so it cannot be a meeting point for the whole web. A service worker also forgets its ports whenever the browser stops it.</p>
+          <p>A shared worker or a service worker reached from inside a frame on another site is partitioned by the top-level site. The same hidden frame embedded on two sites gets two workers that cannot see each other, so it can't be a meeting point for every site. A service worker also forgets its ports whenever the browser stops it.</p>
           <p class="do"><strong>What to do.</strong> For something every site can reach, open a top-level window, which is what <a href="/hub/">the hub</a> does. Inside one site, a shared worker is fine. With a service worker, keep nothing that you cannot rebuild by asking the open windows.</p>
           <pre><span class="c">// a meeting point for many sites has to be a window of its own</span>
 const hub = window.open("https://hub.example/pick", "hub", "popup");
@@ -319,8 +319,8 @@ if (!tabPort) for (const client of await clients.matchAll()) client.postMessage(
         </article>
         <article class="bite">
           <h3>With reduced motion on, still show that something happened</h3>
-          <p>A person who has asked for reduced motion still needs to see that something happened. This site skipped its animations for them at first, and looked broken.</p>
-          <p class="do"><strong>What to do.</strong> Replace the movement with something that does not move: a blink, a count, a line of text. Do not replace it with nothing.</p>
+          <p>Someone who has asked for reduced motion still needs to see that something happened. At first this site skipped its animations for them, and it looked broken.</p>
+          <p class="do"><strong>What to do.</strong> Replace the movement with something that doesn't move: a blink, a count or a line of text.</p>
           <pre>if (matchMedia("(prefers-reduced-motion: reduce)").matches) cable.animate({ opacity: [0.25, 1] }, 450);
 else travel(dot, cable);</pre>
         </article>
@@ -330,14 +330,14 @@ else travel(dot, cable);</pre>
         <h2>12. What is still open</h2>
         <ul>
           <li>Safari and Firefox. Everything marked "measured" is Chromium until <a href="/lab/results/">the results page</a> says otherwise.</li>
-          <li>WebTransport streams. They are ordinary streams and should move like any other, which would let one origin open a session and lend another a single stream of it. Not measured: it needs a server this site does not have yet. The WebSocket version is <a href="/patterns/lend/">running</a>.</li>
+          <li>WebTransport streams. They are ordinary streams and should move like any other, which would let one origin open a session and lend another a single stream of it. I haven't measured it, because it needs a server this site doesn't have yet. The WebSocket version is <a href="/patterns/lend/">running</a>.</li>
           <li>Video frames and data channels do not reach a frame on a second origin, and in Chrome 160 they do not reach a sandboxed frame either. The tests browsers share expect that for video frames. <a href="/missing/#frames">What I would like instead.</a></li>
           <li>Why the shared worker stops answering part-way through the isolated lab.</li>
           <li>Ports to a native app and to an extension. A port to another machine is <a href="/patterns/far/">running</a>, tested between two pages on one computer and not yet between two networks.</li>
         </ul>
       </section>
     </main>
-    <footer class="small muted" style="padding-block:2rem 4rem">A working name and a work in progress.</footer>
+    <footer class="small muted" style="padding-block:2rem 4rem">Port Authority is a working name. By <a href="https://paul.kinlan.me">Paul Kinlan</a>.</footer>
   </div>
   <script type="module">
     // Every section has its examples running in place. Each is set up when it is about to be seen.

@@ -48,12 +48,12 @@
 
     <div class="stack lede" style="--gap:1.2rem">
       <h1>Comlink, rebuilt for today's platform</h1>
-      <p>Comlink made a worker feel like a local object. It was written when ports could carry far less than they can now. This page takes it apart, then puts it back together with what the platform has gained.</p>
-      <p class="small muted" style="font-size:var(--step--1); max-width:62ch">The result is one file with no dependencies, <a href="/hawser.js"><code>hawser.js</code></a> (a hawser is the rope that ties a ship to a port; the name is a placeholder). The three demos below do real work with it, and run Comlink 4.4.2 beside it on the same job so you can see where the two part ways.</p>
+      <p>Comlink lets you call a worker as if it were a local object. It was written when ports could carry a lot less than they can now, so I rebuilt it using what the platform has added since.</p>
+      <p class="small muted" style="font-size:var(--step--1); max-width:62ch">It is one file with no dependencies, <a href="/hawser.js"><code>hawser.js</code></a> (a hawser is the rope that ties a ship to a port, and the name is a placeholder). The three demos below run it next to Comlink 4.4.2 on the same job so you can see where they differ.</p>
     </div>
 
     <section class="pattern" id="explorer" data-demo="explorer">
-      <h2>Two workers, one fractal, and a crash</h2>
+      <h2>Cancelling work and noticing a dead worker</h2>
       <div class="demo stack">
         <div class="pair">
           <figure class="pane" data-lib="hawser">
@@ -86,11 +86,11 @@
       <div class="explain">
         <div>
           <h3>What to try</h3>
-          <p>Press <strong>Dive in fast</strong>. It asks for fourteen deeper pictures, one every 100 ms, the way a held zoom key would. On the left each new request cancels the one before, so the worker only ever draws what you are looking at. On the right every frame has to be finished, in order, so the picture trails behind you and the wasted time climbs.</p>
+          <p>Press <strong>Dive in fast</strong>. It asks for fourteen deeper pictures, one every 100 ms, like holding down a zoom key. On the left each new request cancels the one before, so the worker only draws what you are looking at. On the right every frame has to be finished in order, so the picture falls behind and the wasted time goes up.</p>
         </div>
         <div>
           <h3>Then crash them</h3>
-          <p><strong>Crash both workers</strong> calls <code>terminate()</code>, which is what an out of memory worker looks like from outside. The left side notices within a second, starts another worker and redraws. The right side is still waiting, and will be for as long as you leave the page open.</p>
+          <p><strong>Crash both workers</strong> calls <code>terminate()</code>, which is what a worker that ran out of memory looks like from outside. The left side notices within a second, starts another worker and redraws. The right side waits for ever.</p>
         </div>
       </div>
       <div class="text">
@@ -108,14 +108,14 @@ for await (const { y, pixels } of api.rows(view, W, H, controller.signal)) {
   ctx.putImageData(new ImageData(pixels, W), 0, y);
 }</pre>
         <div class="prose">
-          <p><strong>How it works.</strong> An <code>AbortSignal</code> cannot be cloned, so the one in the arguments is swapped for a token, and the worker gets a real signal of its own that aborts when yours does. The generator stays in the worker. The page holds a reference to it and each turn of the <code>for await</code> loop is one call to <code>next()</code>, so nothing is drawn that was not asked for.</p>
-          <p>A terminated worker sends nothing, so <code>wrap(worker, { heartbeat: 300 })</code> pings it. Three unanswered beats and every pending call rejects with <code>LinkClosedError</code>, and <code>closed(api)</code> resolves, which is where this page starts the replacement. Comlink keeps its pending calls in a map that nothing ever empties.</p>
+          <p><strong>How it works.</strong> An <code>AbortSignal</code> cannot be cloned, so the one in the arguments is swapped for a token, and the worker gets a real signal of its own that aborts when yours does. The generator stays in the worker. The page holds a reference to it and each turn of the <code>for await</code> loop is one call to <code>next()</code>, so the worker only draws what was asked for.</p>
+          <p>A terminated worker sends nothing, so <code>wrap(worker, { heartbeat: 300 })</code> pings it. After three unanswered beats every pending call rejects with <code>LinkClosedError</code> and <code>closed(api)</code> resolves, which is where this page starts the replacement. Comlink keeps its pending calls in a map that is never emptied.</p>
         </div>
       </div>
     </section>
 
     <section class="pattern" id="widget" data-demo="widget">
-      <h2>A stranger's widget that can read your note and nothing else</h2>
+      <h2>A widget on another origin that can read your note and nothing else</h2>
       <div class="demo stack">
         <div class="card">
           <header><b>Your note, on this page</b><span class="status">Edit it. It is saved in this browser.</span></header>
@@ -132,16 +132,16 @@ for await (const { y, pixels } of api.rows(view, W, H, controller.signal)) {
           <div class="widget" data-lib="hawser"><header><b>Widget, given a Hawser port</b><span class="status">May reach: read, changes</span></header></div>
           <div class="widget" data-lib="comlink"><header><b>Widget, given a Comlink port</b><span class="status">Exposed: read, subscribe</span></header></div>
         </div>
-        <p class="small muted">Both frames are the same page on another origin. It counts the words in your note as you type. The red buttons inside are the widget going beyond what it was asked to do.</p>
+        <p class="small muted">Both frames are the same page on another origin. It counts the words in your note as you type. The red buttons inside are the widget trying to do more than it was asked to.</p>
       </div>
       <div class="explain">
         <div>
           <h3>What to try</h3>
-          <p>Type in the note and both counts follow. Then press the red buttons in each widget. Neither can call <code>write()</code>. But the Comlink widget's second button rewrites your note anyway, with code it sent across and ran inside this page. The page was careful, too: it only exposed two harmless functions.</p>
+          <p>Type in the note and both counts follow. Then press the red buttons in each widget. Neither can call <code>write()</code>. But the Comlink widget's second button rewrites your note anyway, with code it sent across and ran inside this page, even though the page only exposed two harmless functions.</p>
         </div>
         <div>
           <h3>Then take the port back</h3>
-          <p><strong>Take back the Hawser widget's port</strong> aborts a signal. The widget's link closes, its loop over your edits ends, and it says so. There is no equivalent on the other side short of removing the frame.</p>
+          <p><strong>Take back the Hawser widget's port</strong> aborts a signal. The widget's link closes, its loop over your edits ends, and it says so. With Comlink the only way to do that is to remove the frame.</p>
         </div>
       </div>
       <div class="text">
@@ -158,14 +158,14 @@ accept(hostOrigin, async (port) =&gt; {
   for await (const text of note.changes()) count(text);
 });</pre>
         <div class="prose">
-          <p><strong>How it works.</strong> Comlink walks whatever path the caller sends. Every function has a <code>constructor</code>, which is <code>Function</code>, so <code>new api.read.constructor("code")</code> builds a function from the caller's text in the exposing page and hands back a proxy to it. Calling the proxy runs it. That is harmless when the other end is your own worker and a real hole when it is another origin.</p>
+          <p><strong>How it works.</strong> Comlink walks whatever path the caller sends. Every function has a <code>constructor</code>, which is <code>Function</code>, so <code>new api.read.constructor("code")</code> builds a function from the caller's text in the exposing page and hands back a proxy to it. Calling the proxy runs it. That doesn't matter when the other end is your own worker. It is a security hole when it is another origin.</p>
           <p>Here a path may only touch an object's own properties and its class's methods. <code>constructor</code>, <code>__proto__</code>, <code>call</code> and <code>bind</code> are refused before anything is read. <code>only</code> then narrows what is left, and <code>signal</code> ties the link's life to something the page controls. <code>offer()</code> and <code>accept()</code> will not send or take a port without an exact origin.</p>
         </div>
       </div>
     </section>
 
     <section class="pattern" id="journal" data-demo="journal">
-      <h2>A locked file that unlocks itself</h2>
+      <h2>Releasing a locked file when the link closes</h2>
       <div class="demo stack">
         <div class="card">
           <header><b>A journal kept in a real file</b><span class="status">File handles open in the worker: <b id="handles">0</b></span></header>
@@ -192,7 +192,7 @@ accept(hostOrigin, async (port) =&gt; {
         </div>
         <div>
           <h3>Then close the link</h3>
-          <p><strong>Close the link</strong> gets you out. Everything the link was holding in the worker is disposed of at once, so the lock goes. The same thing happens if this tab is closed, or if the forgotten handle is garbage collected, though that last one comes with no promise about when.</p>
+          <p><strong>Close the link</strong> fixes it. Everything the link was holding in the worker is disposed of, so the lock goes. The same happens if this tab is closed, or when the forgotten handle is garbage collected, although you can't know when that will be.</p>
         </div>
       </div>
       <div class="text">
@@ -211,16 +211,16 @@ const api = { open: async (name) =&gt; give(new Journal(await lock(name))) };
 } <span class="c">// Journal[Symbol.dispose]() has run in the worker</span></pre>
         <div class="prose">
           <p><strong>How it works.</strong> A class instance is passed by reference: the page gets a proxy and the worker keeps the object in a table with a count of how many times it has been sent. Disposing of the proxy, which is all <code>using</code> does at the end of a block, sends one small message. When the count reaches zero and the object was handed over with <code>give()</code>, its <code>Symbol.dispose</code> method is called.</p>
-          <p>Two safety nets sit under that. A <code>FinalizationRegistry</code> sends the same message when a proxy is collected. And when a link ends for any reason, both sides clear their tables, so nothing a vanished page was holding stays held. Functions, objects and iterators all share the one port. Comlink gives each its own <code>MessageChannel</code>, with nothing tying their lifetimes together.</p>
+          <p>There are two fallbacks. A <code>FinalizationRegistry</code> sends the same message when a proxy is collected. And when a link ends for any reason both sides clear their tables, so nothing stays held for a page that has gone. Functions, objects and iterators all share the one port. Comlink gives each its own <code>MessageChannel</code>, with nothing tying their lifetimes together.</p>
         </div>
       </div>
     </section>
 
     <section class="pattern" id="chain">
-      <h2>One more thing: use an answer before it arrives</h2>
+      <h2>Calling into a result before it arrives</h2>
       <div class="text">
         <div class="prose">
-          <p>With Comlink, each step that returns an object costs a full trip there and back, and a new port. Here a call returns something you can keep calling into straight away. Everything queued in the same tick is sent as one message and the far side runs the steps in order against the real values. Between a page and its worker the saving is small. Across a slow hop, such as a relay or a line to another device, it is one wait in place of three. This one has tests and no demo yet.</p>
+          <p>With Comlink, each step that returns an object costs a full trip there and back, and a new port. Here a call returns something you can keep calling into straight away. Everything queued in the same tick is sent as one message and the far side runs the steps in order against the real values. Between a page and its worker the saving is small. Across a slow hop, such as a relay or a connection to another device, it is one wait in place of three. This has tests but no demo yet.</p>
         </div>
         <pre><span class="c">// one message out, one port</span>
 const title = await api.open("ideas").latest().title();
@@ -236,7 +236,7 @@ const title = await note.title();</pre>
     <section class="pattern" style="border-top:0; padding-top:1.5rem">
       <h2>How Comlink works</h2>
       <div class="prose">
-        <p>Comlink is about 650 lines, and the idea fits in five steps.</p>
+        <p>Comlink is about 650 lines. It works like this.</p>
         <ol>
           <li><code>wrap(port)</code> returns a <code>Proxy</code> around an empty function. Reading a property does nothing but return another proxy that remembers the path so far.</li>
           <li>Calling it, awaiting it, assigning to it or using <code>new</code> posts one of six messages down the port: <code>GET</code>, <code>SET</code>, <code>APPLY</code>, <code>CONSTRUCT</code>, <code>ENDPOINT</code> or <code>RELEASE</code>, with the path and a random id.</li>
@@ -248,7 +248,7 @@ const title = await note.title();</pre>
   argumentList: [{ type: "RAW", value: 1 }, { type: "RAW", value: 2 }] });
 <span class="c">// and back</span>
 port.postMessage({ id: "4f1c…", type: "RAW", value: 3 });</pre>
-        <p>That design has aged well. What has changed is everything around it.</p>
+        <p>I think that design still holds up. The platform around it is what changed.</p>
       </div>
     </section>
 
@@ -276,11 +276,11 @@ port.postMessage({ id: "4f1c…", type: "RAW", value: 3 });</pre>
     </section>
 
     <section class="pattern">
-      <h2>What is still out of reach</h2>
+      <h2>What it still can't do</h2>
       <ul class="stack" style="max-width:62ch; padding-left:1.1rem">
         <li>The result of a call is not a real <code>Promise</code>. It can be awaited, passed to <code>Promise.all</code> and given <code>.then</code>, but <code>instanceof Promise</code> is false, because it also has to be something you can keep calling into.</li>
         <li>A chain only shares a message if it is written in one tick. Hold a result, wait, then call into it and it still works, by waiting for the answer first.</li>
-        <li>Garbage collection is a hint and not a promise. Anything that must be released on time should be disposed of on purpose.</li>
+        <li>Garbage collection can happen at any time or never. Dispose of anything that has to be released on time yourself.</li>
         <li>The heartbeat is a timer, and browsers slow timers in background tabs. It counts missed beats and not milliseconds, so a slow tab is not mistaken for a dead peer, but it will take longer to notice one.</li>
         <li>Everything is asynchronous. A worker that never yields cannot answer a ping or hear an abort, so long jobs have to be cut into pieces, as the fractal is. A blocking call needs shared memory and a cross-origin isolated page, which is what <a href="/isolated/">the isolated room</a> is for.</li>
         <li>Only tested in Chromium so far, plus the same suite in Node, where <code>MessageChannel</code> behaves the same way.</li>
@@ -288,7 +288,7 @@ port.postMessage({ id: "4f1c…", type: "RAW", value: 3 });</pre>
     </section>
 
     <section class="pattern">
-      <h2>The whole surface</h2>
+      <h2>The whole API</h2>
       <div class="text">
         <pre>import { expose, wrap, connect, port, closed,
          share, give, transfer, offer, accept } from "/hawser.js";
@@ -303,11 +303,11 @@ give(object)                <span class="c">// by reference, and theirs to dispo
 transfer(buffer)            <span class="c">// move, do not copy</span>
 offer(window, origin)       <span class="c">// give a window a port, origin required</span>
 accept(origins, callback)   <span class="c">// take ports only from these origins</span></pre>
-        <p>Source: <a href="/hawser.js">hawser.js</a> and its types, <a href="/hawser.d.ts">hawser.d.ts</a>. The behaviour above is pinned down by 31 unit tests and a browser run of this page, both in the <a href="https://github.com/PaulKinlan/port-authority">repository</a>. <a href="https://github.com/GoogleChromeLabs/comlink">Comlink</a> is by Surma and the Chrome Labs team, and is used here under its <a href="https://github.com/GoogleChromeLabs/comlink/blob/main/LICENSE">Apache 2.0 licence</a>.</p>
+        <p>Source: <a href="/hawser.js">hawser.js</a> and its types, <a href="/hawser.d.ts">hawser.d.ts</a>. The behaviour above is covered by 31 unit tests and a browser run of this page, both in the <a href="https://github.com/PaulKinlan/port-authority">repository</a>. <a href="https://github.com/GoogleChromeLabs/comlink">Comlink</a> is by Surma and the Chrome Labs team, and is used here under its <a href="https://github.com/GoogleChromeLabs/comlink/blob/main/LICENSE">Apache 2.0 licence</a>.</p>
       </div>
     </section>
 
-    <footer class="small muted" style="padding-block:2rem 4rem">A working name and a work in progress.</footer>
+    <footer class="small muted" style="padding-block:2rem 4rem">Port Authority is a working name. By <a href="https://paul.kinlan.me">Paul Kinlan</a>.</footer>
   </div>
   <script type="module">
     import { mountAll } from "/comlink/demos.js";
