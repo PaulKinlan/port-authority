@@ -345,6 +345,13 @@
      "by": "Chrome for Developers",
      "y": "2024",
      "n": "What happens to an extension's open port when its page goes into the back/forward cache."
+    },
+    {
+     "t": "Shared MessagePort for AudioWorklet",
+     "u": "https://chrome-platform-showcase.com/v160/shared-messageport-for-audioworklet/",
+     "by": "Chrome Platform Showcase",
+     "y": "2026",
+     "n": "A scope-level MessagePort on AudioWorklet and AudioWorkletGlobalScope so you can message the audio thread without creating a dummy AudioWorkletNode. Still early (landing in Chrome 160)."
     }
    ]
   },

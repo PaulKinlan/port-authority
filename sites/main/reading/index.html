@@ -4,10 +4,10 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Further reading on message ports | Port Authority</title>
-  <meta name="description" content="185 links on MessageChannel, MessagePort, postMessage, transferable objects and SharedWorker: reference pages, specifications, articles, libraries, talks and research papers, each with a one-line note.">
+  <meta name="description" content="186 links on MessageChannel, MessagePort, postMessage, transferable objects and SharedWorker: reference pages, specifications, articles, libraries, talks and research papers, each with a one-line note.">
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <meta property="og:title" content="Further reading on message ports | Port Authority">
-  <meta property="og:description" content="185 links on MessageChannel, MessagePort, postMessage, transferable objects and SharedWorker: reference pages, specifications, articles, libraries, talks and research papers, each with a one-line note.">
+  <meta property="og:description" content="186 links on MessageChannel, MessagePort, postMessage, transferable objects and SharedWorker: reference pages, specifications, articles, libraries, talks and research papers, each with a one-line note.">
   <meta property="og:type" content="website">
   <meta name="twitter:card" content="summary">
   <link rel="stylesheet" href="/base.css">
@@ -41,14 +41,14 @@
     <main id="main">
       <div class="stack" style="padding-block:1.5rem 0; --gap:1.1rem">
         <h1 style="font-size:var(--step-3)">Further reading on message ports</h1>
-        <p>This site builds on a lot of other people's work. Here are 185 places to read more about <code>MessageChannel</code>, <code>MessagePort</code>, <code>postMessage</code>, transferable objects and <code>SharedWorker</code>: the reference pages, the specifications, articles, libraries, talks and research papers. Each link has one line on what it covers.</p>
+        <p>This site builds on a lot of other people's work. Here are 186 places to read more about <code>MessageChannel</code>, <code>MessagePort</code>, <code>postMessage</code>, transferable objects and <code>SharedWorker</code>: the reference pages, the specifications, articles, libraries, talks and research papers. Each link has one line on what it covers.</p>
         <p>Not much has been written about message ports on their own. Most of the writing and nearly all of the research is about <code>window.postMessage</code> and workers, so those are here too.</p>
         <p class="small muted">The links were last checked on 2026-11-21. If one is broken, or something good is missing, please <a href="https://github.com/PaulKinlan/port-authority/issues">open an issue</a>.</p>
         <nav class="toc-nav" aria-label="Table of contents">
           <ul class="toc">
             <li><a href="#reference">Reference pages</a> <span class="muted small">24</span></li>
             <li><a href="#specs">Specifications</a> <span class="muted small">13</span></li>
-            <li><a href="#history">How the standards changed</a> <span class="muted small">15</span></li>
+            <li><a href="#history">How the standards changed</a> <span class="muted small">16</span></li>
             <li><a href="#browser-teams">Guides from browser teams</a> <span class="muted small">11</span></li>
             <li><a href="#performance">Performance and timing</a> <span class="muted small">7</span></li>
             <li><a href="#posts">Posts about ports, frames and shared workers</a> <span class="muted small">13</span></li>
@@ -65,7 +65,7 @@
           </ul>
         </nav>
         <div class="filter-bar">
-          <label for="reading-filter">Filter all 185 links</label>
+          <label for="reading-filter">Filter all 186 links</label>
           <input id="reading-filter" type="search" placeholder="Search by title, author, topic, or acronym (e.g. Comlink, SharedWorker, RPC)…" autocomplete="off">
           <p class="small muted" id="filter-status" role="status" aria-live="polite"></p>
         </div>
@@ -347,6 +347,11 @@
             <a href="https://developer.chrome.com/blog/bfcache-extension-messaging-changes">Changes to BFCache behavior with extension message ports</a>
             <span class="src">Chrome for Developers, 2024</span>
             <span class="note">What happens to an extension's open port when its page goes into the back/forward cache.</span>
+          </li>
+          <li>
+            <a href="https://chrome-platform-showcase.com/v160/shared-messageport-for-audioworklet/">Shared MessagePort for AudioWorklet</a>
+            <span class="src">Chrome Platform Showcase, 2026</span>
+            <span class="note">A scope-level MessagePort on AudioWorklet and AudioWorkletGlobalScope so you can message the audio thread without creating a dummy AudioWorkletNode. Still early (landing in Chrome 160).</span>
           </li>
         </ul>
         <p class="small top-link"><a href="#top">&uarr; Back to top</a></p>
