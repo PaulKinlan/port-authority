@@ -13,11 +13,13 @@
     "html_handling": "none",
     "not_found_handling": "none"
   },
-  // To give the router a domain of its own, attach the domain to this Worker as
-  // a custom domain on Cloudflare, then add "ROUTER_HOST": "<the domain>" to
-  // "vars" here, in ../wrangler.jsonc and in the other files in this folder.
-  // Every Worker needs it, because each one tells its pages where the router is.
-  "vars": { "MAIN_HOST": "port-authority.dev", "DEMO_SUFFIX": ".kinlan-test.workers.dev" },
+  // llmchannel.dev is attached to this Worker as a custom domain on Cloudflare,
+  // and ROUTER_HOST tells the script that requests for it are for the router.
+  // The same ROUTER_HOST is in ../wrangler.jsonc and the other files in this
+  // folder, because each Worker tells its pages where the router is. The old
+  // workers.dev address still answers as the router, so that keys someone
+  // saved there can still be removed.
+  "vars": { "MAIN_HOST": "port-authority.dev", "ROUTER_HOST": "llmchannel.dev", "DEMO_SUFFIX": ".kinlan-test.workers.dev" },
   "durable_objects": { "bindings": [{ "name": "ROUTER", "class_name": "Router" }] },
   "migrations": [{ "tag": "r1", "new_sqlite_classes": ["Router"] }]
 }

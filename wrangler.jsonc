@@ -24,8 +24,10 @@
     "html_handling": "none",
     "not_found_handling": "none"
   },
-  // The main site has its own domain and the demo sites stay on workers.dev.
-  "vars": { "MAIN_HOST": "port-authority.dev", "DEMO_SUFFIX": ".kinlan-test.workers.dev" },
+  // The main site and the AI router each have a domain of their own. The demo
+  // sites stay on workers.dev. Every Worker has the same three settings,
+  // because each one tells its pages where the other sites are.
+  "vars": { "MAIN_HOST": "port-authority.dev", "ROUTER_HOST": "llmchannel.dev", "DEMO_SUFFIX": ".kinlan-test.workers.dev" },
   // ROUTER is here for local development. In production only pa-router answers
   // /r/, with its own Router class (deploy/router.jsonc).
   "durable_objects": { "bindings": [{ "name": "HUB", "class_name": "Hub" }, { "name": "LAB", "class_name": "Lab" }, { "name": "MEET", "class_name": "Meet" }, { "name": "ROUTER", "class_name": "Router" }] },

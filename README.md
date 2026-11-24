@@ -118,7 +118,7 @@ repository and runs one deploy per Worker on every push to `main`:
 | `pa-florist` | https://pa-florist.kinlan-test.workers.dev | `npx wrangler deploy -c deploy/florist.jsonc` |
 | `pa-library` | https://pa-library.kinlan-test.workers.dev | `npx wrangler deploy -c deploy/library.jsonc` |
 | `pa-planner` | https://pa-planner.kinlan-test.workers.dev | `npx wrangler deploy -c deploy/planner.jsonc` |
-| `pa-router` | https://pa-router.kinlan-test.workers.dev | `npx wrangler deploy -c deploy/router.jsonc` |
+| `pa-router` | https://llmchannel.dev (and still https://pa-router.kinlan-test.workers.dev) | `npx wrangler deploy -c deploy/router.jsonc` |
 
 All five run `src/worker.js` and carry the whole `sites/` folder as static
 assets; the script picks the folder by hostname. The three demo sites use the

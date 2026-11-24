@@ -1,6 +1,6 @@
 // AI router, the part a site loads.
 //
-//   import { connect } from "https://pa-router.kinlan-test.workers.dev/router.js";
+//   import { connect } from "https://llmchannel.dev/router.js";
 //   const ai = await connect();
 //   if (!ai.ready) await ai.choose();          // call this from a click
 //   for await (const piece of ai.prompt("Write a haiku about ports")) show(piece);

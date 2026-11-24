@@ -14,7 +14,7 @@
     "html_handling": "none",
     "not_found_handling": "none"
   },
-  "vars": { "MAIN_HOST": "port-authority.dev", "DEMO_SUFFIX": ".kinlan-test.workers.dev" },
+  "vars": { "MAIN_HOST": "port-authority.dev", "ROUTER_HOST": "llmchannel.dev", "DEMO_SUFFIX": ".kinlan-test.workers.dev" },
   "durable_objects": { "bindings": [
     { "name": "HUB", "class_name": "Hub", "script_name": "portauthority" },
     { "name": "LAB", "class_name": "Lab", "script_name": "portauthority" },
