@@ -2,7 +2,7 @@
 //   node --test test/worker.unit.mjs
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { Hub, Router } from "../src/worker.js";
+import worker, { Hub, Router } from "../src/worker.js";
 
 function memoryStorage() {
   const map = new Map();
@@ -160,4 +160,40 @@ test("Hub binds non-permission agent requests to their grant and handles malform
   // Clearing this.leaving on socket close.
   await hub.webSocketClose(siteA);
   assert.equal(hub.leaving, null);
+});
+
+// The AI router's own domain. /_sites.js is what tells every page which site
+// it is on and where the others live, so it is asked here as a browser would.
+const hosts = async (address, vars = {}) => {
+  const env = { MAIN_HOST: "port-authority.dev", DEMO_SUFFIX: ".kinlan-test.workers.dev", ...vars };
+  const source = await (await worker.fetch(new Request(address + "/_sites.js"), env)).text();
+  return { site: JSON.parse(source.match(/export const site = (.*);/)[1]), sites: JSON.parse(source.match(/export const sites = (.*);/)[1]) };
+};
+
+test("without ROUTER_HOST the router stays at its workers.dev address", async () => {
+  const router = await hosts("https://pa-router.kinlan-test.workers.dev");
+  assert.equal(router.site, "router");
+  assert.equal(router.sites.router, "https://pa-router.kinlan-test.workers.dev");
+  assert.equal(router.sites.main, "https://port-authority.dev");
+});
+
+test("with ROUTER_HOST the router's domain is the router, and every site is told so", async () => {
+  const vars = { ROUTER_HOST: "llmchannel.dev" };
+  const router = await hosts("https://llmchannel.dev", vars);
+  assert.equal(router.site, "router");
+  assert.equal(router.sites.router, "https://llmchannel.dev");
+
+  const main = await hosts("https://port-authority.dev", vars);
+  assert.equal(main.site, "main");
+  assert.equal(main.sites.router, "https://llmchannel.dev");
+  assert.equal(main.sites.florist, "https://pa-florist.kinlan-test.workers.dev");
+
+  // The old address still answers as the router, so keys saved there can be removed.
+  const old = await hosts("https://pa-router.kinlan-test.workers.dev", vars);
+  assert.equal(old.site, "router");
+  assert.equal(old.sites.router, "https://llmchannel.dev");
+});
+
+test("a domain nobody named is the main site, which is why ROUTER_HOST is needed", async () => {
+  assert.equal((await hosts("https://llmchannel.dev")).site, "main");
 });

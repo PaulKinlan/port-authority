@@ -13,6 +13,10 @@
     "html_handling": "none",
     "not_found_handling": "none"
   },
+  // To give the router a domain of its own, attach the domain to this Worker as
+  // a custom domain on Cloudflare, then add "ROUTER_HOST": "<the domain>" to
+  // "vars" here, in ../wrangler.jsonc and in the other files in this folder.
+  // Every Worker needs it, because each one tells its pages where the router is.
   "vars": { "MAIN_HOST": "port-authority.dev", "DEMO_SUFFIX": ".kinlan-test.workers.dev" },
   "durable_objects": { "bindings": [{ "name": "ROUTER", "class_name": "Router" }] },
   "migrations": [{ "tag": "r1", "new_sqlite_classes": ["Router"] }]

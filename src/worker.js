@@ -31,7 +31,12 @@ const ROUTER_CSP = [
 ].join("; ");
 
 function label(host) { return host.split(":")[0].split(".")[0]; }
-function siteFor(host) { return LABELS[label(host)] || "main"; }
+// The AI router can have a domain of its own (ROUTER_HOST). Its name says
+// nothing about which site it is, so it is matched whole.
+function siteFor(host, env = {}) {
+  if (env.ROUTER_HOST && host.split(":")[0] === env.ROUTER_HOST) return "router";
+  return LABELS[label(host)] || "main";
+}
 
 // Where each site lives. Locally and on plain workers.dev the names follow the
 // host that was asked. When the main site has a domain of its own (MAIN_HOST),
@@ -43,6 +48,7 @@ function siteOrigins(url, env) {
   const out = {};
   if (!local && env.MAIN_HOST && env.DEMO_SUFFIX) {
     for (const [site, name] of Object.entries(PROD)) out[site] = site === "main" ? "https://" + env.MAIN_HOST : "https://" + name + env.DEMO_SUFFIX;
+    if (env.ROUTER_HOST) out.router = "https://" + env.ROUTER_HOST;
     return out;
   }
   const rest = host.includes(".") ? host.slice(first.length) : "." + host; // ".kinlan-test.workers.dev"
@@ -104,7 +110,7 @@ async function serve(env, site, pathname) {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
-    const site = siteFor(url.host);
+    const site = siteFor(url.host, env);
 
     // The main site has one address. Its old workers.dev address sends people on,
     // so that the demo sites and the hub all agree on which origin is the hub.
