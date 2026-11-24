@@ -5,7 +5,7 @@ import { oneWay } from "/oneway.js";
 import { qrSvg } from "/qr.js";
 
 const logBox = (stage, name, title, extra = "", keep = 5) => {
-  const box = stage.box(name, { html: `<div class="here"><h4>${title}</h4>${extra}<ul class="log"></ul></div>` });
+  const box = stage.box(name, { html: `<div class="here"><div class="box-title">${title}</div>${extra}<ul class="log" role="log" aria-live="polite"></ul></div>` });
   const ul = box.node.querySelector("ul");
   const say = (text) => { const li = document.createElement("li"); li.textContent = text; ul.prepend(li); while (ul.children.length > keep) ul.lastChild.remove(); };
   return { say, node: box.node, box };
@@ -16,11 +16,17 @@ const NETLESS = "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsa
 // QR code in it, a button that opens the line, and a stand-in for when there
 // is no second device to hand. Returns the buttons and a way to hang up.
 export function openLine(stage, ui, { makeMe, openLabel = "Open a line to your phone", standLabel = "Use a stand-in for the phone", onPort, onGone = () => {} }) {
-  const farBox = stage.box("far", { html: `<div class="here"><h4>Your phone</h4><p class="small muted">Not connected yet.</p></div>` });
+  const farBox = stage.box("far", { html: `<div class="here"><div class="box-title">Your phone</div><p class="small muted">Not connected yet.</p></div>` });
   // The other device's box comes first, so the page sits in the middle of the row.
   const me = makeMe();
-  if (!("RTCPeerConnection" in self)) { me.say("no WebRTC in this browser"); return null; }
+  if (!("RTCPeerConnection" in self)) {
+    me.say("no WebRTC in this browser");
+    ui.unsupported("This browser does not support WebRTC (RTCPeerConnection).");
+    return null;
+  }
   const state = { line: null, code: null, standIn: false, me };
+  let watch = null;
+  stage.cleanup(() => { clearInterval(watch); state.line?.close(); });
   const stand = ui.button(standLabel, (btn) => {
     btn.disabled = true; state.standIn = true;
     farBox.node.innerHTML = `<iframe title="A stand-in for your phone" src="/far/?embed=1#${state.code}"></iframe>`;
@@ -31,7 +37,7 @@ export function openLine(stage, ui, { makeMe, openLabel = "Open a line to your p
     btn.disabled = true;
     state.code = [...crypto.getRandomValues(new Uint8Array(6))].map((b) => "abcdefghjkmnpqrstuvwxyz23456789"[b % 31]).join("");
     const url = `${location.origin}/far/#${state.code}`;
-    farBox.node.innerHTML = `<div class="here" style="display:flex;gap:.6rem;align-items:flex-start"><a href="${url}" target="_blank" data-qr style="flex:none;width:6.6rem;line-height:0;border-radius:6px;overflow:hidden">${qrSvg(url, { label: "QR code for " + url })}</a><div><h4>Your phone</h4><p class="small" style="margin:0">Scan this, or open <a href="${url}" target="_blank">${location.host}/far/#${state.code}</a></p></div></div>`;
+    farBox.node.innerHTML = `<div class="here" style="display:flex;gap:.6rem;align-items:flex-start"><a href="${url}" target="_blank" rel="noopener" data-qr style="flex:none;width:6.6rem;line-height:0;border-radius:6px;overflow:hidden">${qrSvg(url, { label: "QR code for " + url })}</a><div><div class="box-title">Your phone</div><p class="small" style="margin:0">Scan this, or open <a href="${url}" target="_blank" rel="noopener">${location.host}/far/#${state.code}</a></p></div></div>`;
     stand.disabled = false;
     me.say("waiting at a meeting place for the other device");
     state.line = far({
@@ -43,7 +49,7 @@ export function openLine(stage, ui, { makeMe, openLabel = "Open a line to your p
         if (s === "gone") { delete farBox.node.dataset.link; me.say("the connection closed"); stage.cut("air"); hang.disabled = true; onGone(); }
       },
       onPort(port) {
-        if (!state.standIn) { farBox.node.dataset.link = "up"; farBox.node.innerHTML = `<div class="here"><h4>Your phone</h4><p class="small">Connected. It is a real device, so its screen is not shown here.</p></div>`; }
+        if (!state.standIn) { farBox.node.dataset.link = "up"; farBox.node.innerHTML = `<div class="here"><div class="box-title">Your phone</div><p class="small">Connected. It is a real device, so its screen is not shown here.</p></div>`; }
         stage.cable("air", "far", "page", "teal");
         stand.disabled = true; hang.disabled = false;
         state.line.route().then((route) => me.say(`connected directly${route ? ", " + route : ""}. The server is out of it.`));
@@ -51,7 +57,7 @@ export function openLine(stage, ui, { makeMe, openLabel = "Open a line to your p
       },
     });
     // Leaving the page or starting again hangs up.
-    const watch = setInterval(() => { if (!me.node.isConnected) { clearInterval(watch); state.line?.close(); } }, 1000);
+    watch = setInterval(() => { if (!me.node.isConnected) { clearInterval(watch); state.line?.close(); } }, 1000);
   }, false, true);
   return state;
 }
@@ -88,8 +94,12 @@ for await (const chunk of body) show(chunk);`,
           port.onmessage = ({ data }) => {
             if (!data.file) return;
             me.say(`${data.file.name}, ${size(data.file.size)}, is arriving as a ${data.body.constructor.name}. Passed it to the viewer unread.`);
-            stage.post("viewer", { cmd: "show", file: data.file, body: data.body }, [data.body]);
-            stage.cable("view", "page", "viewer", "yellow");
+            try {
+              stage.post("viewer", { cmd: "show", file: data.file, body: data.body }, [data.body]);
+              stage.cable("view", "page", "viewer", "yellow");
+            } catch {
+              me.say("This browser cannot transfer streams to the viewer frame.");
+            }
           };
           sample.disabled = !line.standIn;
         },
@@ -259,11 +269,11 @@ fetch(somewhere, { body: figures });      <span class="c">// blocked: default-sr
       ["Widget: try to send the figures out", "The widget posts the figures back into its port and tries a network request. Neither arrives anywhere."],
     ] },
     async setup(stage, ui) {
-      const box = stage.box("page", { html: `<div class="here"><h4>This page has the figures</h4>
+      const box = stage.box("page", { html: `<div class="here"><div class="box-title">This page has the figures</div>
         <p class="small" style="margin:0 0 .25rem">Sent to the widget: <strong data-passed>0</strong></p>
         <p class="small" style="margin:0 0 .25rem">Stopped, coming back: <strong data-dropped>0</strong></p>
         <p class="small" style="margin:0 0 .4rem">Heard from the widget on my port: <strong data-heard>0</strong></p>
-        <ul class="log"></ul></div>` });
+        <ul class="log" role="log" aria-live="polite"></ul></div>` });
       const ul = box.node.querySelector("ul");
       const say = (text) => { const li = document.createElement("li"); li.textContent = text; ul.prepend(li); while (ul.children.length > 3) ul.lastChild.remove(); };
       await stage.frame("widget", {
@@ -339,12 +349,12 @@ for (const bit of bits) { await wait(bit ? 360 : 120); await reader.read(); }`,
       ["Frame: try the same on the port", "The frame takes its messages on the same rhythm as before. This page sends on its own clock and sees no difference.", 5000],
     ] },
     async setup(stage, ui) {
-      const box = stage.box("page", { html: `<div class="here"><h4>This page writes the ticks</h4>
+      const box = stage.box("page", { html: `<div class="here"><div class="box-title">This page writes the ticks</div>
         <p class="small" style="margin:0 0 .25rem">Bits read from the frame's timing:</p>
         <p class="small" data-bits style="margin:0 0 .25rem;font-family:var(--mono);min-height:2.6em;overflow-wrap:anywhere">none</p>
         <p class="small" style="margin:0 0 .25rem">As text: <strong data-word>nothing</strong></p>
         <p class="small" style="margin:0 0 .4rem">Read from the one-way port: <strong data-port>not tried yet</strong></p>
-        <ul class="log"></ul></div>` });
+        <ul class="log" role="log" aria-live="polite"></ul></div>` });
       const ul = box.node.querySelector("ul");
       const say = (text) => { const li = document.createElement("li"); li.textContent = text; ul.prepend(li); while (ul.children.length > 2) ul.lastChild.remove(); };
       const bitsEl = box.node.querySelector("[data-bits]"), wordEl = box.node.querySelector("[data-word]"), portEl = box.node.querySelector("[data-port]");
@@ -387,6 +397,7 @@ for (const bit of bits) { await wait(bit ? 360 : 120); await reader.read(); }`,
         },
       });
       let last = 0, bits = null, pulls = 0, ticker = null, link = null;
+      stage.cleanup(() => { clearInterval(ticker); link?.cut(); });
       const decode = () => {
         const text = bits.match(/.{8}/g)?.map((byte) => String.fromCharCode(parseInt(byte, 2))).join("") || "";
         bitsEl.textContent = bits.replace(/(.{8})/g, "$1 ") || "none";
@@ -406,10 +417,14 @@ for (const bit of bits) { await wait(bit ? 360 : 120); await reader.read(); }`,
           },
         }, { highWaterMark: 0 });
         last = performance.now();
-        stage.post("reader", { cmd: "stream", readable }, [readable]);
-        stage.cable("ticks", "page", "reader", "red");
-        say("gave away the readable side only");
-        spell.disabled = false;
+        try {
+          stage.post("reader", { cmd: "stream", readable }, [readable]);
+          stage.cable("ticks", "page", "reader", "red");
+          say("gave away the readable side only");
+          spell.disabled = false;
+        } catch {
+          say("This browser cannot transfer streams yet.");
+        }
       }, false, true);
       const attempt = ui.button("Frame: try the same on the port", (btn) => { btn.disabled = true; stage.post("reader", { cmd: "try" }); }, true);
       const givePort = ui.button("Give the frame a one-way port", (btn) => {

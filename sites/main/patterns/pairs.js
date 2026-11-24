@@ -18,10 +18,10 @@ function pageBox(stage, box, site, title, extra = "") {
 // A box for a site's service worker. A worker has no window, so this page
 // draws the box from what the worker tells its own page.
 function workerBox(stage, box, site) {
-  const b = stage.box(box, { kind: "service", url: `${sites[site]}/pair-sw.js`, scope: "/pair/", html: `<div class="here"><h4>${TITLE[site]}'s service worker</h4>
+  const b = stage.box(box, { kind: "service", url: `${sites[site]}/pair-sw.js`, scope: "/pair/", html: `<div class="here"><div class="box-title">${TITLE[site]}'s Service Worker</div>
     <p class="small" style="margin:0 0 .25rem">Run <strong data-run>not started</strong>, started <strong data-born>-</strong></p>
     <p class="small" style="margin:0 0 .4rem">Port to the other worker: <strong data-peer>none</strong></p>
-    <ul class="log"></ul></div>` });
+    <ul class="log" role="log" aria-live="polite"></ul></div>` });
   const ul = b.node.querySelector("ul");
   b.say = (text) => { const li = document.createElement("li"); li.textContent = text; ul.prepend(li); while (ul.children.length > 4) ul.lastChild.remove(); };
   b.show = (state) => {
@@ -35,18 +35,22 @@ function workerBox(stage, box, site) {
 // Put the boxes on the stage and keep the drawing true to what the workers
 // report. `pages` is a list of [box, site, title]. Returns null where there is
 // no service worker.
-function pairStage(stage, pages, { planner = false } = {}) {
+function pairStage(stage, pages, { planner = false, ui = null } = {}) {
   // The pages go in a row, with the two workers in a row underneath, so that
   // the cable between the workers does not cross a page.
   const boxes = {};
   for (const [box, site, title] of pages.filter(([, site]) => site === "florist")) boxes[box] = pageBox(stage, box, site, title);
-  if (planner) boxes.m = stage.box("m", { src: `${sites.planner}/pair/?role=intro&title=${encodeURIComponent("Planner, a third site")}&color=%23f5b700` });
+  if (planner) boxes.m = stage.box("m", { src: `${sites.planner}/pair/?role=intro&title=${encodeURIComponent("Planner, a third site")}&color=%23f5b700`, title: "Planner, a third site" });
   for (const [box, site, title] of pages.filter(([, site]) => site === "library")) boxes[box] = pageBox(stage, box, site, title);
   const workers = { florist: workerBox(stage, "swa", "florist"), library: workerBox(stage, "swb", "library") };
   const count = Object.keys(boxes).length;
   for (const b of Object.values(boxes)) b.wrap.style.flexBasis = `max(11.5rem, ${count > 2 ? 24 : 34}%)`;
   for (const w of Object.values(workers)) w.wrap.style.flexBasis = "max(11.5rem, 34%)";
-  if (!("serviceWorker" in navigator)) { workers.florist.say("this browser has no service worker"); return null; }
+  if (!("serviceWorker" in navigator)) {
+    workers.florist.say("this browser has no Service Worker");
+    ui?.unsupported("This browser does not support Service Workers.");
+    return null;
+  }
   const siteOf = Object.fromEntries(pages.map(([box, site]) => [box, site]));
   const seen = { florist: "", library: "" }, state = {};
   let drawn = "";
@@ -121,7 +125,7 @@ export const swpair = {
     ["Florist's worker: ask about Dune", "The florist's worker sends a new port out and nothing answers on it. Without a page on each side, the workers cannot be joined again.", 5000],
   ] },
   async setup(stage, ui) {
-    const s = pairStage(stage, [["a", "florist", "Florist's page"], ["b", "library", "Library's page"]]);
+    const s = pairStage(stage, [["a", "florist", "Florist's page"], ["b", "library", "Library's page"]], { ui });
     if (!s) return;
     await s.ready;
     const later = [];
@@ -140,13 +144,17 @@ export const swpair = {
   },
 };
 
-// The line between the pages and the join, in one press, for the demos that
-// start from two workers that are already joined.
+// Two atomic steps: first give the two pages a line, then carry a port between the workers.
 function joinButton(stage, ui, s, unlock) {
-  ui.button("Join the two workers", (btn) => {
-    btn.disabled = true; s.trunk("a", "b");
+  const joinBtn = ui.button("Join the two workers", (btn) => {
+    btn.disabled = true;
     stage.post("a", { cmd: "join" });
     for (const b of unlock) b.disabled = false;
+  }, true);
+  ui.button("Give the two pages a line to each other", (btn) => {
+    btn.disabled = true;
+    s.trunk("a", "b");
+    joinBtn.disabled = false;
   }, false, true);
 }
 
@@ -168,7 +176,8 @@ peer.onmessage = (event) => {
 <span class="c">// florist's tab: ask the library's worker directly</span>
 line.postMessage({ ask: "Dune" }, [reply.port2]);`,
     tour: { steps: [
-      ["Join the two workers", "The pages carry a port across, as in the demo at the top of the page.", 3200],
+      ["Give the two pages a line to each other", "The florist's page and the library's page get a direct channel between them."],
+      ["Join the two workers", "The florist's Service Worker makes a channel, and the pages carry one port across to the library's Service Worker.", 3200],
       ["Tab one: get a line of its own", "The florist's worker makes a channel, gives tab one a port, and sends the other port to the library's worker over the port that joins them.", 2600],
       ["Tab two: get a line of its own", "A second channel, for the second tab.", 2600],
       ["Tab one: ask about Dune on its line", "Tab one posts to the library's worker. The florist's worker is not involved.", 2400],
@@ -179,7 +188,7 @@ line.postMessage({ ask: "Dune" }, [reply.port2]);`,
       ["Tab one: get a line of its own", "The florist's worker has no port either, so the pages carry a new one across first. Then tab one gets a new line.", 5000],
     ] },
     async setup(stage, ui) {
-      const s = pairStage(stage, [["a", "florist", "Florist, tab one"], ["a2", "florist", "Florist, tab two"], ["b", "library", "Library's page"]]);
+      const s = pairStage(stage, [["a", "florist", "Florist, tab one"], ["a2", "florist", "Florist, tab two"], ["b", "library", "Library's page"]], { ui });
       if (!s) return;
       await s.ready;
       const buttons = [
@@ -209,14 +218,15 @@ peer.onmessage = async (event) => {
   event.ports[0].postMessage({ status: 200, headers, body }, [body]);
 };`,
     tour: { steps: [
-      ["Join the two workers", "The pages carry a port across, as in the demo at the top of the page.", 3200],
+      ["Give the two pages a line to each other", "The florist's page and the library's page get a direct channel between them."],
+      ["Join the two workers", "The florist's Service Worker makes a channel, and the pages carry one port across to the library's Service Worker.", 3200],
       ["Florist's page: fetch the library's shelf", "The page fetches an address on its own site. Its worker asks the library's worker, which answers with a stream and writes four lines into it.", 4200],
       ["Make the library's worker forget", "The library's worker closes its port, as a stop would."],
       ["Florist's page: fetch the library's shelf", "The first try gets no answer. A new port is carried across, and the same fetch is answered.", 6500],
       ["Florist's page: fetch a file the library does not have", "The library's worker answers 404, and that is the status the page sees.", 2600],
     ] },
     async setup(stage, ui) {
-      const s = pairStage(stage, [["a", "florist", "Florist's page"], ["b", "library", "Library's page"]]);
+      const s = pairStage(stage, [["a", "florist", "Florist's page"], ["b", "library", "Library's page"]], { ui });
       if (!s) return;
       await s.ready;
       const buttons = [
@@ -250,7 +260,7 @@ addEventListener("message", (event) => {
       ["Florist's worker: ask about Dune", "No answer comes. The florist's worker looks for a page that can carry a new port. There is none, because the planner is gone.", 4500],
     ] },
     async setup(stage, ui) {
-      const s = pairStage(stage, [["a", "florist", "Florist's page"], ["b", "library", "Library's page"]], { planner: true });
+      const s = pairStage(stage, [["a", "florist", "Florist's page"], ["b", "library", "Library's page"]], { planner: true, ui });
       if (!s) return;
       await Promise.all([s.ready, s.boxes.m.whenReady]);
       // The planner posts to the frames beside it. It is told which they are.
@@ -279,9 +289,9 @@ function sharedStage(stage) {
   };
   const tabs = { ft1: tab("ft1", "florist", "florist tab one"), ft2: tab("ft2", "florist", "florist tab two"), lt1: tab("lt1", "library", "library tab one"), lt2: tab("lt2", "library", "library tab two") };
   const worker = (box, site) => {
-    const b = stage.box(box, { kind: "shared", url: `${sites[site]}/pair-shared.js`, html: `<div class="here"><h4>${TITLE[site]}'s shared worker</h4>
+    const b = stage.box(box, { kind: "shared", url: `${sites[site]}/pair-shared.js`, html: `<div class="here"><div class="box-title">${TITLE[site]}'s SharedWorker</div>
       <p class="small" style="margin:0 0 .25rem">Tabs: <strong data-tabs>none</strong></p>
-      <p class="small" style="margin:0 0 .4rem">Port to the other worker: <strong data-peer>none</strong></p><ul class="log"></ul></div>` });
+      <p class="small" style="margin:0 0 .4rem">Port to the other worker: <strong data-peer>none</strong></p><ul class="log" role="log" aria-live="polite"></ul></div>` });
     b.wrap.style.flexBasis = "max(11.5rem, 34%)";
     const ul = b.node.querySelector("ul");
     b.say = (text) => { const li = document.createElement("li"); li.textContent = text; ul.prepend(li); while (ul.children.length > 3) ul.lastChild.remove(); };
@@ -382,15 +392,20 @@ link.onmessage = ({ data }) => everyTab(data.note);
 const { port } = new SharedWorker("/pair-shared.js");
 addEventListener("pagehide", () => port.postMessage({ bye: name }));`,
     tour: { steps: [
-      ["Join the two shared workers", "Tab one of each site is given a line to the other. The florist's worker makes a channel and tab one carries a port across to the library's worker.", 3000],
+      ["Give tab one of each site a line", "Florist tab one and library tab one get a direct channel between them."],
+      ["Join the two SharedWorkers", "The florist's SharedWorker makes a channel and tab one carries a port across to the library's SharedWorker.", 3000],
       ["Florist tab two: post a note", "Florist tab two did not take part in the join. Its note reaches both florist tabs and both library tabs.", 2600],
       ["Close tab one of each site", "The two tabs that carried the port are destroyed. Each says goodbye to its worker as it goes."],
       ["Library tab two: post a note", "The link is still there. The note reaches florist tab two.", 2600],
-      ["Close library tab two", "That was the library's last tab, so the browser ends the library's shared worker, and its port with it."],
+      ["Close library tab two", "That was the library's last tab, so the browser ends the library's SharedWorker, and its port with it."],
       ["Florist tab two: post a note", "The florist's worker posts into the link as before. Nothing is at the other end, and nothing says so.", 2600],
     ] },
     async setup(stage, ui) {
-      if (!("SharedWorker" in self)) { stage.box("none", { html: `<div class="here"><h4>No SharedWorker</h4><p class="small">This browser has no shared workers.</p></div>` }); return; }
+      if (!("SharedWorker" in self)) {
+        stage.box("none", { html: `<div class="here"><div class="box-title">No SharedWorker</div><p class="small">This browser has no SharedWorker.</p></div>` });
+        ui.unsupported("This browser does not support SharedWorker.");
+        return;
+      }
       const s = sharedStage(stage);
       await s.ready;
       let n = 0;
@@ -406,14 +421,18 @@ addEventListener("pagehide", () => port.postMessage({ bye: name }));`,
           setTimeout(() => { stage.remove("swb"); stage.cut("direct"); }, 300);
         }, true),
       ];
-      ui.button("Join the two shared workers", (btn) => {
+      const joinBtn = ui.button("Join the two SharedWorkers", (btn) => {
+        btn.disabled = true;
+        stage.post("ft1", { cmd: "join", to: "library" });
+        for (const b of later) b.disabled = false;
+      }, true);
+      ui.button("Give tab one of each site a line", (btn) => {
         btn.disabled = true;
         const { port1, port2 } = new MessageChannel();
         stage.post("ft1", { cmd: "trunk", to: "library" }, [port1]);
         stage.post("lt1", { cmd: "trunk", to: "florist" }, [port2]);
-        stage.cable("trunk", "ft1", "lt1", "teal");
-        setTimeout(() => stage.post("ft1", { cmd: "join", to: "library" }), 200);
-        for (const b of later) b.disabled = false;
+        stage.cable("trunk", "ft1", "lt1", "teal", "pages");
+        joinBtn.disabled = false;
       }, false, true);
     },
   },
@@ -450,12 +469,14 @@ const keys = await crypto.subtle.generateKey({ name: "ECDSA", namedCurve: "P-256
       });
       // The two that offer ports, with this page between them, and the library underneath.
       const florist = stage.frame("florist", { title: "Florist", color: "red", script: offerer });
-      const box = stage.box("page", { html: `<div class="here"><h4>This page, passing ports on</h4><p class="small" style="margin:0">It does not know what is at the other end of the ports it passes on. Neither does the library.</p></div>` });
+      const box = stage.box("page", { html: `<div class="here"><div class="box-title">This page, passing ports on</div><p class="small" style="margin:0">It does not know what is at the other end of the ports it passes on. Neither does the library.</p></div>` });
       const stranger = stage.frame("stranger", { title: "A stranger", color: "yellow", script: offerer });
       const library = stage.frame("library", { title: "Library", color: "teal", script: receiver });
       await Promise.all([florist, stranger, library]);
       for (const name of ["florist", "page", "stranger"]) stage.boxes.get(name).wrap.style.flexBasis = "max(11.5rem, 26%)";
       stage.boxes.get("library").wrap.style.flexBasis = "100%";
+      const waits = [];
+      stage.cleanup(() => waits.forEach(clearInterval));
       const pass = (from, color) => () => {
         stage.post(from, { cmd: "offer", name: from });
         const wait = setInterval(() => {
@@ -465,6 +486,7 @@ const keys = await crypto.subtle.generateKey({ name: "ECDSA", namedCurve: "P-256
           stage.pulse("via-" + from, from);
           stage.cable("c-" + from, from, "library", color);
         }, 50);
+        waits.push(wait);
       };
       const later = [
         ui.button("Pass the library a port from the florist", pass("florist", "red"), true),

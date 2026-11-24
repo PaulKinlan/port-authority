@@ -5,7 +5,7 @@ import { sites } from "/_sites.js";
 import { watch, listen, beat, whenReleased, hasCloseEvent } from "/alive.js";
 
 const far = (stage, site, wiring, title, extra = "") =>
-  stage.box("far", { src: `${sites[site]}/alive-far.html?wiring=${wiring}&title=${encodeURIComponent(title)}&color=${encodeURIComponent("#e0364c")}${extra}` });
+  stage.box("far", { src: `${sites[site]}/alive-far.html?wiring=${wiring}&title=${encodeURIComponent(title)}&color=${encodeURIComponent("#e0364c")}${extra}`, title });
 
 const WORDS = {
   waiting: "Not connected",
@@ -18,10 +18,10 @@ const WORDS = {
 
 // The page's box: what it believes about the far side, and a short log.
 function pageBox(stage, title, label = "The far side is") {
-  const box = stage.box("page", { html: `<div class="here"><h4>${title}</h4>
+  const box = stage.box("page", { html: `<div class="here"><div class="box-title">${title}</div>
     <p class="small" style="margin:0 0 .2rem">${label}: <strong data-state>${WORDS.waiting}</strong></p>
     <p class="small muted" data-why style="margin:0 0 .4rem;min-height:1.3em"></p>
-    <ul class="log"></ul></div>` });
+    <ul class="log" role="log" aria-live="polite"></ul></div>` });
   const ul = box.node.querySelector("ul");
   return {
     box,
@@ -41,7 +41,7 @@ function troubles(stage, ui, me) {
 
 function dataPort(stage, view) {
   const data = new MessageChannel();
-  data.port1.onmessage = (e) => { view.say("answer: " + e.data); };
+  data.port1.onmessage = (e) => { view.say("answer: " + e.data); stage.pulse("data", "far"); };
   return data;
 }
 
@@ -74,15 +74,17 @@ onmessage = ({ ports: [data, health] }) => {
       const view = pageBox(stage, "This page");
       await box.whenReady;
       const me = {};
+      let watcher = null;
+      stage.cleanup(() => { watcher?.stop(); me.data?.close(); });
       const enable = troubles(stage, ui, me);
       ui.button("Connect", (b) => {
         b.disabled = true;
         const data = dataPort(stage, view), health = new MessageChannel();
         me.data = data.port1;
         stage.post("far", { cmd: "port" }, [data.port2, health.port2]);
-        stage.cable("data", "page", "far", "teal");
-        stage.cable("health", "page", "far", "ink");
-        watch(health.port1, { every: 1000, misses: 3, onState: (state, why) => { view.show(state, why); view.say(state + (why ? ": " + why : "")); }, onPing: () => stage.pulse("health", "page") });
+        stage.cable("data", "page", "far", "teal", "work");
+        stage.cable("health", "page", "far", "ink", "health");
+        watcher = watch(health.port1, { every: 1000, misses: 3, onState: (state, why) => { view.show(state, why); view.say(state + (why ? ": " + why : "")); }, onPing: () => stage.pulse("health", "page") });
         view.say("sent a data port and a health port");
         enable();
       }, false, true);
@@ -116,13 +118,15 @@ onmessage = ({ source, ports: [data] }) => {
       const view = pageBox(stage, "This page");
       await box.whenReady;
       const me = {};
+      let watcher = null;
+      stage.cleanup(() => { watcher?.stop(); me.data?.close(); });
       const enable = troubles(stage, ui, me);
       stage.on((name, data, ports) => {
         if (name !== "far") return;
         if (data.wire === "health" && ports[0]) {
-          stage.cable("health", "far", "page", "ink");
+          stage.cable("health", "far", "page", "ink", "health");
           view.say("a health port came back");
-          watch(ports[0], { every: 1000, misses: 3, onState: (state, why) => { view.show(state, why); view.say(state + (why ? ": " + why : "")); }, onPing: () => stage.pulse("health", "page") });
+          watcher = watch(ports[0], { every: 1000, misses: 3, onState: (state, why) => { view.show(state, why); view.say(state + (why ? ": " + why : "")); }, onPing: () => stage.pulse("health", "page") });
         }
       });
       ui.button("Connect", (b) => {
@@ -130,7 +134,7 @@ onmessage = ({ source, ports: [data] }) => {
         const data = dataPort(stage, view);
         me.data = data.port1;
         stage.post("far", { cmd: "port" }, [data.port2]);
-        stage.cable("data", "page", "far", "teal");
+        stage.cable("data", "page", "far", "teal", "work");
         view.say("sent one port, for work");
         enable();
       }, false, true);
@@ -159,12 +163,13 @@ listen(theirs, { onState: (state) => show(state) });`,
       await box.whenReady;
       const me = {};
       const enable = troubles(stage, ui, me);
-      let mine = null;
+      let mine = null, listener = null;
+      stage.cleanup(() => { mine?.stop(); listener?.stop(); me.data?.close(); });
       stage.on((name, data, ports) => {
         if (name !== "far") return;
         if (data.wire === "beats" && ports[0]) {
-          stage.cable("beats-far", "far", "page", "red");
-          listen(ports[0], { onState: (state, why) => { view.show(state, why); view.say(state + (why ? ": " + why : "")); } });
+          stage.cable("beats-far", "far", "page", "red", "← beats");
+          listener = listen(ports[0], { onState: (state, why) => { view.show(state, why); view.say(state + (why ? ": " + why : "")); } });
         }
       });
       const stop = ui.button("This page: stop sending beats", (b) => { mine.stop(); b.disabled = true; view.say("stopped my beats"); }, true);
@@ -174,8 +179,8 @@ listen(theirs, { onState: (state) => show(state) });`,
         me.data = data.port1;
         mine = beat(out.port1, { every: 1000, onBeat: () => stage.pulse("beats-page", "page") });
         stage.post("far", { cmd: "port" }, [data.port2, out.port2]);
-        stage.cable("data", "page", "far", "teal");
-        stage.cable("beats-page", "page", "far", "yellow");
+        stage.cable("data", "page", "far", "teal", "work");
+        stage.cable("beats-page", "page", "far", "yellow", "beats →");
         view.say("sent a data port and my beat port");
         enable(); stop.disabled = false;
       }, false, true);
@@ -183,6 +188,7 @@ listen(theirs, { onState: (state) => show(state) });`,
   },
   {
     id: "alive-signals",
+    noAutoplay: true,
     title: "Which signal notices which ending, and how quickly",
     blurb: "Every way of knowing the far side has gone, side by side, measured in your browser. For each row a fresh far side is made on this site's own origin and given every signal at once: a port that only carries its goodbye, a port it answers pings on every half second, a port it beats on every half second, and a Web Lock it holds. Then it is ended in one way, and the table shows how long each signal took to say so. The last column is the port <code>close</code> event. It was added to the HTML standard in 2024, never switched on in any browser, and taken out again in October 2026.",
     code: `<span class="c">// the far side holds a lock with a name only it uses, and tells the page the name</span>
@@ -204,73 +210,91 @@ farSideIsGone();`,
         ["stuck", "A worker is busy for 4 seconds, then fine"],
       ];
       const COLS = ["goodbye", "pings", "beats", "lock", "close"];
-      const table = stage.box("page", { wide: true, html: `<div class="here"><h4>This page, timing each signal</h4>
-        <div style="overflow-x:auto"><table class="census" style="min-width:40rem"><thead><tr><th scope="col">How it ends</th><th scope="col">Goodbye on pagehide</th><th scope="col">Pings, 0.5 s, 3 misses</th><th scope="col">Beats, 0.5 s</th><th scope="col">Web Lock released</th><th scope="col">Port close event</th></tr></thead>
+      const table = stage.box("page", { wide: true, html: `<div class="here"><div class="box-title">This page, timing each signal</div>
+        <div style="overflow-x:auto" tabindex="0"><table class="census" style="min-width:40rem"><thead><tr><th scope="col">How it ends</th><th scope="col">Goodbye on pagehide</th><th scope="col">Pings, 0.5 s, 3 misses</th><th scope="col">Beats, 0.5 s</th><th scope="col">Web Lock released</th><th scope="col">Port close event</th></tr></thead>
         <tbody>${ENDINGS.map(([id, label]) => `<tr data-row="${id}"><th scope="row">${label}</th>${COLS.map((c) => `<td data-col="${c}" class="no">not run</td>`).join("")}</tr>`).join("")}</tbody></table></div></div>` });
-      const slot = stage.box("far", { kind: "iframe", html: `<div class="here"><h4>Nothing yet</h4><p class="small">Each row makes a new far side here, then ends it.</p></div>` });
-      const cell = (row, col, text, good) => { const td = table.node.querySelector(`[data-row="${row}"] [data-col="${col}"]`); td.textContent = text; td.className = good ? "" : "no"; };
+      const slot = stage.box("far", { kind: "iframe", html: `<div class="here"><div class="box-title">Nothing yet</div><p class="small">Each row makes a new far side here, then ends it.</p></div>` });
+      const cell = (row, col, text, good) => { const td = table.node.querySelector(`[data-row="${row}"] [data-col="${col}"]`); if (td) { td.textContent = text; td.className = good ? "" : "no"; } };
       const secs = (ms) => ms < 1000 ? `${Math.max(0, Math.round(ms))} ms` : `${(ms / 1000).toFixed(1)} s`;
-      let running = false;
+      let running = false, cancelled = false;
+      const activeCleanups = new Set();
+      stage.cleanup(() => { cancelled = true; for (const fn of activeCleanups) { try { fn(); } catch {} } activeCleanups.clear(); });
 
       async function run(ending) {
+        if (cancelled) return;
         for (const c of COLS) cell(ending, c, "…", false);
         const seen = {};
-        let t0 = 0, worker = null, frame = null, target;
-        const mark = (col, text) => { if (t0 && !(col in seen)) { seen[col] = text ?? secs(performance.now() - t0); cell(ending, col, seen[col], true); } };
+        let t0 = 0, worker = null, frame = null, workerUrl = null;
+        const mark = (col, text) => { if (t0 && !(col in seen) && !cancelled) { seen[col] = text ?? secs(performance.now() - t0); cell(ending, col, seen[col], true); } };
         const chans = [0, 1, 2, 3, 4].map(() => new MessageChannel());
         let lockName;
         const inWorker = ending === "worker" || ending === "stuck";
-        if (inWorker) {
-          slot.node.innerHTML = `<div class="here"><h4>A worker</h4><p class="small">Answering pings, sending beats, holding a lock.</p></div>`;
-          slot.kind = "worker"; slot.url = "blob:"; stage.describe(slot);
-          const src = `import { answer, beat, holdLock } from "${location.origin}/alive.js";
-            onmessage = async ({ data, ports }) => {
-              if (data && data.stuck) { const end = Date.now() + data.stuck; while (Date.now() < end); return; }
-              answer(ports[1], { announce: false }); beat(ports[2], { every: 500, announce: false }); postMessage(await holdLock());
-            };`;
-          worker = new Worker(URL.createObjectURL(new Blob([src], { type: "text/javascript" })), { type: "module" });
-          const got = new Promise((r) => (worker.onmessage = (e) => r(e.data)));
-          worker.postMessage(0, chans.slice(0, 4).map((c) => c.port2));
-          lockName = await got;
-        } else {
-          slot.kind = "iframe";
-          slot.node.innerHTML = "";
-          frame = document.createElement("iframe");
-          frame.title = "The far side";
-          frame.src = `/alive-far.html?wiring=all&every=500&title=${encodeURIComponent("The far side, this origin")}`;
-          slot.node.append(frame);
-          await new Promise((resolve) => { const off = stage.on((name, data) => { if (name === "far" && data.wire === "ready") { off(); resolve(); } }); });
-          const got = new Promise((resolve) => { const off = stage.on((name, data) => { if (name === "far" && data.wire === "lock") { off(); resolve(data.name); } }); });
-          frame.contentWindow.postMessage({ cmd: "port" }, "*", chans.slice(0, 4).map((c) => c.port2));
-          lockName = await got;
-        }
-        chans[3].port1.onmessage = ({ data }) => { if (data.bye) mark("goodbye"); };
-        if (inWorker) cell(ending, "goodbye", "none: a worker has no pagehide", false), (seen.goodbye = 1);
-        const back = (col) => (state) => {
-          if (!t0) return;
-          if (state === "silent" || state === "closed") mark(col);
-          if (state === "alive" && seen[col] && ending === "stuck" && !seen[col + "+"]) { seen[col + "+"] = 1; cell(ending, col, `${seen[col]}, then alive again`, true); }
-        };
-        const pings = watch(chans[1].port1, { every: 500, misses: 3, closeEvent: false, onState: back("pings") });
-        const beats = listen(chans[2].port1, { closeEvent: false, onState: back("beats") });
         const abort = new AbortController();
-        whenReleased(lockName, { signal: abort.signal }).then(() => mark("lock"), () => {});
-        if (hasCloseEvent) chans[0].port1.addEventListener("close", () => mark("close"));
-        chans[0].port1.start();
-        await new Promise((r) => setTimeout(r, 1200));
-        t0 = performance.now();
-        if (ending === "remove") { frame.remove(); slot.node.innerHTML = ""; }
-        else if (ending === "leave") frame.contentWindow.postMessage({ cmd: "leave" }, "*");
-        else if (ending === "close") frame.contentWindow.postMessage({ cmd: "close" }, "*");
-        else if (ending === "stuck") worker.postMessage({ stuck: 4000 });
-        else if (ending === "worker") worker.terminate();
-        await new Promise((r) => setTimeout(r, ending === "stuck" ? 6500 : 4000));
-        t0 = 0;   // what happens while tidying up is not part of the result
-        for (const col of COLS) if (!(col in seen)) cell(ending, col, col === "close" && !hasCloseEvent ? "not in this browser" : "nothing", false);
-        pings.stop(); beats.stop(); abort.abort();
-        if (worker) worker.terminate();
-        frame?.remove();
-        slot.node.innerHTML = `<div class="here"><h4>Ended</h4><p class="small">Each row makes a new far side here, then ends it.</p></div>`;
+        let pings = null, beats = null;
+        const teardown = () => {
+          pings?.stop(); beats?.stop(); abort.abort();
+          if (worker) { worker.terminate(); worker = null; }
+          if (workerUrl) { URL.revokeObjectURL(workerUrl); workerUrl = null; }
+          frame?.remove(); frame = null;
+        };
+        activeCleanups.add(teardown);
+        try {
+          if (inWorker) {
+            slot.node.innerHTML = `<div class="here"><div class="box-title">A worker</div><p class="small">Answering pings, sending beats, holding a lock.</p></div>`;
+            slot.kind = "worker"; slot.url = "blob:"; stage.describe(slot);
+            const src = `import { answer, beat, holdLock } from "${location.origin}/alive.js";
+              onmessage = async ({ data, ports }) => {
+                if (data && data.stuck) { const end = Date.now() + data.stuck; while (Date.now() < end); return; }
+                answer(ports[1], { announce: false }); beat(ports[2], { every: 500, announce: false }); postMessage(await holdLock());
+              };`;
+            workerUrl = URL.createObjectURL(new Blob([src], { type: "text/javascript" }));
+            worker = new Worker(workerUrl, { type: "module" });
+            const got = new Promise((r) => (worker.onmessage = (e) => r(e.data)));
+            worker.postMessage(0, chans.slice(0, 4).map((c) => c.port2));
+            lockName = await got;
+          } else {
+            slot.kind = "iframe";
+            slot.node.innerHTML = "";
+            frame = document.createElement("iframe");
+            frame.title = "The far side";
+            frame.src = `/alive-far.html?wiring=all&every=500&title=${encodeURIComponent("The far side, this origin")}`;
+            slot.node.append(frame);
+            await new Promise((resolve) => { const off = stage.on((name, data) => { if (name === "far" && data.wire === "ready") { off(); resolve(); } }); });
+            if (cancelled) return;
+            const got = new Promise((resolve) => { const off = stage.on((name, data) => { if (name === "far" && data.wire === "lock") { off(); resolve(data.name); } }); });
+            frame.contentWindow.postMessage({ cmd: "port" }, "*", chans.slice(0, 4).map((c) => c.port2));
+            lockName = await got;
+          }
+          if (cancelled) return;
+          chans[3].port1.onmessage = ({ data }) => { if (data.bye) mark("goodbye"); };
+          if (inWorker) cell(ending, "goodbye", "none: a worker has no pagehide", false), (seen.goodbye = 1);
+          const back = (col) => (state) => {
+            if (!t0 || cancelled) return;
+            if (state === "silent" || state === "closed") mark(col);
+            if (state === "alive" && seen[col] && ending === "stuck" && !seen[col + "+"]) { seen[col + "+"] = 1; cell(ending, col, `${seen[col]}, then alive again`, true); }
+          };
+          pings = watch(chans[1].port1, { every: 500, misses: 3, closeEvent: false, onState: back("pings") });
+          beats = listen(chans[2].port1, { closeEvent: false, onState: back("beats") });
+          whenReleased(lockName, { signal: abort.signal }).then(() => mark("lock"), () => {});
+          if (hasCloseEvent) chans[0].port1.addEventListener("close", () => mark("close"));
+          chans[0].port1.start();
+          await new Promise((r) => setTimeout(r, 1200));
+          if (cancelled) return;
+          t0 = performance.now();
+          if (ending === "remove") { frame.remove(); slot.node.innerHTML = ""; }
+          else if (ending === "leave") frame.contentWindow.postMessage({ cmd: "leave" }, "*");
+          else if (ending === "close") frame.contentWindow.postMessage({ cmd: "close" }, "*");
+          else if (ending === "stuck") worker.postMessage({ stuck: 4000 });
+          else if (ending === "worker") worker.terminate();
+          await new Promise((r) => setTimeout(r, ending === "stuck" ? 6500 : 4000));
+          if (cancelled) return;
+          t0 = 0;   // what happens while tidying up is not part of the result
+          for (const col of COLS) if (!(col in seen)) cell(ending, col, col === "close" && !hasCloseEvent ? "not in this browser" : "nothing", false);
+          slot.node.innerHTML = `<div class="here"><div class="box-title">Ended</div><p class="small">Each row makes a new far side here, then ends it.</p></div>`;
+        } finally {
+          teardown();
+          activeCleanups.delete(teardown);
+        }
       }
 
       const buttons = ENDINGS.map(([id, label]) => ui.button("Run: " + label.toLowerCase(), async () => {
@@ -279,7 +303,7 @@ farSideIsGone();`,
       }));
       ui.button("Run every row", async () => {
         if (running) return; running = true; for (const b of buttons) b.disabled = true;
-        try { for (const [id] of ENDINGS) await run(id); } finally { running = false; for (const b of buttons) b.disabled = false; }
+        try { for (const [id] of ENDINGS) { if (cancelled) break; await run(id); } } finally { running = false; for (const b of buttons) b.disabled = false; }
       }, false, true);
     },
   },
@@ -300,6 +324,7 @@ farSideIsGone();`,
   } });
 }`,
     tour: { steps: [
+      ["Start the worker", "This page starts a worker and sends it two ports: one for prime calculations and one for health pings."],
       ["Ask: primes below 5 million", "The question goes on the work port and the answer comes back on it."],
       ["Make the worker hang", "The worker is sent into a loop that never ends. It cannot answer pings or work."],
       ["Ask: primes below 5 million", "This question waits. After three missed pings the page terminates the worker, starts a new one, and asks it again.", 4500],
@@ -307,10 +332,18 @@ farSideIsGone();`,
     ] },
     async setup(stage, ui) {
       const view = pageBox(stage, "This page", "The worker is");
-      const wbox = stage.box("worker", { kind: "worker", url: "/patterns/alive-worker.js", html: `<div class="here"><h4>Worker</h4><p class="small" style="margin:0">Number <strong data-gen>1</strong></p><p class="small" style="margin:0">Questions answered: <strong data-done>0</strong></p></div>` });
+      const wbox = stage.box("worker", { kind: "worker", url: "/patterns/alive-worker.js", html: `<div class="here"><div class="box-title">Worker</div><p class="small" style="margin:0">Number <strong data-gen>not started</strong></p><p class="small" style="margin:0">Questions answered: <strong data-done>0</strong></p></div>` });
       const pending = new Map();
-      let worker = null, work = null, health = null, gen = 0, next = 0, done = 0;
+      let worker = null, work = null, health = null, gen = 0, next = 0, done = 0, restartTimer = null, alive = true;
+      stage.cleanup(() => {
+        alive = false;
+        clearTimeout(restartTimer);
+        health?.stop();
+        work?.close();
+        worker?.terminate();
+      });
       function start() {
+        if (!alive) return;
         gen++;
         wbox.node.querySelector("[data-gen]").textContent = gen;
         wbox.node.classList.remove("gone"); wbox.wrap.classList.remove("gone");
@@ -327,29 +360,36 @@ farSideIsGone();`,
         };
         const mine = gen;
         health = watch(h.port1, { every: 500, misses: 3, onPing: () => stage.pulse("health", "page"), onState(state, why) {
-          if (mine !== gen) return;
+          if (!alive || mine !== gen) return;
           view.show(state, why);
           if (state !== "silent") return;
           view.say(`worker ${mine} is silent. terminating it and starting another`);
           health.stop(); worker.terminate();
           stage.cut("work"); stage.cut("health");
-          setTimeout(() => {
+          restartTimer = setTimeout(() => {
+            if (!alive) return;
             start();
             for (const [id, ask] of pending) { work.postMessage({ id, n: ask.n }); view.say(`asked #${id} again`); }
           }, 400);
         } });
-        setTimeout(() => { stage.cable("work", "page", "worker", "teal"); stage.cable("health", "page", "worker", "ink"); }, 50);
+        stage.cable("work", "page", "worker", "teal", "work");
+        stage.cable("health", "page", "worker", "ink", "health");
       }
-      start();
-      ui.button("Ask: primes below 5 million", () => {
+      const askBtn = ui.button("Ask: primes below 5 million", () => {
         const id = ++next, n = 5_000_000;
         pending.set(id, { n });
         work.postMessage({ id, n });
         stage.pulse("work", "page");
         view.say(`asked #${id}`);
-      });
-      ui.button("Make the worker hang", () => { worker.postMessage({ hang: true }); view.say("told the worker to loop for ever"); });
-      ui.button("Make the worker close itself", () => { worker.postMessage({ quit: true }); view.say("told the worker to call close()"); });
+      }, true);
+      const hangBtn = ui.button("Make the worker hang", () => { worker.postMessage({ hang: true }); view.say("told the worker to loop for ever"); }, true);
+      const quitBtn = ui.button("Make the worker close itself", () => { worker.postMessage({ quit: true }); view.say("told the worker to call close()"); }, true);
+      ui.button("Start the worker", (btn) => {
+        btn.disabled = true;
+        start();
+        view.say("started worker 1 with a work port and a health port");
+        askBtn.disabled = hangBtn.disabled = quitBtn.disabled = false;
+      }, false, true);
     },
   },
 ];

@@ -5,7 +5,7 @@ import { far } from "/farport.js";
 import { qrSvg } from "/qr.js";
 
 const logBox = (stage, name, title, extra = "", what = {}) => {
-  const box = stage.box(name, { html: `<div class="here"><h4>${title}</h4>${extra}<ul class="log"></ul></div>`, ...what });
+  const box = stage.box(name, { html: `<div class="here"><div class="box-title">${title}</div>${extra}<ul class="log" role="log" aria-live="polite"></ul></div>`, ...what });
   const ul = box.node.querySelector("ul");
   const say = (text) => { const li = document.createElement("li"); li.textContent = text; ul.prepend(li); while (ul.children.length > 6) ul.lastChild.remove(); };
   return { say, node: box.node, box };
@@ -89,7 +89,7 @@ export const places = [
   {
     id: "far",
     title: "A port whose other end is on another device",
-    blurb: "This page meets another device through a pairing code, the two connect directly with WebRTC, and each side wraps its end of that connection in a <code>MessagePort</code>. Then this page hands its port on. The counter at the end of the yellow cable is a sandboxed frame that was given a port and knows nothing more. Your phone is now pressing its buttons. The server carried a few messages so the two could find each other, and nothing since. The port carries more than text: bytes, other ports and streams can be posted into it, and each is rebuilt on the other device. Two demos further down this page do that.",
+    blurb: "This page meets another device through a pairing code, the two connect directly with WebRTC, and each side wraps its end of that connection in a <code>MessagePort</code>. Then this page hands its port on. The counter at the end of the yellow cable is a sandboxed frame that was given a port and knows nothing more. Your phone is now pressing its buttons. The server carried a few messages so the two could find each other, and nothing since. The port carries more than text: bytes, other ports and streams can be posted into it, and each is rebuilt on the other device. See <a href=\"/patterns/far/#built-farfile\">sending a photo as a stream</a> and <a href=\"/patterns/far/#built-farports\">lending a port to another device</a>.",
     code: `<span class="c">// both devices</span>
 const port = await far({ code });               <span class="c">// a real MessagePort</span>
 
@@ -100,7 +100,7 @@ counterFrame.postMessage({ cmd: "port" }, "*", [port]);
 port.postMessage({ do: "add" });
 port.onmessage = ({ data }) => show(data.count);`,
     async setup(stage, ui) {
-      const farBox = stage.box("far", { html: `<div class="here"><h4>Another device</h4><p class="small muted">Nobody yet. Open the link on a phone, or let a stand-in play the part.</p></div>` });
+      const farBox = stage.box("far", { html: `<div class="here"><div class="box-title">Another device</div><p class="small muted">Nobody yet. Open the link on a phone, or let a stand-in play the part.</p></div>` });
       const me = logBox(stage, "page", "This page, in the middle", `<p class="small" data-code style="margin:0 0 .4rem" hidden></p>`);
       await stage.frame("tool", {
         title: "Counter, a sandboxed frame", color: "yellow",
@@ -126,9 +126,14 @@ port.onmessage = ({ data }) => show(data.count);`,
           });
         },
       });
-      if (!("RTCPeerConnection" in self)) return me.say("no WebRTC in this browser");
+      if (!("RTCPeerConnection" in self)) {
+        me.say("no WebRTC in this browser");
+        ui.unsupported("This browser does not support WebRTC (RTCPeerConnection).");
+        return;
+      }
       const codeEl = me.node.querySelector("[data-code]");
-      let line = null, code = null;
+      let line = null, code = null, watch = null;
+      stage.cleanup(() => { clearInterval(watch); line?.close(); });
       const WORDS = { waiting: "waiting for the other device", found: "the other device is here, connecting directly", direct: "connected directly. The server is out of it.", gone: "the other device hung up", failed: "could not connect" };
       const standIn = ui.button("Use a stand-in for the other device", async (btn) => {
         btn.disabled = true;
@@ -142,8 +147,8 @@ port.onmessage = ({ data }) => show(data.count);`,
         code = [...crypto.getRandomValues(new Uint8Array(6))].map((b) => "abcdefghjkmnpqrstuvwxyz23456789"[b % 31]).join("");
         const url = `${location.origin}/far/#${code}`;
         codeEl.hidden = false;
-        codeEl.innerHTML = `Code <strong>${code}</strong>. On a phone: <a href="${url}" target="_blank">${location.host}/far/#${code}</a>`;
-        farBox.node.innerHTML = `<div class="here" style="display:flex;gap:.6rem;align-items:flex-start"><a href="${url}" target="_blank" data-qr style="flex:none;width:6.6rem;line-height:0;border-radius:6px;overflow:hidden">${qrSvg(url, { label: "QR code for " + url })}</a><div><h4>Another device</h4><p class="small muted" style="margin:0">Scan this with a phone, or let a stand-in play the part.</p></div></div>`;
+        codeEl.innerHTML = `Code <strong>${code}</strong>. On a phone: <a href="${url}" target="_blank" rel="noopener">${location.host}/far/#${code}</a>`;
+        farBox.node.innerHTML = `<div class="here" style="display:flex;gap:.6rem;align-items:flex-start"><a href="${url}" target="_blank" rel="noopener" data-qr style="flex:none;width:6.6rem;line-height:0;border-radius:6px;overflow:hidden">${qrSvg(url, { label: "QR code for " + url })}</a><div><div class="box-title">Another device</div><p class="small muted" style="margin:0">Scan this with a phone, or let a stand-in play the part.</p></div></div>`;
         standIn.disabled = false;
         line = far({
           code, host: true,
@@ -155,35 +160,35 @@ port.onmessage = ({ data }) => show(data.count);`,
             // The port that stands for the other device goes to the counter.
             // This page keeps nothing, and the two talk without it.
             stage.post("tool", { cmd: "port" }, [port]);
-            if (!farBox.frame) { farBox.node.dataset.link = "up"; farBox.node.innerHTML = `<div class="here"><h4>Another device</h4><p class="small">Connected. It is a real device, so its screen is not shown here.</p></div>`; }
-            stage.cable("air", "far", "page", "teal");
-            stage.cable("port", "page", "tool", "yellow");
+            if (!farBox.frame) { farBox.node.dataset.link = "up"; farBox.node.innerHTML = `<div class="here"><div class="box-title">Another device</div><p class="small">Connected. It is a real device, so its screen is not shown here.</p></div>`; }
+            stage.cable("air", "far", "page", "teal", "WebRTC");
+            stage.cable("port", "page", "tool", "yellow", "port");
             me.say("gave the far port to the counter");
             standIn.disabled = true; hang.disabled = false;
             if (farBox.frame) add.disabled = colour.disabled = false;
           },
         });
         // Leaving the page or starting again hangs up.
-        const watch = setInterval(() => { if (!me.node.isConnected) { clearInterval(watch); line?.close(); } }, 1000);
+        watch = setInterval(() => { if (!me.node.isConnected) { clearInterval(watch); line?.close(); } }, 1000);
       }, false, true);
     },
   },
   {
     id: "mounted",
     title: "Mount another site at a path on yours",
-    blurb: "A service worker can answer a request by asking a port, and the other end of that port can be on another origin. This page introduces a service worker to the florist's site. From then on, every request under <code>/patterns/mounted/florist/</code> is answered by the florist: pages, images, and a file whose body is a stream that the florist is still writing while this origin reads it. The florist's server is never contacted. Its page, open in a frame, is the server. The same worker script, registered again for <code>/patterns/mounted/library/</code> and given a port to the library's site, mounts that site beside it. What is mounted here runs as this origin, so mount only what you would let act as you.",
+    blurb: "A Service Worker can answer a request by asking a port, and the other end of that port can be on another origin. This page introduces a Service Worker to the florist's site. From then on, every request under <code>/patterns/mounted/florist/</code> is answered by the florist: pages, images, and a file whose body is a stream that the florist is still writing while this origin reads it. The florist's server is never contacted. Its page, open in a frame, is the server. The same worker script, registered again for <code>/patterns/mounted/library/</code> and given a port to the library's site, mounts that site beside it. What is mounted here runs as this origin, so mount only what you would let act as you.",
     code: `<span class="c">// this page: a worker for the path, and a port to the site that will serve it</span>
 const reg = await navigator.serviceWorker.register("/mount-sw.js", { scope: "/mounted/florist/" });
 const { port1, port2 } = new MessageChannel();
 floristFrame.postMessage({ cmd: "serve" }, floristOrigin, [port1]);
 reg.active.postMessage({ mount: true }, [port2]);
 
-<span class="c">// service worker</span>
+<span class="c">// Service Worker</span>
 origin.postMessage({ path }, [replyPort]);
 <span class="c">// the florist answers with a body that is a ReadableStream, transferred</span>
 return new Response(answer.body, answer);`,
     tour: { steps: [
-      ["Mount the florist's site here", "This page gives one end of a channel to the florist's site and the other to a service worker for that path."],
+      ["Mount the florist's site here", "This page gives one end of a channel to the florist's site and the other to a Service Worker for that path."],
       ["Open the catalogue", "A page at an address on this origin. Its HTML, its picture and a slowly written file all come from the florist, down the port.", 4200],
       ["Mount the library's site too", "The same worker script is registered for a second path and given a port to the library's site."],
       ["Open the library's catalogue", "A second address on this origin, served by a second site.", 4200],
@@ -191,13 +196,15 @@ return new Response(answer.body, answer);`,
     ] },
     async setup(stage, ui) {
       const shelfSrc = (site, title, color) => `${sites[site]}/actor.html?role=shelf&shelf=${site}&title=${encodeURIComponent(title)}&color=${encodeURIComponent(color)}`;
-      const shelf = stage.box("shelf", { src: shelfSrc("florist", "Florist, a real site", "#e0364c") });
-      shelf.frame.title = "Florist, a real site";
-      const shelf2 = stage.box("shelf2", { src: shelfSrc("library", "Library, a real site", "#0e9f8e") });
-      shelf2.frame.title = "Library, a real site";
-      const sw = logBox(stage, "sw", "This site's service worker", "", { kind: "service", url: "/patterns/mount-sw.js", scope: "/patterns/mounted/florist/ and /patterns/mounted/library/" });
-      const view = stage.box("view", { kind: "iframe", html: `<div class="here"><h4>/patterns/mounted/</h4><p class="small muted">Nothing is mounted here yet.</p></div>` });
-      if (!("serviceWorker" in navigator)) return sw.say("no service worker support here");
+      const shelf = stage.box("shelf", { src: shelfSrc("florist", "Florist, a real site", "#e0364c"), title: "Florist, a real site" });
+      const shelf2 = stage.box("shelf2", { src: shelfSrc("library", "Library, a real site", "#0e9f8e"), title: "Library, a real site" });
+      const sw = logBox(stage, "sw", "This site's Service Worker", "", { kind: "service", url: "/patterns/mount-sw.js", scope: "/patterns/mounted/florist/ and /patterns/mounted/library/" });
+      const view = stage.box("view", { kind: "iframe", html: `<div class="here"><div class="box-title">/patterns/mounted/</div><p class="small muted">Nothing is mounted here yet.</p></div>` });
+      if (!("serviceWorker" in navigator)) {
+        sw.say("no Service Worker support here");
+        ui.unsupported("This browser does not support Service Workers.");
+        return;
+      }
       await Promise.all([shelf.whenReady, shelf2.whenReady]);
       // One registration of the same script for each mounted site.
       const mounts = { florist: { box: "shelf", cable: "mount", color: "yellow" }, library: { box: "shelf2", cable: "mount2", color: "teal" } };
@@ -213,6 +220,7 @@ return new Response(answer.body, answer);`,
         if (event.data?.mounted) { sw.say(`${event.data.status} ${event.data.site}/${event.data.mounted}, asked the ${event.data.site}`); stage.pulse("down", "view"); stage.pulse(mounts[event.data.site]?.cable, "sw"); }
       };
       navigator.serviceWorker.addEventListener("message", onMessage);
+      stage.cleanup(() => navigator.serviceWorker.removeEventListener("message", onMessage));
       const load = (name, file) => { stage.cable("down", "view", "sw", "ink"); return embed(view, `/patterns/mounted/${name}/${file}?${Date.now()}`, `A page on this origin, served by the ${name}`); };
       const mount = async (name) => {
         const m = mounts[name];
@@ -222,7 +230,7 @@ return new Response(answer.body, answer);`,
           if (worker.state !== "activated") await new Promise((resolve) => worker.addEventListener("statechange", () => worker.state === "activated" && resolve()));
         } catch (err) { sw.say("could not start: " + err.message); return false; }
         m.mounted = true; introduce(name);
-        stage.cable(m.cable, m.box, "sw", m.color);
+        stage.cable(m.cable, m.box, "sw", m.color, name);
         sw.say(`holding a port to the ${name}'s site, for /mounted/${name}/`);
         return true;
       };
@@ -244,8 +252,9 @@ return new Response(answer.body, answer);`,
   {
     id: "socket",
     title: "One connection to the server, shared by every tab",
-    blurb: "Ten tabs of the same site usually means ten connections to the server. Here no tab has one. A shared worker holds the only WebSocket, and each tab holds a port to the worker. A tab speaks by posting to its port. The worker numbers each question, and the answer with that number goes back down the port of the tab that asked, so replies are never mixed up. Close a tab and the worker notices and carries on. Drop the connection and the worker opens another and asks again anything that was not answered. The tabs have no code for any of that. The two boxes on the outside are real pages of this site, and the link opens a third in a real tab that joins the same socket.",
+    blurb: "Ten tabs of the same site usually means ten connections to the server. Here no tab has one. A SharedWorker holds the only WebSocket, and each tab holds a port to the worker. A tab speaks by posting to its port. The worker numbers each question, and the answer with that number goes back down the port of the tab that asked, so replies are never mixed up. Close a tab and the worker notices and carries on. Drop the connection and the worker opens another and asks again anything that was not answered. The tabs have no code for any of that. The two boxes on the outside are real pages of this site, and the link opens a third in a real tab that joins the same socket.",
     tour: { steps: [
+      ["Connect both tabs to the SharedWorker", "Each tab opens a port to the SharedWorker. Neither tab opens a WebSocket; the worker holds the only one."],
       ["Tab one: say hello", "Tab one posts to its port. The worker sends it on the only socket, and the server's answer comes back to tab one alone."],
       ["Tab two: say hello", "Tab two does the same, on the same socket."],
       ["Close tab one", "Tab one is destroyed. The worker notices, and the socket stays open for the other."],
@@ -272,9 +281,13 @@ socket.onmessage = ({ data }) => {
 socket.onclose = () => setTimeout(connect, 300);`,
     async setup(stage, ui) {
       const one = stage.box("tab1", { kind: "iframe" });
-      const hub = stage.box("worker", { kind: "shared", url: "/patterns/socket-worker.js", html: `<div class="here"><h4>Shared worker</h4><p class="small" style="margin:0 0 .3rem">Sockets it has opened: <strong data-opened>0</strong></p><p class="small" style="margin:0 0 .3rem">Open now: <strong data-open>0</strong></p><p class="small" style="margin:0">Tabs on it: <strong data-tabs>none</strong></p></div>` });
+      const hub = stage.box("worker", { kind: "shared", url: "/patterns/socket-worker.js", html: `<div class="here"><div class="box-title">SharedWorker</div><p class="small" style="margin:0 0 .3rem">Sockets it has opened: <strong data-opened>0</strong></p><p class="small" style="margin:0 0 .3rem">Open now: <strong data-open>0</strong></p><p class="small" style="margin:0">Tabs on it: <strong data-tabs>none</strong></p></div>` });
       const two = stage.box("tab2", { kind: "iframe" });
-      if (!("SharedWorker" in self)) { hub.node.querySelector(".here").insertAdjacentHTML("beforeend", `<p class="small muted">This browser has no SharedWorker.</p>`); return; }
+      if (!("SharedWorker" in self)) {
+        hub.node.querySelector(".here").insertAdjacentHTML("beforeend", `<p class="small muted">This browser has no SharedWorker.</p>`);
+        ui.unsupported("This browser does not support SharedWorker.");
+        return;
+      }
       // This page only watches. It is not one of the tabs.
       const watch = new SharedWorker("/patterns/socket-worker.js").port;
       watch.onmessage = ({ data }) => {
@@ -285,13 +298,23 @@ socket.onclose = () => setTimeout(connect, 300);`,
         hub.node.querySelector("[data-tabs]").textContent = state.tabs.join(", ") || "none";
       };
       watch.postMessage({ watch: true });
-      await Promise.all([embed(one, "/patterns/tab.html?cable=c1", "A tab of this site"), embed(two, "/patterns/tab.html?cable=c2", "Another tab of this site")]);
-      stage.cable("c1", "tab1", "worker", "red");
-      stage.cable("c2", "tab2", "worker", "teal");
-      const b1 = ui.button("Tab one: say hello", () => stage.post("tab1", { cmd: "say" }), false, true);
-      ui.button("Tab two: say hello", () => stage.post("tab2", { cmd: "say" }));
-      ui.button("Close tab one", (btn) => { stage.remove("tab1"); btn.disabled = b1.disabled = true; });
-      ui.button("Drop the connection", () => watch.postMessage({ drop: true }));
+      stage.cleanup(() => watch.close());
+      await Promise.all([embed(one, "/patterns/tab.html?cable=c1&manual=1", "A tab of this site"), embed(two, "/patterns/tab.html?cable=c2&manual=1", "Another tab of this site")]);
+      let joined = 0;
+      const b1 = ui.button("Tab one: say hello", () => stage.post("tab1", { cmd: "say" }), true);
+      const b2 = ui.button("Tab two: say hello", () => stage.post("tab2", { cmd: "say" }), true);
+      const close1 = ui.button("Close tab one", (btn) => { stage.remove("tab1"); btn.disabled = b1.disabled = true; }, true);
+      const dropBtn = ui.button("Drop the connection", () => watch.postMessage({ drop: true }), true);
+      stage.on((name, data) => {
+        if (data.wire !== "joined") return;
+        stage.cable(name === "tab1" ? "c1" : "c2", name, "worker", name === "tab1" ? "red" : "teal");
+        if (++joined >= 2) b1.disabled = b2.disabled = close1.disabled = dropBtn.disabled = false;
+      });
+      ui.button("Connect both tabs to the SharedWorker", (btn) => {
+        btn.disabled = true;
+        stage.post("tab1", { cmd: "connect" });
+        stage.post("tab2", { cmd: "connect" });
+      }, false, true);
       ui.link("Open a third tab for real", "/patterns/tab.html");
     },
   },
@@ -309,19 +332,26 @@ port.postMessage({ freq: 440 });`,
     async setup(stage, ui) {
       const me = logBox(stage, "page", "This page", `<p class="small" style="margin:0 0 .4rem">Main thread ticks: <strong data-ticks>0</strong></p>`);
       const box = stage.box("composer", { kind: "worker", url: "blob:", html: `<canvas style="width:100%;height:100%;display:block" aria-label="The composer worker, painted by the worker itself"></canvas>` });
-      stage.box("audio", { kind: "worklet", url: "blob:", html: `<div class="here"><h4>The audio thread</h4><p class="small muted" style="margin:0">No DOM, no timers, no network. It turns numbers into sound 48,000 times a second, and it has one port.</p></div>` });
+      stage.box("audio", { kind: "worklet", url: "blob:", html: `<div class="here"><div class="box-title">The audio thread</div><p class="small muted" style="margin:0">No DOM, no timers, no network. It turns numbers into sound 48,000 times a second, and it has one port.</p></div>` });
       const ticks = me.node.querySelector("[data-ticks]");
-      let n = 0, audio = null;
-      if (!("AudioWorkletNode" in self) || !("OffscreenCanvas" in self)) return me.say("this browser lacks an audio worklet or an offscreen canvas");
+      let n = 0, audio = null, bellUrl = null;
+      if (!("AudioWorkletNode" in self) || !("OffscreenCanvas" in self) || typeof HTMLCanvasElement.prototype.transferControlToOffscreen !== "function") {
+        me.say("this browser lacks an AudioWorklet or OffscreenCanvas transfer");
+        ui.unsupported("This browser lacks AudioWorklet or OffscreenCanvas transfer.");
+        return;
+      }
       const canvas = box.node.querySelector("canvas");
       const ratio = Math.min(2, devicePixelRatio || 1);
-      canvas.width = box.node.clientWidth * ratio; canvas.height = box.node.clientHeight * ratio;
-      const worker = new Worker(URL.createObjectURL(new Blob([`(${composer})()`], { type: "text/javascript" })));
+      canvas.width = Math.max(160, box.node.clientWidth) * ratio;
+      canvas.height = Math.max(120, box.node.clientHeight) * ratio;
+      const workerUrl = URL.createObjectURL(new Blob([`(${composer})()`], { type: "text/javascript" }));
+      const worker = new Worker(workerUrl);
       const surface = canvas.transferControlToOffscreen();
       const look = { color: getComputedStyle(document.documentElement).getPropertyValue("--teal").trim(), panel: getComputedStyle(box.node).backgroundColor, ink: getComputedStyle(box.node).color };
       worker.postMessage({ surface, look }, [surface]);
-      const stop = () => { worker.postMessage({ stop: true }); audio?.close(); audio = null; };
+      const stop = () => { worker.postMessage({ stop: true }); audio?.close(); audio = null; if (bellUrl) { URL.revokeObjectURL(bellUrl); bellUrl = null; } };
       const beat = setInterval(() => { if (!ticks.isConnected) { clearInterval(beat); stop(); worker.terminate(); return; } ticks.textContent = ++n; }, 100);
+      stage.cleanup(() => { clearInterval(beat); stop(); worker.terminate(); URL.revokeObjectURL(workerUrl); });
       const count = () => new Promise((resolve) => { worker.onmessage = ({ data }) => resolve(data.played); worker.postMessage({ count: true }); });
       const freeze = ui.button("Freeze this page for 3 seconds", async () => {
         const before = await count();
@@ -333,23 +363,38 @@ port.postMessage({ freq: 440 });`,
         const after = await count();
         me.say(`3 s frozen: I ticked ${n - mine} times, the audio thread played ${after - before} notes`);
       }, true);
-      const quiet = ui.button("Stop the music", (btn) => { stop(); stage.cut("notes"); btn.disabled = freeze.disabled = true; me.say("stopped"); }, true);
+      const resumeBtn = ui.button("Tap to resume audio", async (btn) => {
+        if (!audio) return;
+        try {
+          await audio.resume();
+          if (audio.state === "running") { btn.hidden = true; me.say("audio resumed — notes are playing directly from the worker"); }
+        } catch (err) { me.say("could not resume audio: " + err.message); }
+      }, false);
+      resumeBtn.hidden = true;
+      const quiet = ui.button("Stop the music", (btn) => { stop(); stage.cut("notes"); btn.disabled = freeze.disabled = true; resumeBtn.hidden = true; me.say("stopped"); }, true);
       ui.button("Start the music", async (btn) => {
         btn.disabled = true;
         try {
           audio = new AudioContext();
-          await audio.audioWorklet.addModule(URL.createObjectURL(new Blob([BELL], { type: "text/javascript" })));
+          // Start resuming inside the user gesture before any await.
+          const resuming = audio.resume();
+          bellUrl = URL.createObjectURL(new Blob([BELL], { type: "text/javascript" }));
+          await audio.audioWorklet.addModule(bellUrl);
           const node = new AudioWorkletNode(audio, "bell", { outputChannelCount: [2] });
           const volume = audio.createGain(); volume.gain.value = 0.5;
           node.connect(volume).connect(audio.destination);
           const { port1, port2 } = new MessageChannel();
           worker.postMessage({}, [port1]);
           node.port.postMessage({}, [port2]);
-          audio.resume();   // may wait for a tap, so it is not awaited
-          await new Promise((r) => setTimeout(r, 250));
-        } catch (err) { return me.say("could not start: " + err.message); }
-        stage.cable("notes", "composer", "audio", "teal");
-        me.say(audio.state === "running" ? "introduced the worker to the audio thread, and kept no port" : "the browser is holding the sound until you tap");
+          await Promise.race([resuming, new Promise((r) => setTimeout(r, 250))]);
+        } catch (err) { btn.disabled = false; return me.say("could not start: " + err.message); }
+        stage.cable("notes", "composer", "audio", "teal", "notes");
+        if (audio.state === "running") {
+          me.say("introduced the worker to the audio thread, and kept no port");
+        } else {
+          resumeBtn.hidden = false;
+          me.say("the browser paused audio until a real tap — press Tap to resume audio");
+        }
         freeze.disabled = quiet.disabled = false;
       }, false, true);
     },

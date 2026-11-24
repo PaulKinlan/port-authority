@@ -5,12 +5,11 @@ import { sites } from "/_sites.js";
 
 const COLOR = { yellow: "#f5b700", red: "#e0364c", teal: "#0e9f8e" };
 const actor = (stage, name, site, role, title, color, extra = "") => {
-  const box = stage.box(name, { src: `${sites[site]}/actor.html?role=${role}&title=${encodeURIComponent(title)}&color=${encodeURIComponent(COLOR[color])}${extra}` });
-  box.frame.title = title;
+  const box = stage.box(name, { src: `${sites[site]}/actor.html?role=${role}&title=${encodeURIComponent(title)}&color=${encodeURIComponent(COLOR[color])}${extra}`, title });
   return box;
 };
 const pageBox = (stage, title, extra = "") => {
-  const box = stage.box("page", { html: `<div class="here"><h4>${title}</h4>${extra}<ul class="log"></ul></div>` });
+  const box = stage.box("page", { html: `<div class="here"><div class="box-title">${title}</div>${extra}<ul class="log" role="log" aria-live="polite"></ul></div>` });
   const ul = box.node.querySelector("ul");
   const say = (text) => { const li = document.createElement("li"); li.textContent = text; ul.prepend(li); while (ul.children.length > 6) ul.lastChild.remove(); };
   return { say, node: box.node };
@@ -21,7 +20,7 @@ export const origins = [
   {
     id: "keycopy",
     title: "Send a key to another site: it gets a copy you cannot take back",
-    blurb: "A <code>CryptoKey</code> can be posted to another origin. This page makes a signing key that cannot be read, and sends the key itself to the florist's site. The florist can now sign as you. It cannot read the key either, but it can keep it: it saves the key in its own IndexedDB, and after a reload it still has it. Nothing this page does can undo that. Compare the experiment above, where the key stays put and only a port travels.",
+    blurb: "A <code>CryptoKey</code> can be posted to another origin. This page makes a signing key that cannot be read, and sends the key itself to the florist's site. The florist can now sign as you. It cannot read the key either, but it can keep it: it saves the key in its own IndexedDB, and after a reload it still has it. Nothing this page does can undo that. Compare <a href=\"/patterns/signer/\">the signer pattern</a>, where the key stays put and only a port travels.",
     code: `const { privateKey } = await crypto.subtle.generateKey(ECDSA, false, ["sign"]);
 floristWindow.postMessage({ key: privateKey }, floristOrigin);   <span class="c">// a copy, not a move</span>
 
@@ -35,7 +34,7 @@ await crypto.subtle.sign(ECDSA, key, bytes); <span class="c">// signs as you</sp
       await keeper.whenReady;
       let pair = null;
       try { pair = await crypto.subtle.generateKey(ECDSA, false, ["sign", "verify"]); say("made a signing key nobody can read"); }
-      catch (err) { return say("no WebCrypto here: " + err.message); }
+      catch (err) { say("no WebCrypto here: " + err.message); ui.unsupported("This browser does not support WebCrypto here."); return; }
       const publicKey = pair.publicKey;
       let n = 0;
       stage.on(async (name, data) => {
@@ -49,7 +48,7 @@ await crypto.subtle.sign(ECDSA, key, bytes); <span class="c">// signs as you</sp
       const reload = ui.button("Reload the florist", () => { keeper.frame.src = keeper.frame.src; say("the florist's page was thrown away and loaded again"); }, true);
       ui.button("Send the key itself to the florist", (btn) => {
         stage.post("keeper", { cmd: "key", key: pair.privateKey });
-        stage.cable("gift", "page", "keeper", "red");
+        stage.cable("gift", "page", "keeper", "red", "copied key");
         say("sent the key. It was copied, so I still hold mine.");
         btn.disabled = true; sign.disabled = forget.disabled = reload.disabled = false;
       }, false, true);
@@ -72,22 +71,31 @@ box.error(new Error("shut"));               <span class="c">// later: their next
       const dropper = actor(stage, "dropper", "florist", "dropper", "Florist, a real site", "red");
       await Promise.all([listener.whenReady, dropper.whenReady]);
       let feed = null, timer = null, shut = null, n = 0;
+      stage.cleanup(() => { clearInterval(timer); try { feed?.close(); } catch {} });
       const drop = ui.button("Florist: drop a note", () => stage.post("dropper", { cmd: "drop" }), true);
       const close = ui.button("Close the feed", (btn) => { clearInterval(timer); try { feed.close(); } catch {} btn.disabled = true; say("closed the feed"); stage.cut("feed"); }, true);
       const shutBtn = ui.button("Shut the drop box", (btn) => { shut.error(new Error("the owner shut it")); btn.disabled = true; stage.cut("box"); say("shut the box. The next note will bounce."); }, true);
       const give = ui.button("Give the florist the writing half", (btn) => {
         const writable = new WritableStream({ start(controller) { shut = controller; }, write(note) { say("found in the box: " + note); } });
-        stage.post("dropper", { cmd: "box", writable }, [writable]);
-        stage.cable("box", "dropper", "page", "red");
-        btn.disabled = true; drop.disabled = shutBtn.disabled = false;
+        try {
+          stage.post("dropper", { cmd: "box", writable }, [writable]);
+          stage.cable("box", "dropper", "page", "red", "write only");
+          btn.disabled = true; drop.disabled = shutBtn.disabled = false;
+        } catch {
+          say("This browser cannot transfer streams yet.");
+        }
       }, true);
       ui.button("Give the library the listening half", (btn) => {
         const readable = new ReadableStream({ start(controller) { feed = controller; } });
-        timer = setInterval(() => { if (!listener.frame.isConnected) return clearInterval(timer); feed.enqueue(`tick ${++n}`); }, 900);
-        stage.post("listener", { cmd: "feed", readable }, [readable]);
-        stage.cable("feed", "page", "listener", "teal");
-        say("gave away the readable half, kept the controller");
-        btn.disabled = true; give.disabled = close.disabled = false;
+        try {
+          stage.post("listener", { cmd: "feed", readable }, [readable]);
+          timer = setInterval(() => { if (!listener.frame.isConnected) return clearInterval(timer); feed.enqueue(`tick ${++n}`); stage.pulse("feed", "page"); }, 900);
+          stage.cable("feed", "page", "listener", "teal", "read only");
+          say("gave away the readable half, kept the controller");
+          btn.disabled = true; give.disabled = close.disabled = false;
+        } catch {
+          say("This browser cannot transfer streams yet.");
+        }
       }, false, true);
     },
   },
@@ -104,19 +112,25 @@ myLines.pipeThrough({ readable, writable }).pipeTo(screen);`,
     async setup(stage, ui) {
       const { say } = pageBox(stage, "This page has private lines");
       const redactor = actor(stage, "redactor", "library", "redactor", "Library, a real site", "teal");
-      const out = stage.box("out", { html: `<div class="here"><h4>What came back</h4><ul class="log"><li class="muted">nothing yet</li></ul></div>` });
+      const out = stage.box("out", { html: `<div class="here"><div class="box-title">What came back</div><ul class="log" role="log" aria-live="polite"><li class="muted">nothing yet</li></ul></div>` });
       await redactor.whenReady;
       const lines = ["Write to ada@example.com about the order", "Card 4929 1234 5678 9012, expires soon", "Call 020 7946 0991 after six", "Nothing secret in this one"];
       let writer = null, i = 0;
       stage.on((name, data) => {
-        if (name !== "redactor" || data.wire !== "transform") return;
-        writer = data.writable.getWriter();
-        const list = out.node.querySelector("ul"); list.innerHTML = "";
-        data.readable.pipeTo(new WritableStream({ write(line) { const li = document.createElement("li"); li.textContent = line; list.prepend(li); stage.pulse("back", "redactor"); } }));
-        stage.cable("there", "page", "redactor", "teal");
-        stage.cable("back", "redactor", "out", "teal");
-        say("holding both ends of the library's transform");
-        send.disabled = false;
+        if (name !== "redactor") return;
+        if (data.wire === "error") { say("This browser cannot transfer streams yet."); return; }
+        if (data.wire !== "transform") return;
+        try {
+          writer = data.writable.getWriter();
+          const list = out.node.querySelector("ul"); list.innerHTML = "";
+          data.readable.pipeTo(new WritableStream({ write(line) { const li = document.createElement("li"); li.textContent = line; list.prepend(li); stage.pulse("back", "redactor"); } })).catch(() => {});
+          stage.cable("there", "page", "redactor", "teal", "writable");
+          stage.cable("back", "redactor", "out", "teal", "readable");
+          say("holding both ends of the library's transform");
+          send.disabled = false;
+        } catch {
+          say("This browser cannot transfer streams yet.");
+        }
       });
       const send = ui.button("Send a line through it", () => { const line = lines[i++ % lines.length]; writer.write(line); say("sent: " + line); stage.pulse("there", "page"); }, true);
       ui.button("Ask the library for its transform", (btn) => { stage.post("redactor", { cmd: "offer" }); btn.disabled = true; }, false, true);
@@ -140,6 +154,7 @@ const { value } = await readable.getReader().read();   <span class="c">// the se
         csp: "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'",
         script: () => {
           let writer = null, n = 0;
+          log("sandboxed with default-src 'none'");
           on("own", (data) => {
             try {
               const ws = new WebSocket(data.url);
@@ -174,19 +189,24 @@ const { value } = await readable.getReader().read();   <span class="c">// the se
         return { readable, writable, close: () => ws.close(), how: "a WebSocket wrapped in streams" };
       };
       let line = null;
+      stage.cleanup(() => { try { line?.close(); } catch {} });
       const alone = ui.button("Widget: try to connect by itself", () => stage.post("widget", { cmd: "own", url: echo }));
       const lend = ui.button("Lend the widget the connection", (btn) => {
-        stage.post("widget", { cmd: "line", readable: line.readable, writable: line.writable }, [line.readable, line.writable]);
-        stage.cable("lent", "page", "widget", "red");
-        say("handed over both streams. I kept the socket itself.");
-        btn.disabled = true; hello.disabled = back.disabled = false;
+        try {
+          stage.post("widget", { cmd: "line", readable: line.readable, writable: line.writable }, [line.readable, line.writable]);
+          stage.cable("lent", "page", "widget", "red", "streams");
+          say("handed over both streams. I kept the socket itself.");
+          btn.disabled = true; hello.disabled = back.disabled = false;
+        } catch {
+          say("This browser cannot transfer streams yet.");
+        }
       }, true);
       const hello = ui.button("Widget: say hello to the server", () => stage.post("widget", { cmd: "say" }), true);
       const back = ui.button("Close the connection", (btn) => { line.close(); btn.disabled = true; stage.cut("lent"); say("closed the socket. The widget is cut off."); }, true);
       ui.button("Open a connection to the server", async (btn) => {
         btn.disabled = true;
         try { line = await open(); say(`connected, using ${line.how}`); lend.disabled = false; }
-        catch (err) { say("could not connect: " + err.message); }
+        catch (err) { say("could not connect: " + err.message); btn.disabled = false; }
       }, false, true);
       void alone;
     },

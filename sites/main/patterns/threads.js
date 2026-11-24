@@ -3,7 +3,7 @@
 // Same stage as demos.js.
 
 const pageBox = (stage, title = "This page", extra = "") => {
-  const box = stage.box("page", { html: `<div class="here"><h4>${title}</h4>${extra}<ul class="log"></ul></div>` });
+  const box = stage.box("page", { html: `<div class="here"><div class="box-title">${title}</div>${extra}<ul class="log" role="log" aria-live="polite"></ul></div>` });
   const ul = box.node.querySelector("ul");
   const say = (text) => { const li = document.createElement("li"); li.textContent = text; ul.prepend(li); while (ul.children.length > 6) ul.lastChild.remove(); };
   return { say, node: box.node };
@@ -52,16 +52,24 @@ while (performance.now() < until) {}`,
     async setup(stage, ui) {
       const { say, node } = pageBox(stage, "This page", `<p class="small" style="margin:0 0 .4rem">Main thread ticks: <strong data-ticks>0</strong></p>`);
       const ticks = node.querySelector("[data-ticks]");
+      if (!("OffscreenCanvas" in self) || typeof HTMLCanvasElement.prototype.transferControlToOffscreen !== "function") {
+        say("This browser cannot transfer canvas control to a worker (transferControlToOffscreen is missing).");
+        ui.unsupported("This browser does not support OffscreenCanvas transfer to workers.");
+        return;
+      }
       let n = 0;
       const beat = setInterval(() => { if (!ticks.isConnected) return clearInterval(beat); ticks.textContent = ++n; }, 100);
       const css = getComputedStyle(document.documentElement);
       const url = URL.createObjectURL(new Blob([`(${talker})()`], { type: "text/javascript" }));
+      const workers = [];
       const make = (name, title, color, starts) => {
         const box = stage.box(name, { kind: "worker", url: "blob:", html: `<canvas style="width:100%;height:100%;display:block" aria-label="${title}, painted by the worker itself"></canvas>` });
         const canvas = box.node.querySelector("canvas");
         const ratio = Math.min(2, devicePixelRatio || 1);
-        canvas.width = box.node.clientWidth * ratio; canvas.height = box.node.clientHeight * ratio;
+        canvas.width = Math.max(160, box.node.clientWidth) * ratio;
+        canvas.height = Math.max(120, box.node.clientHeight) * ratio;
         const worker = new Worker(url);
+        workers.push(worker);
         const surface = canvas.transferControlToOffscreen();
         const look = { title, starts, color, panel: getComputedStyle(box.node).backgroundColor, ink: getComputedStyle(box.node).color };
         worker.postMessage({ surface, look }, [surface]);
@@ -69,6 +77,11 @@ while (performance.now() < until) {}`,
       };
       const a = make("a", "Worker A", css.getPropertyValue("--red").trim(), true);
       const b = make("b", "Worker B", css.getPropertyValue("--teal").trim(), false);
+      stage.cleanup(() => {
+        clearInterval(beat);
+        workers.forEach((w) => w.terminate());
+        URL.revokeObjectURL(url);
+      });
       const count = () => new Promise((resolve) => { b.onmessage = ({ data }) => resolve(data.heard); b.postMessage({ count: true }); });
       const freeze = ui.button("Freeze this page for 3 seconds", async () => {
         const before = await count();
@@ -84,7 +97,7 @@ while (performance.now() < until) {}`,
         const { port1, port2 } = new MessageChannel();
         a.postMessage({}, [port1]);
         b.postMessage({}, [port2]);
-        stage.cable("line", "a", "b", "teal");
+        stage.cable("line", "a", "b", "teal", "direct");
         say("introduced them, and kept no port");
         btn.disabled = true; freeze.disabled = false;
       }, false, true);
@@ -107,31 +120,39 @@ port.onmessage = ({ data }) => {
       const src = stage.box("page", { html: `<canvas width="320" height="180" style="width:100%;height:100%;display:block" aria-label="The source video, drawn by this page"></canvas>` });
       await stage.frame("filter", {
         title: "Filter on another origin", color: "yellow",
-        script: () => on("port", (_, [port]) => {
-          const effects = ["invert(1) hue-rotate(40deg)", "mosaic", "grayscale(1) contrast(2.2)", "blur(3px) saturate(3)"];
-          let effect = 0, canvas = null, ctx = null, small = null, done = 0;
-          log("waiting for frames");
-          port.onmessage = ({ data }) => {
-            if (data.next) { effect = (effect + 1) % effects.length; return log("effect: " + effects[effect]); }
-            const frame = data.frame;
-            if (!canvas) { canvas = new OffscreenCanvas(frame.displayWidth, frame.displayHeight); ctx = canvas.getContext("2d"); small = new OffscreenCanvas(40, 22); }
-            if (effects[effect] === "mosaic") {
-              small.getContext("2d").drawImage(frame, 0, 0, small.width, small.height);
-              ctx.filter = "none"; ctx.imageSmoothingEnabled = false;
-              ctx.drawImage(small, 0, 0, canvas.width, canvas.height);
-            } else { ctx.filter = effects[effect]; ctx.drawImage(frame, 0, 0); }
-            const timestamp = frame.timestamp;
-            frame.close();
-            const out = new VideoFrame(canvas, { timestamp });
-            send(port, "back", { frame: out }, [out]);
-            if (++done % 30 === 0) log(`filtered ${done} frames, kept none`);
-          };
-        }),
+        script: () => {
+          log("waiting — not connected yet");
+          on("port", (_, [port]) => {
+            const effects = ["invert(1) hue-rotate(40deg)", "mosaic", "grayscale(1) contrast(2.2)", "blur(3px) saturate(3)"];
+            let effect = 0, canvas = null, ctx = null, small = null, done = 0;
+            log("connected, waiting for frames");
+            port.onmessage = ({ data }) => {
+              if (data.next) { effect = (effect + 1) % effects.length; return log("effect: " + effects[effect]); }
+              const frame = data.frame;
+              if (!canvas) { canvas = new OffscreenCanvas(frame.displayWidth, frame.displayHeight); ctx = canvas.getContext("2d"); small = new OffscreenCanvas(40, 22); }
+              if (effects[effect] === "mosaic") {
+                small.getContext("2d").drawImage(frame, 0, 0, small.width, small.height);
+                ctx.filter = "none"; ctx.imageSmoothingEnabled = false;
+                ctx.drawImage(small, 0, 0, canvas.width, canvas.height);
+              } else { ctx.filter = effects[effect]; ctx.drawImage(frame, 0, 0); }
+              const timestamp = frame.timestamp;
+              frame.close();
+              const out = new VideoFrame(canvas, { timestamp });
+              send(port, "back", { frame: out }, [out]);
+              if (++done % 30 === 0) log(`filtered ${done} frames, kept none`);
+            };
+          });
+        },
       });
       const out = stage.box("out", { html: `<canvas width="320" height="180" style="width:100%;height:100%;display:block" aria-label="The video after the filter"></canvas><p class="small" data-note style="position:absolute;inset:auto 0 0 0;margin:0;padding:.35rem .6rem;background:var(--panel)">Nothing has come back yet.</p>` });
       const source = src.node.querySelector("canvas"), sctx = source.getContext("2d");
       const octx = out.node.querySelector("canvas").getContext("2d");
       const note = out.node.querySelector("[data-note]");
+      if (!("VideoFrame" in self)) {
+        note.textContent = "This browser does not support VideoFrame.";
+        ui.unsupported("This browser does not support WebCodecs VideoFrame.");
+        return;
+      }
       const paint = (t) => {
         const { width: w, height: h } = source;
         sctx.fillStyle = "#0f1c3f"; sctx.fillRect(0, 0, w, h);
@@ -141,36 +162,44 @@ port.onmessage = ({ data }) => {
         }
         sctx.fillStyle = "#fff"; sctx.font = "700 20px system-ui"; sctx.fillText((t / 1000).toFixed(1) + " s", 12, 28);
       };
-      let alive = true, running = false, waiting = false, shown = 0, closedHere = null;
-      const loop = (t) => { if (!source.isConnected) return; paint(t); if (running && alive && !waiting) sendFrame(t); requestAnimationFrame(loop); };
-      requestAnimationFrame(loop);
-      const channel = new MessageChannel();
-      stage.post("filter", { cmd: "port" }, [channel.port2]);
-      stage.cable("there", "page", "filter", "yellow");
-      stage.cable("back", "filter", "out", "yellow");
+      let alive = true, running = false, waiting = false, shown = 0, closedHere = null, port = null, rafId = 0;
+      const loop = (t) => { if (!alive || !source.isConnected) return; paint(t); if (running && !waiting && port) sendFrame(t); rafId = requestAnimationFrame(loop); };
+      rafId = requestAnimationFrame(loop);
+      stage.cleanup(() => { alive = false; running = false; cancelAnimationFrame(rafId); port?.close(); });
+
       // One frame in flight at a time: the next leaves when the last comes back.
       const sendFrame = (t) => {
         try {
           const frame = new VideoFrame(source, { timestamp: Math.round(t * 1000) });
-          channel.port1.postMessage({ frame }, [frame]);
+          port.postMessage({ frame }, [frame]);
           closedHere = frame.codedWidth === 0;
           frame.close();   // already empty after the transfer, and harmless to say so
           waiting = true;
           if (shown % 6 === 0) stage.pulse("there", "page");
         } catch (err) { running = false; note.textContent = `This browser cannot do it: ${err.message}`; }
       };
-      channel.port1.onmessage = ({ data }) => {
-        octx.drawImage(data.frame, 0, 0); data.frame.close();
-        waiting = false;
-        if (removing) { removing = false; setTimeout(remove); }
-        note.textContent = `${++shown} frames back from the filter${closedHere ? ". Each one left this page empty-handed." : "."}`;
-      };
-      const next = ui.button("Ask for another effect", () => channel.port1.postMessage({ next: true }), true);
+      const next = ui.button("Ask for another effect", () => port?.postMessage({ next: true }), true);
       // Stop sending first, and let the frame that is out there come home, so none is lost inside a dead context.
       let removing = false;
       const remove = () => { stage.remove("filter"); note.textContent += " The filter is gone and the video stops with it."; };
-      const kill = ui.button("Remove the filter", (btn) => { alive = false; btn.disabled = true; waiting ? (removing = true) : remove(); }, true);
-      ui.button("Start the video", (btn) => { running = true; btn.disabled = true; next.disabled = kill.disabled = false; }, false, true);
+      const kill = ui.button("Remove the filter", (btn) => { alive = false; running = false; btn.disabled = next.disabled = true; waiting ? (removing = true) : remove(); }, true);
+      const startBtn = ui.button("Start the video", (btn) => { running = true; btn.disabled = true; next.disabled = kill.disabled = false; }, true);
+      ui.button("Connect the filter", (btn) => {
+        btn.disabled = true;
+        const channel = new MessageChannel();
+        port = channel.port1;
+        port.onmessage = ({ data }) => {
+          octx.drawImage(data.frame, 0, 0); data.frame.close();
+          waiting = false;
+          if (removing) { removing = false; setTimeout(remove); }
+          note.textContent = `${++shown} frames back from the filter${closedHere ? ". Each one left this page empty-handed." : "."}`;
+        };
+        stage.post("filter", { cmd: "port" }, [channel.port2]);
+        stage.cable("there", "page", "filter", "yellow", "frames in");
+        stage.cable("back", "filter", "out", "yellow", "frames out");
+        note.textContent = "Connected. Press Start the video to begin sending frames.";
+        startBtn.disabled = false;
+      }, false, true);
     },
   },
   {
@@ -189,28 +218,32 @@ lent.onmessage = ({ data }) => {
       const ECDSA = { name: "ECDSA", namedCurve: "P-256" }, SIGN = { name: "ECDSA", hash: "SHA-256" };
       await stage.frame("vault", {
         title: "Vault, origin one", color: "yellow",
-        script: () => on("port", async (_, [port]) => {
-          try {
-            const pair = await crypto.subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, false, ["sign", "verify"]);
-            let readable = "no";
-            try { await crypto.subtle.exportKey("jwk", pair.privateKey); readable = "yes"; } catch {}
-            log("made a key. can I read it myself? " + readable);
-            const jwk = await crypto.subtle.exportKey("jwk", pair.publicKey);
-            let n = 0;
-            port.onmessage = async ({ data }) => {
-              const signature = await crypto.subtle.sign({ name: "ECDSA", hash: "SHA-256" }, pair.privateKey, new TextEncoder().encode(data.text));
-              log(`signed #${++n}: ${data.text}`);
-              send(port, "vault", { id: data.id, signature });
-            };
-            send(port, "vault", { publicKey: jwk });
-          } catch (err) { log("no WebCrypto here: " + err.message); }
-        }),
+        script: () => {
+          log("waiting — no signing port requested yet");
+          on("port", async (_, [port]) => {
+            try {
+              const pair = await crypto.subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, false, ["sign", "verify"]);
+              let readable = "no";
+              try { await crypto.subtle.exportKey("jwk", pair.privateKey); readable = "yes"; } catch {}
+              log("made a key. can I read it myself? " + readable);
+              const jwk = await crypto.subtle.exportKey("jwk", pair.publicKey);
+              let n = 0;
+              port.onmessage = async ({ data }) => {
+                const signature = await crypto.subtle.sign({ name: "ECDSA", hash: "SHA-256" }, pair.privateKey, new TextEncoder().encode(data.text));
+                log(`signed #${++n}: ${data.text}`);
+                send(port, "vault", { id: data.id, signature });
+              };
+              send(port, "vault", { publicKey: jwk });
+            } catch (err) { log("no WebCrypto here: " + err.message); }
+          });
+        },
       });
       const { say } = pageBox(stage, "This page holds the signing port");
       await stage.frame("shop", {
         title: "Shop, origin two", color: "teal",
         script: () => {
           let port = null, n = 0;
+          log("no signing port yet");
           on("port", (_, [p]) => {
             port = p; log("lent a signing port");
             port.onmessage = ({ data }) => {
@@ -230,6 +263,7 @@ lent.onmessage = ({ data }) => {
       const vault = new MessageChannel();
       let publicKey = null, lent = null, uses = 0;
       const texts = new Map();
+      stage.cleanup(() => { vault.port1.close(); lent?.close(); });
       vault.port1.onmessage = async ({ data }) => {
         if (data.publicKey) {
           publicKey = await crypto.subtle.importKey("jwk", data.publicKey, ECDSA, true, ["verify"]);
@@ -261,15 +295,15 @@ lent.onmessage = ({ data }) => {
           say(`passed an order to the vault, ${uses} use${uses === 1 ? "" : "s"} left`);
         };
         stage.post("shop", { cmd: "port" }, [channel.port2]);
-        stage.cable("lent", "page", "shop", "teal");
+        stage.cable("lent", "page", "shop", "teal", "orders only");
         btn.disabled = true; orderBtn.disabled = moneyBtn.disabled = backBtn.disabled = false;
       }, true);
       const orderBtn = ui.button("Shop: sign an order", () => stage.post("shop", { cmd: "sign", text: "order: # dozen tulips" }), true);
       const moneyBtn = ui.button("Shop: try to sign a payment", () => stage.post("shop", { cmd: "sign", text: "pay: 5000 to the shop (#)" }), true);
-      const backBtn = ui.button("Take the port back", () => { lent?.close(); lent = null; stage.cut("lent"); say("closed the shop's port. The vault never knew the shop existed."); }, true);
+      const backBtn = ui.button("Take the port back", (btn) => { lent?.close(); lent = null; stage.cut("lent"); btn.disabled = true; say("closed the shop's port. The vault never knew the shop existed."); }, true);
       ui.button("Ask the vault for a signing port", (btn) => {
         stage.post("vault", { cmd: "port" }, [vault.port2]);
-        stage.cable("vault", "vault", "page", "yellow");
+        stage.cable("vault", "vault", "page", "yellow", "full sign");
         btn.disabled = true;
       }, false, true);
     },

@@ -16,38 +16,62 @@
 </head>
 <body>
 <h1 id="name"></h1>
-<p id="who">Nobody else is here yet. Open this page in another tab.</p>
-<button id="hi">Say hi to everyone</button>
-<ul id="log"></ul>
+<p id="who">Waiting to connect to the SharedWorker.</p>
+<button id="hi" type="button">Say hi to everyone</button>
+<ul id="log" role="log" aria-live="polite"></ul>
 <script>
-  const name = new URLSearchParams(location.search).get("name") || "Tab " + Math.random().toString(36).slice(2, 5);
+  const params = new URLSearchParams(location.search);
+  const name = params.get("name") || "Tab " + Math.random().toString(36).slice(2, 5);
+  const manual = params.get("manual") === "1";
   document.getElementById("name").textContent = name;
   const log = (text) => { const li = document.createElement("li"); li.textContent = text; document.getElementById("log").prepend(li); };
   const tell = (wire, data) => parent !== window && parent.postMessage({ wire, ...data }, location.origin);
   const direct = new Map();
-  const worker = new SharedWorker("/patterns/exchange.js", { name: "exchange" });
-  worker.port.onmessage = ({ data, ports }) => {
-    if (data.type !== "meet") return;
-    const port = ports[0], cable = [name, data.name].sort().join("~");
-    direct.set(data.name, port);
-    document.getElementById("who").textContent = "Direct lines to: " + [...direct.keys()].join(", ");
-    // Every message on a direct line is answered, so both tabs can see it works.
-    port.onmessage = (e) => {
-      log(`${data.name}: ${e.data}`);
-      if (/^(hello|hi)\b/.test(e.data)) { port.postMessage(`got your "${e.data}"`); tell("pulse", { cable }); }
+  let worker = null, joined = false, count = 0;
+
+  const connect = () => {
+    if (joined) return;
+    if (!("SharedWorker" in self)) {
+      document.getElementById("who").textContent = "This browser does not support SharedWorker.";
+      document.getElementById("hi").disabled = true;
+      return;
+    }
+    joined = true;
+    document.getElementById("who").textContent = "Connected to SharedWorker. Waiting for another tab.";
+    worker = new SharedWorker("/patterns/exchange.js", { name: "exchange" });
+    worker.port.onmessage = ({ data, ports }) => {
+      if (data.type !== "meet") return;
+      const port = ports[0], cable = [name, data.name].sort().join("~");
+      direct.set(data.name, port);
+      document.getElementById("who").textContent = "Direct lines to: " + [...direct.keys()].join(", ");
+      // Every message on a direct line is answered, so both tabs can see it works.
+      port.onmessage = (e) => {
+        log(`${data.name}: ${e.data}`);
+        if (/^(hello|hi)\b/.test(e.data)) { port.postMessage(`got your "${e.data}"`); tell("pulse", { cable }); }
+      };
+      log(`worker introduced ${data.name}`);
+      tell("met", { peer: data.name });
+      if (!manual) port.postMessage("hello from " + name);
     };
-    log(`worker introduced ${data.name}`);
-    tell("met", { peer: data.name });
-    port.postMessage("hello from " + name);
+    const lock = "peer-" + crypto.randomUUID();
+    const join = () => worker.port.postMessage({ type: "join", name, lock });
+    navigator.locks ? navigator.locks.request(lock, () => { join(); return new Promise(() => {}); }) : join();
+    tell("joined");
   };
-  const lock = "peer-" + crypto.randomUUID();
-  const join = () => worker.port.postMessage({ type: "join", name, lock });
-  navigator.locks ? navigator.locks.request(lock, () => { join(); return new Promise(() => {}); }) : join();
-  let count = 0;
-  document.getElementById("hi").onclick = () => {
+
+  const sayHi = () => {
     if (!direct.size) return log("nobody else is here yet");
     for (const [peer, port] of direct) { port.postMessage(`hi #${++count}`); tell("pulse", { cable: [name, peer].sort().join("~") }); }
   };
+
+  document.getElementById("hi").onclick = sayHi;
+  addEventListener("message", (event) => {
+    if (event.source !== parent || event.origin !== location.origin || !event.data) return;
+    if (event.data.cmd === "join") connect();
+    if (event.data.cmd === "say") sayHi();
+  });
+
+  if (!manual) connect();
   tell("ready");
 </script>
 </body>

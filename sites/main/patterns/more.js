@@ -2,7 +2,7 @@
 // Same stage as demos.js. Every frame is a sandboxed context on its own origin.
 
 const pageBox = (stage, title = "This page", extra = "") => {
-  const box = stage.box("page", { html: `<div class="here"><h4>${title}</h4>${extra}<ul class="log"></ul></div>` });
+  const box = stage.box("page", { html: `<div class="here"><div class="box-title">${title}</div>${extra}<ul class="log" role="log" aria-live="polite"></ul></div>` });
   const ul = box.node.querySelector("ul");
   const say = (text) => { const li = document.createElement("li"); li.textContent = text; ul.prepend(li); while (ul.children.length > 6) ul.lastChild.remove(); };
   return { say, node: box.node };
@@ -31,46 +31,57 @@ port.onmessage = ({ data }) => show.transferFromImageBitmap(data.frame);`,
       const canvas = box.node.querySelector("canvas");
       await stage.frame("painter", {
         title: "Painter on another origin", color: "red",
-        script: () => on("port", (_, [port]) => {
-          let hue = 350, frames = 0, going = false;
-          port.onmessage = ({ data }) => {
-            if (data.hue !== undefined) { hue = data.hue; return log("told to use hue " + hue); }
-            if (!data.size || going) return;
-            going = true;
-            const [w, h] = data.size;
-            const mine = new OffscreenCanvas(w, h), ctx = mine.getContext("2d");
-            log("painting frames for a page I cannot see");
-            const draw = async (t) => {
-              ctx.fillStyle = "rgba(15,28,63,0.12)"; ctx.fillRect(0, 0, w, h);
-              for (let i = 0; i < 5; i++) {
-                const a = t / 700 + i * 1.26;
-                ctx.beginPath();
-                ctx.arc(w / 2 + Math.cos(a) * w * 0.32, h / 2 + Math.sin(a * 1.7) * h * 0.32, 12 + i * 3, 0, 7);
-                ctx.fillStyle = `hsl(${hue + i * 14} 85% 58%)`; ctx.fill();
-              }
-              const frame = await createImageBitmap(mine);
-              port.postMessage({ frame, frames: ++frames }, [frame]);
+        script: () => {
+          log("waiting — no channel yet");
+          on("port", (_, [port]) => {
+            let hue = 350, frames = 0, going = false;
+            log("holding a port to the page");
+            port.onmessage = ({ data }) => {
+              if (data.hue !== undefined) { hue = data.hue; return log("told to use hue " + hue); }
+              if (!data.size || going) return;
+              going = true;
+              const [w, h] = data.size;
+              const mine = new OffscreenCanvas(w, h), ctx = mine.getContext("2d");
+              log("painting frames for a page I cannot see");
+              const draw = async (t) => {
+                ctx.fillStyle = "rgba(15,28,63,0.12)"; ctx.fillRect(0, 0, w, h);
+                for (let i = 0; i < 5; i++) {
+                  const a = t / 700 + i * 1.26;
+                  ctx.beginPath();
+                  ctx.arc(w / 2 + Math.cos(a) * w * 0.32, h / 2 + Math.sin(a * 1.7) * h * 0.32, 12 + i * 3, 0, 7);
+                  ctx.fillStyle = `hsl(${hue + i * 14} 85% 58%)`; ctx.fill();
+                }
+                const frame = await createImageBitmap(mine);
+                port.postMessage({ frame, frames: ++frames }, [frame]);
+                requestAnimationFrame(draw);
+              };
               requestAnimationFrame(draw);
             };
-            requestAnimationFrame(draw);
-          };
-        }),
+          });
+        },
       });
-      const channel = new MessageChannel();
-      stage.post("painter", { cmd: "port" }, [channel.port2]);
-      stage.cable("line", "page", "painter", "red");
-      const hueBtn = ui.button("Ask for another colour", () => { channel.port1.postMessage({ hue: Math.floor(Math.random() * 360) }); stage.pulse("line", "page"); }, true);
+      let port = null;
       const show = canvas.getContext("bitmaprenderer");
-      channel.port1.onmessage = ({ data }) => {
-        if (!data.frame) return;
-        if (!canvas.isConnected) { data.frame.close(); return channel.port1.close(); }
-        show.transferFromImageBitmap(data.frame);
-        if (data.frames % 45 === 1) stage.pulse("line", "painter");
-      };
-      ui.button("Ask the painter to paint", (btn) => {
-        channel.port1.postMessage({ size: [canvas.width, canvas.height] });
+      stage.cleanup(() => port?.close());
+      const hueBtn = ui.button("Ask for another colour", () => { port.postMessage({ hue: Math.floor(Math.random() * 360) }); stage.pulse("line", "page"); }, true);
+      const paintBtn = ui.button("Ask the painter to paint", (btn) => {
+        port.postMessage({ size: [canvas.width, canvas.height] });
         stage.pulse("line", "page");
         btn.disabled = true; hueBtn.disabled = false;
+      }, true);
+      ui.button("Open a channel to the painter", (btn) => {
+        btn.disabled = true;
+        const channel = new MessageChannel();
+        port = channel.port1;
+        port.onmessage = ({ data }) => {
+          if (!data.frame) return;
+          if (!canvas.isConnected) { data.frame.close(); return port.close(); }
+          show.transferFromImageBitmap(data.frame);
+          if (data.frames % 45 === 1) stage.pulse("line", "painter");
+        };
+        stage.post("painter", { cmd: "port" }, [channel.port2]);
+        stage.cable("line", "page", "painter", "red", "bitmaps");
+        paintBtn.disabled = false;
       }, false, true);
     },
   },
@@ -88,27 +99,56 @@ const borrow = (port) => (...args) => port.postMessage(args);`,
       const { say } = pageBox(stage, "This page owns onTick()");
       await stage.frame("worker", {
         title: "Countdown on another origin", color: "teal",
-        script: () => on("count", (data, [port]) => {
-          const onTick = (...args) => { port.postMessage(args); tell("pulse", { cable: "fn" }); };
-          log("I was lent a function");
-          let n = data.from;
-          const timer = setInterval(() => { log(`calling onTick(${n})`); onTick(n, n === 0 ? "lift off" : "counting"); if (n-- === 0) clearInterval(timer); }, 700);
-        }),
+        script: () => {
+          let onTick = null, timer = null;
+          log("waiting for a function handle");
+          on("lend", (_, [port]) => {
+            onTick = (...args) => { port.postMessage(args); tell("pulse", { cable: "fn" }); };
+            log("I was lent a function");
+          });
+          on("start", (data) => {
+            if (!onTick) return log("no function lent yet");
+            clearInterval(timer);
+            let n = data.from;
+            const step = () => {
+              log(`calling onTick(${n})`);
+              onTick(n, n === 0 ? "lift off" : "counting");
+              if (n-- === 0) clearInterval(timer);
+            };
+            step();
+            timer = setInterval(step, 700);
+          });
+        },
       });
       let lent = null;
-      ui.button("Take the function back", () => { lent?.close(); stage.cut("fn"); say("closed it. Their calls now go nowhere."); });
-      ui.button("Lend onTick and start a countdown", () => {
+      stage.cleanup(() => lent?.close());
+      const startBtn = ui.button("Start the countdown", (btn) => {
+        btn.disabled = true;
+        stage.post("worker", { cmd: "start", from: 6 });
+        say("told the other origin to begin counting down");
+      }, true);
+      const takeBtn = ui.button("Take the function back", (btn) => {
+        lent?.close(); lent = null;
+        stage.cut("fn");
+        btn.disabled = true;
+        say("closed it. Their calls now go nowhere.");
+      }, true);
+      ui.button("Lend onTick()", (btn) => {
+        btn.disabled = true;
         const onTick = (n, word) => say(`onTick(${n}, "${word}") ran here`);
         const { port1, port2 } = new MessageChannel();
         port1.onmessage = (e) => onTick(...e.data);
         lent = port1;
-        stage.post("worker", { cmd: "count", from: 6 }, [port2]);
-        stage.cable("fn", "page", "worker", "teal");
+        stage.post("worker", { cmd: "lend" }, [port2]);
+        stage.cable("fn", "page", "worker", "teal", "onTick()");
+        say("wrapped onTick() in a channel and sent one end");
+        startBtn.disabled = takeBtn.disabled = false;
       }, false, true);
     },
   },
   {
     id: "zerocopy",
+    noAutoplay: true,
     title: "Move 64 MB between origins without copying it",
     blurb: "Post an <code>ArrayBuffer</code> and it is copied. Put it in the transfer list and the memory itself changes hands: the sender's buffer drops to zero bytes and the cost stops depending on size. Each button sends 64 MB to another origin and back, and times the round trip.",
     code: `port.postMessage(buffer);            <span class="c">// structured clone: a copy each way</span>
@@ -117,31 +157,43 @@ port.postMessage(buffer, [buffer]);  <span class="c">// transfer: buffer.byteLen
       const { say } = pageBox(stage);
       await stage.frame("far", {
         title: "Another origin", color: "yellow",
-        script: () => on("port", (_, [port]) => {
-          port.onmessage = ({ data }) => {
-            log(`received ${data.buffer.byteLength / 2 ** 20} MB, sending it back`);
-            send(port, "line", { buffer: data.buffer }, data.transfer ? [data.buffer] : []);
-          };
-        }),
+        script: () => {
+          log("waiting — no channel yet");
+          on("port", (_, [port]) => {
+            log("holding a channel to this page");
+            port.onmessage = ({ data }) => {
+              log(`received ${data.buffer.byteLength / 2 ** 20} MB, sending it back`);
+              send(port, "line", { buffer: data.buffer }, data.transfer ? [data.buffer] : []);
+            };
+          });
+        },
       });
-      const channel = new MessageChannel();
-      stage.post("far", { cmd: "port" }, [channel.port2]);
-      stage.cable("line", "page", "far", "yellow");
+      let port = null;
+      stage.cleanup(() => port?.close());
       const run = (transfer) => new Promise((resolve) => {
         const buffer = new ArrayBuffer(64 * 2 ** 20);
         new Uint8Array(buffer).fill(7);
         const start = performance.now();
-        channel.port1.onmessage = ({ data }) => {
+        port.onmessage = () => {
           const ms = performance.now() - start;
           say(`${transfer ? "transfer" : "copy"}: ${ms.toFixed(1)} ms round trip${transfer ? `, sender held ${held} bytes meanwhile` : ""}`);
           resolve(ms);
         };
-        channel.port1.postMessage({ buffer, transfer }, transfer ? [buffer] : []);
+        port.postMessage({ buffer, transfer }, transfer ? [buffer] : []);
         const held = buffer.byteLength;
         stage.pulse("line", "page");
       });
-      ui.button("Copy 64 MB there and back", () => run(false));
-      ui.button("Transfer 64 MB there and back", () => run(true), false, true);
+      const transferBtn = ui.button("Transfer 64 MB there and back", () => run(true), true);
+      const copyBtn = ui.button("Copy 64 MB there and back", () => run(false), true);
+      ui.button("Open a channel", (btn) => {
+        btn.disabled = true;
+        const channel = new MessageChannel();
+        port = channel.port1;
+        stage.post("far", { cmd: "port" }, [channel.port2]);
+        stage.cable("line", "page", "far", "yellow", "channel");
+        say("opened a channel to the other origin");
+        transferBtn.disabled = copyBtn.disabled = false;
+      }, false, true);
     },
   },
   {
@@ -156,34 +208,72 @@ win.postMessage({ feed: port }, location.origin, [port]);`,
       const meter = node.querySelector(".meter");
       await stage.frame("feed", {
         title: "Feed on another origin", color: "teal",
-        script: () => on("port", (_, [port]) => {
-          let n = 0;
-          log("ticking into one port, wherever it is");
-          setInterval(() => send(port, "line", ++n), 900);
-        }),
+        script: () => {
+          log("waiting — no channel yet");
+          on("port", (_, [port]) => {
+            let n = 0;
+            log("ticking into one port, wherever it is");
+            setInterval(() => send(port, "line", ++n), 900);
+          });
+        },
       });
-      const channel = new MessageChannel();
-      let port = channel.port1;
+      let port = null, activeListener = null, closedCheck = null, popup = null;
+      const clearPopupWatch = () => {
+        if (activeListener) { removeEventListener("message", activeListener); activeListener = null; }
+        if (closedCheck) { clearInterval(closedCheck); closedCheck = null; }
+      };
+      stage.cleanup(() => { clearPopupWatch(); port?.close(); try { popup?.close(); } catch {} });
       const listen = () => { port.onmessage = (e) => { meter.textContent = e.data; }; };
-      listen();
-      stage.post("feed", { cmd: "port" }, [channel.port2]);
-      stage.cable("line", "page", "feed", "teal");
-      ui.button("Tear it off", (btn) => {
+      const tearBtn = ui.button("Tear it off", (btn) => {
         const win = window.open("/patterns/meter.html", "pa_meter", "popup,width=320,height=260");
-        if (!win) return say("the window was blocked");
-        const onMessage = (event) => {
+        if (!win) {
+          say("Your browser blocked the popup window. Allow popups for this site and press Tear it off again.");
+          return;
+        }
+        popup = win;
+        let handedOff = false;
+        clearPopupWatch();
+        activeListener = (event) => {
           if (event.source !== win || event.origin !== location.origin) return;
-          if (event.data === "ready") {
+          if (event.data === "ready" && port) {
+            handedOff = true;
             port.onmessage = null;
             win.postMessage({ feed: port }, location.origin, [port]);
-            meter.textContent = "away"; say("the port left for the other window"); stage.cut("line"); btn.disabled = true;
+            port = null;
+            meter.textContent = "away";
+            say("the port left for the other window");
+            stage.cut("line");
+            btn.disabled = true;
           } else if (event.data?.back) {
-            port = event.ports[0]; listen();
-            say("the port came back"); stage.cable("line", "page", "feed", "teal"); btn.disabled = false;
-            removeEventListener("message", onMessage);
+            clearPopupWatch();
+            port = event.ports[0];
+            listen();
+            say("the port came back");
+            stage.cable("line", "page", "feed", "teal", "feed");
+            btn.disabled = false;
+            popup = null;
           }
         };
-        addEventListener("message", onMessage);
+        addEventListener("message", activeListener);
+        closedCheck = setInterval(() => {
+          if (!win.closed) return;
+          clearPopupWatch();
+          popup = null;
+          if (handedOff && !port) {
+            meter.textContent = "closed";
+            say("the popup closed without returning the port. Press Start again to reconnect.");
+          }
+        }, 400);
+      }, true);
+      ui.button("Connect to the feed", (btn) => {
+        btn.disabled = true;
+        const channel = new MessageChannel();
+        port = channel.port1;
+        listen();
+        stage.post("feed", { cmd: "port" }, [channel.port2]);
+        stage.cable("line", "page", "feed", "teal", "feed");
+        say("connected to the feed — ticks are arriving");
+        tearBtn.disabled = false;
       }, false, true);
     },
   },
@@ -191,21 +281,25 @@ win.postMessage({ feed: port }, location.origin, [port]);`,
     id: "tabserver",
     title: "Serve pages to other tabs from this tab",
     blurb: "A Service Worker can answer a fetch any way it likes, including by asking someone else. This page hands the worker a port. Every request under <code>/patterns/served/</code> is sent up that port, and whatever you type on the left is the response. The page on the right is a real navigation to a real URL, and so is the new tab.",
-    code: `<span class="c">// service worker</span>
+    code: `<span class="c">// Service Worker</span>
 onfetch = (event) => event.respondWith(new Promise((resolve) => {
   const { port1, port2 } = new MessageChannel();
   port1.onmessage = (e) => resolve(new Response(e.data.body, { headers: e.data.headers }));
   tabPort.postMessage({ url: event.request.url }, [port2]);
 }));`,
     async setup(stage, ui) {
-      const box = stage.box("page", { html: `<div class="here" style="height:100%;display:grid;grid-template-rows:auto 1fr"><h4>This tab is the server</h4><textarea aria-label="HTML to serve" style="font:12px/1.4 var(--mono);resize:none;border-width:1px;padding:.4rem">&lt;h1&gt;Hello from another tab&lt;/h1&gt;\n&lt;p&gt;Edit me, then reload.&lt;/p&gt;</textarea></div>` });
+      const box = stage.box("page", { html: `<div class="here" style="height:100%;display:grid;grid-template-rows:auto 1fr"><div class="box-title">This tab is the server</div><textarea aria-label="HTML to serve" style="font:12px/1.4 var(--mono);resize:none;border-width:1px;padding:.4rem">&lt;h1&gt;Hello from another tab&lt;/h1&gt;\n&lt;p&gt;Edit me, then reload.&lt;/p&gt;</textarea></div>` });
       const source = box.node.querySelector("textarea");
-      const swBox = stage.box("sw", { kind: "service", url: "/patterns/tabserver-sw.js", scope: "/patterns/served/", html: `<div class="here"><h4>Service Worker</h4><ul class="log"><li>not registered</li></ul></div>` });
+      const swBox = stage.box("sw", { kind: "service", url: "/patterns/tabserver-sw.js", scope: "/patterns/served/", html: `<div class="here"><div class="box-title">Service Worker</div><ul class="log" role="log" aria-live="polite"><li>not connected yet</li></ul></div>` });
       const swLog = (text) => { const ul = swBox.node.querySelector("ul"); const li = document.createElement("li"); li.textContent = text; ul.prepend(li); while (ul.children.length > 5) ul.lastChild.remove(); };
-      const served = stage.box("served", { kind: "iframe", html: `<div class="here"><h4>/patterns/served/</h4><p class="small muted">Nothing loaded yet.</p></div>` });
-      if (!("serviceWorker" in navigator)) return swLog("no Service Worker support here");
+      const served = stage.box("served", { kind: "iframe", html: `<div class="here"><div class="box-title">/patterns/served/</div><p class="small muted">Nothing loaded yet.</p></div>` });
+      if (!("serviceWorker" in navigator)) {
+        swLog("no Service Worker support here");
+        ui.unsupported("This browser does not support Service Workers.");
+        return;
+      }
 
-      let hits = 0;
+      let hits = 0, registration = null, onSwMessage = null;
       const offer = (worker) => {
         const channel = new MessageChannel();
         channel.port1.onmessage = (event) => {
@@ -220,21 +314,31 @@ onfetch = (event) => event.respondWith(new Promise((resolve) => {
         };
         worker.postMessage({ serve: true }, [channel.port2]);
       };
-      const registration = await navigator.serviceWorker.register("/patterns/tabserver-sw.js", { scope: "/patterns/served/" });
-      const worker = registration.active || registration.waiting || registration.installing;
-      if (worker.state !== "activated") await new Promise((resolve) => worker.addEventListener("statechange", () => worker.state === "activated" && resolve()));
-      offer(registration.active);
-      // Service Workers are stopped when idle and forget the port. When one
-      // wakes with no port it asks for a new one.
-      navigator.serviceWorker.addEventListener("message", (event) => { if (event.data === "need-port" && registration.active) offer(registration.active); });
-      swLog("holding a port to this tab");
-      stage.cable("up", "page", "sw", "yellow");
-      ui.link("Open the served page in a new tab", "/patterns/served/anything-you-like");
-      ui.button("Load the served page", () => {
+      stage.cleanup(() => { if (onSwMessage) navigator.serviceWorker.removeEventListener("message", onSwMessage); });
+
+      const loadBtn = ui.button("Load the served page", () => {
         served.node.innerHTML = `<iframe title="A page served by this tab" src="/patterns/served/index.html?${Date.now()}"></iframe>`;
-        stage.cable("down", "sw", "served", "teal");
-        setTimeout(() => stage.pulse("down", "sw"), 300);
+        stage.cable("down", "sw", "served", "teal", "HTTP fetch");
+        setTimeout(() => stage.pulse("down", "served"), 220);
+      }, true);
+      ui.button("Connect this tab to the Service Worker", async (btn) => {
+        btn.disabled = true;
+        try {
+          registration = await navigator.serviceWorker.register("/patterns/tabserver-sw.js", { scope: "/patterns/served/" });
+          const worker = registration.active || registration.waiting || registration.installing;
+          if (worker.state !== "activated") await new Promise((resolve) => worker.addEventListener("statechange", () => worker.state === "activated" && resolve()));
+          offer(registration.active);
+          onSwMessage = (event) => { if (event.data === "need-port" && registration.active && swBox.node.isConnected) offer(registration.active); };
+          navigator.serviceWorker.addEventListener("message", onSwMessage);
+          swLog("holding a port to this tab");
+          stage.cable("up", "page", "sw", "yellow", "serve port");
+          loadBtn.disabled = false;
+        } catch (err) {
+          swLog("could not start Service Worker: " + err.message);
+          btn.disabled = false;
+        }
       }, false, true);
+      ui.link("Open the served page in a new tab", "/patterns/served/anything-you-like");
     },
   },
 ];
@@ -256,12 +360,43 @@ direct.postMessage({ stream }, [stream]);`,
       const source = () => {
         let viaIntro = null, direct = null;
         const make = () => { let n = 0; return new ReadableStream({ async pull(c) { await new Promise((r) => setTimeout(r, 600)); c.enqueue(++n); log("wrote " + n); } }, { highWaterMark: 0 }); };
-        on("port", (_, [port]) => { viaIntro = port; port.onmessage = (e) => { direct = e.ports[0]; log("introduced to the reader"); const s = make(); send(direct, "direct", { stream: s }, [s]); log("sent a stream down the direct line"); }; });
-        on("relay", () => { const s = make(); send(viaIntro, "i-left", { stream: s }, [s]); log("sent a stream to the introducer"); });
+        log("waiting — no lines yet");
+        on("port", (_, [port]) => {
+          viaIntro = port;
+          log("connected to the introducer");
+          port.onmessage = (e) => {
+            direct = e.ports[0];
+            log("received direct port to the reader");
+            tell("met");
+          };
+        });
+        on("stream-direct", () => {
+          if (!direct) return log("no direct port yet");
+          const s = make();
+          try { send(direct, "direct", { stream: s }, [s]); log("sent a stream down the direct line"); }
+          catch { log("This browser cannot transfer streams yet."); }
+        });
+        on("relay", () => {
+          if (!viaIntro) return log("not connected to the introducer yet");
+          const s = make();
+          try { send(viaIntro, "i-left", { stream: s }, [s]); log("sent a stream to the introducer"); }
+          catch { log("This browser cannot transfer streams yet."); }
+        });
       };
       const reader = () => {
         const read = async (stream, how) => { log("reading a stream that came " + how); const r = stream.getReader(); for (;;) { const { value, done } = await r.read(); if (done) return log("ended"); log("read " + value); tell("read", { n: value }); } };
-        on("port", (_, [port]) => { port.onmessage = (e) => { if (e.data.stream) read(e.data.stream, "through the introducer"); else if (e.ports[0]) e.ports[0].onmessage = (m) => read(m.data.stream, "down the direct line"); }; });
+        log("waiting — no lines yet");
+        on("port", (_, [port]) => {
+          log("connected to the introducer");
+          port.onmessage = (e) => {
+            if (e.data.stream) read(e.data.stream, "through the introducer");
+            else if (e.ports[0]) {
+              log("received direct port from the introducer");
+              tell("met");
+              e.ports[0].onmessage = (m) => read(m.data.stream, "down the direct line");
+            }
+          };
+        });
       };
       await Promise.all([
         stage.frame("left", { title: "Source", color: "red", script: source }),
@@ -269,25 +404,58 @@ direct.postMessage({ stream }, [stream]);`,
           title: "Introducer", color: "yellow",
           script: () => {
             const lines = {};
+            log("waiting for Source and Reader");
             on("port", (data, [port]) => {
               lines[data.side] = port;
-              if (data.side === "left") port.onmessage = (e) => { log("passing the stream on"); send(lines.right, "i-right", e.data, [e.data.stream]); };
+              log(`connected to ${data.side === "left" ? "Source" : "Reader"}`);
+              if (data.side === "left") port.onmessage = (e) => {
+                log("passing the stream on");
+                try { send(lines.right, "i-right", e.data, [e.data.stream]); }
+                catch { log("This browser cannot transfer streams yet."); }
+              };
             });
-            on("introduce", () => { const { port1, port2 } = new MessageChannel(); send(lines.left, "i-left", {}, [port1]); send(lines.right, "i-right", {}, [port2]); log("introduced them"); });
+            on("introduce", () => {
+              const { port1, port2 } = new MessageChannel();
+              send(lines.left, "i-left", {}, [port1]);
+              send(lines.right, "i-right", {}, [port2]);
+              log("introduced them with a direct port");
+            });
           },
         }),
         stage.frame("right", { title: "Reader", color: "teal", script: reader }),
       ]);
-      for (const name of ["left", "right"]) {
-        const channel = new MessageChannel();
-        stage.post(name, { cmd: "port" }, [channel.port1]);
-        stage.post("intro", { cmd: "port", side: name }, [channel.port2]);
-        stage.cable("i-" + name, name, "intro", "ink");
-      }
+      let met = 0;
+      const relayBtn = ui.button("Stream through the introducer", (btn) => {
+        stage.post("left", { cmd: "relay" });
+        btn.disabled = introDirectBtn.disabled = true;
+        removeBtn.disabled = false;
+      }, true);
       const removeBtn = ui.button("Remove the introducer", (btn) => { stage.remove("intro"); btn.disabled = true; }, true);
-      const lock = (...buttons) => buttons.forEach((b) => (b.disabled = true));
-      const directBtn = ui.button("Introduce, then stream directly", (btn) => { stage.post("intro", { cmd: "introduce" }); stage.cable("direct", "left", "right", "teal"); lock(btn, relayBtn); removeBtn.disabled = false; });
-      const relayBtn = ui.button("Stream through the introducer", (btn) => { stage.post("left", { cmd: "relay" }); lock(btn, directBtn); removeBtn.disabled = false; }, false, true);
+      const introDirectBtn = ui.button("Introduce them with a port", (btn) => {
+        stage.post("intro", { cmd: "introduce" });
+        btn.disabled = relayBtn.disabled = true;
+      }, true);
+      const streamDirectBtn = ui.button("Stream down the direct port", (btn) => {
+        stage.post("left", { cmd: "stream-direct" });
+        btn.disabled = true;
+        removeBtn.disabled = false;
+      }, true);
+      stage.on((name, data) => {
+        if (data.wire === "met" && ++met === 2) {
+          stage.cable("direct", "left", "right", "teal", "direct");
+          streamDirectBtn.disabled = false;
+        }
+      });
+      ui.button("Connect Source and Reader to the introducer", (btn) => {
+        btn.disabled = true;
+        for (const name of ["left", "right"]) {
+          const channel = new MessageChannel();
+          stage.post(name, { cmd: "port" }, [channel.port1]);
+          stage.post("intro", { cmd: "port", side: name }, [channel.port2]);
+          stage.cable("i-" + name, name, "intro", "ink");
+        }
+        relayBtn.disabled = introDirectBtn.disabled = false;
+      }, false, true);
     },
   },
   {
@@ -300,25 +468,32 @@ port.onmessage = ({ data }) => {
   port.postMessage({ readable: out }, [out]);
 };`,
     async setup(stage, ui) {
-      const box = stage.box("page", { html: `<div class="here"><h4>This page, the source</h4><ul class="log"><li>idle</li></ul></div>` });
+      const box = stage.box("page", { html: `<div class="here"><div class="box-title">This page, the source</div><ul class="log" role="log" aria-live="polite"><li>idle — not connected yet</li></ul></div>` });
       const say = (text) => { box.node.querySelector("ul").innerHTML = `<li>${text}</li>`; };
       await Promise.all([
         stage.frame("shout", {
           title: "Transformer, origin two", color: "yellow",
-          script: () => on("port", (_, [port]) => {
-            port.onmessage = ({ data }) => {
-              let n = 0;
-              const out = data.readable.pipeThrough(new TransformStream({ transform(chunk, c) { log(`shouted ${++n}`); c.enqueue(String(chunk).toUpperCase() + "!"); } }));
-              send(port, "a", { readable: out }, [out]);
-            };
-          }),
+          script: () => {
+            log("waiting — not connected yet");
+            on("port", (_, [port]) => {
+              log("connected to the source");
+              port.onmessage = ({ data }) => {
+                let n = 0;
+                const out = data.readable.pipeThrough(new TransformStream({ transform(chunk, c) { log(`shouted ${++n}`); c.enqueue(String(chunk).toUpperCase() + "!"); } }));
+                try { send(port, "a", { readable: out }, [out]); }
+                catch { log("This browser cannot transfer streams yet."); }
+              };
+            });
+          },
         }),
         stage.frame("sink", {
           title: "Reader, origin three", color: "teal",
           script: () => {
             let paused = false, wake = null;
+            log("waiting — not connected yet");
             on("pause", (data) => { paused = data.paused; log(paused ? "paused" : "reading again"); if (!paused) wake?.(); });
             on("port", (_, [port]) => {
+              log("connected to the pipeline");
               port.onmessage = async ({ data }) => {
                 const reader = data.readable.getReader();
                 for (;;) {
@@ -333,19 +508,33 @@ port.onmessage = ({ data }) => {
           },
         }),
       ]);
-      const toShout = new MessageChannel(), toSink = new MessageChannel();
-      stage.post("shout", { cmd: "port" }, [toShout.port2]);
-      stage.post("sink", { cmd: "port" }, [toSink.port2]);
-      stage.cable("a", "page", "shout", "yellow");
-      stage.cable("b", "shout", "sink", "teal");
-      toShout.port1.onmessage = ({ data }) => { toSink.port1.postMessage({ readable: data.readable }, [data.readable]); stage.pulse("b", "shout"); };
-      let paused = false;
+      let toShout = null, toSink = null, paused = false;
+      stage.cleanup(() => { toShout?.port1.close(); toSink?.port1.close(); });
       const pauseBtn = ui.button("Pause the reader", (btn) => { paused = !paused; stage.post("sink", { cmd: "pause", paused }); btn.textContent = paused ? "Let the reader continue" : "Pause the reader"; }, true);
-      ui.button("Start the pipe", (btn) => {
+      const startBtn = ui.button("Start the pipe", (btn) => {
         let made = 0;
         const readable = new ReadableStream({ pull(c) { c.enqueue(`chunk ${++made}`); say(`asked for ${made} chunk${made === 1 ? "" : "s"} so far`); stage.pulse("a", "page"); } }, { highWaterMark: 0 });
-        toShout.port1.postMessage({ readable }, [readable]);
-        btn.disabled = true; pauseBtn.disabled = false;
+        try {
+          toShout.port1.postMessage({ readable }, [readable]);
+          btn.disabled = true; pauseBtn.disabled = false;
+        } catch {
+          say("This browser cannot transfer streams yet.");
+        }
+      }, true);
+      ui.button("Connect the three origins", (btn) => {
+        btn.disabled = true;
+        toShout = new MessageChannel();
+        toSink = new MessageChannel();
+        stage.post("shout", { cmd: "port" }, [toShout.port2]);
+        stage.post("sink", { cmd: "port" }, [toSink.port2]);
+        stage.cable("a", "page", "shout", "yellow", "in");
+        stage.cable("b", "shout", "sink", "teal", "out");
+        toShout.port1.onmessage = ({ data }) => {
+          try { toSink.port1.postMessage({ readable: data.readable }, [data.readable]); stage.pulse("b", "shout"); }
+          catch { say("This browser cannot transfer streams yet."); }
+        };
+        say("connected to Transformer and Reader");
+        startBtn.disabled = false;
       }, false, true);
     },
   },
@@ -363,33 +552,66 @@ bank.port.onmessage = ({ ports }) => resume(ports[0]);`,
       const key = "k" + Math.random().toString(36).slice(2, 8);
       await stage.frame("feed", {
         title: "Feed on another origin", color: "teal",
-        script: () => on("port", (_, [port]) => { let n = 0; log("ticking into one port"); setInterval(() => send(port, "line", ++n), 400); }),
+        script: () => {
+          log("waiting — no channel yet");
+          on("port", (_, [port]) => { let n = 0; log("ticking into one port"); setInterval(() => send(port, "line", ++n), 400); });
+        },
       });
-      const bankBox = stage.box("bank", { kind: "shared", url: "/patterns/bank.js", html: `<div class="here"><h4>Port bank, a SharedWorker</h4><ul class="log"><li>empty</li></ul></div>` });
-      const keeper = stage.box("keeper", { src: `/patterns/keeper.html?key=${key}` });
-      let refusal = "";
+      const bankBox = stage.box("bank", { kind: "shared", url: "/patterns/bank.js", html: `<div class="here"><div class="box-title">Port bank, a SharedWorker</div><ul class="log" role="log" aria-live="polite"><li>empty</li></ul></div>` });
+      const keeper = stage.box("keeper", { src: `/patterns/keeper.html?key=${key}&manual=1`, title: "A page that reloads" });
+      if (!("SharedWorker" in self)) {
+        bankBox.node.querySelector("ul").innerHTML = `<li>This browser does not support SharedWorker.</li>`;
+        ui.unsupported("This browser does not support SharedWorker, so the port bank cannot run here.");
+        return;
+      }
+      await keeper.whenReady;
+      let refusal = "", reloads = 0;
       const note = (text) => { bankBox.node.querySelector("ul").innerHTML = `<li>${text}</li>${refusal}`; };
-      let reloads = 0;
+      const connectFeed = () => {
+        const channel = new MessageChannel();
+        stage.post("feed", { cmd: "port" }, [channel.port1]);
+        keeper.frame.contentWindow.postMessage({ cmd: "port" }, location.origin, [channel.port2]);
+        stage.cable("line", "feed", "keeper", "teal", "feed");
+      };
       stage.on((name, data) => {
         if (name !== "keeper") return;
         if (data.wire === "need-port") {
-          const channel = new MessageChannel();
-          stage.post("feed", { cmd: "port" }, [channel.port1]);
-          keeper.frame.contentWindow.postMessage({ cmd: "port" }, location.origin, [channel.port2]);
-          stage.cable("line", "feed", "keeper", "teal");
+          connectFeed();
+          if (reloads) refusal = "<li>The bank did not survive the reload. This browser may not support extendedLifetime.</li>";
         }
-        if (data.wire === "need-port" && reloads) refusal = "<li>The bank did not survive the reload. This browser may not support extendedLifetime.</li>";
+        if (data.wire === "withdrew") {
+          stage.pulse("bank", "bank");
+          setTimeout(() => stage.cut("bank"), 900);
+        }
         if (data.wire === "tick") note(`${reloads} reload${reloads === 1 ? "" : "s"}, at ${data.n}, ${data.gaps} gap${data.gaps === 1 ? "" : "s"} in the count`);
       });
+      const reloadBtn = ui.button("Reload the frame", () => {
+        reloads++;
+        stage.cable("bank", "keeper", "bank", "yellow", "banked");
+        stage.pulse("bank", "keeper");
+        note("holding the port while the page is gone");
+        keeper.frame.contentWindow.location.reload();
+      }, true);
       ui.button("Try to store a port in IndexedDB", () => {
-        const open = indexedDB.open("pa-refusal", 1);
-        open.onupgradeneeded = () => open.result.createObjectStore("s");
-        open.onsuccess = () => {
-          try { open.result.transaction("s", "readwrite").objectStore("s").put(new MessageChannel().port1, "k"); note("stored, which is a surprise"); }
-          catch (err) { refusal = `<li>IndexedDB refused the port: ${err.name}</li>`; note("asked IndexedDB"); }
-        };
+        try {
+          const open = indexedDB.open("pa-refusal", 1);
+          open.onupgradeneeded = () => open.result.createObjectStore("s");
+          open.onerror = () => { refusal = `<li>IndexedDB could not open here.</li>`; note("asked IndexedDB"); };
+          open.onsuccess = () => {
+            try { open.result.transaction("s", "readwrite").objectStore("s").put(new MessageChannel().port1, "k"); note("stored, which is a surprise"); }
+            catch (err) { refusal = `<li>IndexedDB refused the port: ${err.name}</li>`; note("asked IndexedDB"); }
+          };
+        } catch (err) {
+          refusal = `<li>IndexedDB unavailable: ${err.name}</li>`;
+          note("asked IndexedDB");
+        }
       });
-      ui.button("Reload the frame", () => { reloads++; note("holding the port while the page is gone"); keeper.frame.contentWindow.location.reload(); }, false, true);
+      ui.button("Connect the feed to the frame", (btn) => {
+        btn.disabled = true;
+        connectFeed();
+        note("connected feed directly to the frame");
+        reloadBtn.disabled = false;
+      }, false, true);
     },
   },
 );

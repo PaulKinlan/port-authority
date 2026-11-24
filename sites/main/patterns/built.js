@@ -8,17 +8,21 @@ import { further } from "/patterns/further.js";
 import { pairBuilt } from "/patterns/pairs.js";
 
 const logBox = (stage, name, title, extra = "", what = {}) => {
-  const box = stage.box(name, { html: `<div class="here"><h4>${title}</h4>${extra}<ul class="log"></ul></div>`, ...what });
+  const box = stage.box(name, { html: `<div class="here"><div class="box-title">${title}</div>${extra}<ul class="log" role="log" aria-live="polite"></ul></div>`, ...what });
   const ul = box.node.querySelector("ul");
   const say = (text) => { const li = document.createElement("li"); li.textContent = text; ul.prepend(li); while (ul.children.length > 6) ul.lastChild.remove(); };
   return { say, node: box.node, box };
 };
 
-// A tab that answers requests for the service worker, for the paths under one prefix.
-// Adds a box for the service worker to the stage. Returns null where there is no service worker.
-const serveFrom = async (stage, prefix) => {
+// A tab that answers requests for the Service Worker, for the paths under one prefix.
+// Adds a box for the Service Worker to the stage. Returns null where there is no Service Worker.
+const serveFrom = async (stage, prefix, ui) => {
   const sw = logBox(stage, "sw", "Service Worker", "", { kind: "service", url: "/patterns/tabserver-sw.js", scope: "/patterns/served/" });
-  if (!("serviceWorker" in navigator)) { sw.say("no Service Worker support here"); return null; }
+  if (!("serviceWorker" in navigator)) {
+    sw.say("no Service Worker support here");
+    ui?.unsupported("This browser does not support Service Workers.");
+    return null;
+  }
   let handler = () => ({ status: 503, body: "not ready", headers: {} });
   const offer = (worker) => {
     const channel = new MessageChannel();
@@ -34,8 +38,10 @@ const serveFrom = async (stage, prefix) => {
   const worker = registration.active || registration.waiting || registration.installing;
   if (worker.state !== "activated") await new Promise((resolve) => worker.addEventListener("statechange", () => worker.state === "activated" && resolve()));
   offer(registration.active);
-  // A service worker that was stopped has forgotten the port, and asks for another.
-  navigator.serviceWorker.addEventListener("message", (event) => { if (event.data === "need-port" && registration.active && sw.node.isConnected) offer(registration.active); });
+  // A Service Worker that was stopped has forgotten the port, and asks for another.
+  const onSwMessage = (event) => { if (event.data === "need-port" && registration.active && sw.node.isConnected) offer(registration.active); };
+  navigator.serviceWorker.addEventListener("message", onSwMessage);
+  stage.cleanup(() => navigator.serviceWorker.removeEventListener("message", onSwMessage));
   sw.say("holding a port to this tab");
   stage.cable("up", "page", "sw", "yellow");
   return { handle: (fn) => (handler = fn) };
@@ -206,11 +212,12 @@ port1.close();`,
     pattern: "halves", use: [1], id: "built-sealed",
     title: "A sealed bid box that two rivals write into",
     blurb: "Two bidders on two origins each get something to write into, and nothing to read from. Their bids land in this page. Neither can see the other's bid, or even whether the other has bid. When the owner closes the box, both writers are refused from then on. It is a sealed auction with no server.",
-    code: `const slot = (who) => new WritableStream({
+    code: `const makeSlot = (who) => new WritableStream({
   start(controller) { slots.push(controller); },
   write(bid) { bids.push({ who, bid }); },
 });
-bidderOne.postMessage({ slot: slot("one") }, "*", [slot]);   <span class="c">// write only</span>
+const slot = makeSlot("one");
+bidderOne.postMessage({ slot }, "*", [slot]);   <span class="c">// write only</span>
 <span class="c">// closing time</span>
 slots.forEach((s) => s.error(new Error("bidding has closed")));`,
     tour: { steps: [["Give each bidder a slot", "Each bidder gets a stream it can write to and cannot read."], ["Bidder one: bid", "Bidder one's bid arrives here. Bidder two is told nothing."], ["Bidder two: bid", "Bidder two bids without knowing what it is up against."], ["Close the box", "The owner shuts both slots and names the winner."], ["Bidder one: bid", "A late bid is refused."]] },
@@ -241,13 +248,17 @@ slots.forEach((s) => s.error(new Error("bidding has closed")));`,
         owner.say(best ? `closed. Bidder ${best.who} wins with ${best.amount}.` : "closed, with no bids");
       }, true);
       ui.button("Give each bidder a slot", (btn) => {
-        for (const who of ["one", "two"]) {
-          const slot = new WritableStream({ start(controller) { slots.push(controller); }, write(amount) { bids.push({ who, amount }); owner.say(`bidder ${who} bid ${amount}`); } });
-          stage.post(who, { cmd: "slot", slot }, [slot]);
-          stage.cable(who, who, "page", who === "one" ? "red" : "teal");
+        try {
+          for (const who of ["one", "two"]) {
+            const slot = new WritableStream({ start(controller) { slots.push(controller); }, write(amount) { bids.push({ who, amount }); owner.say(`bidder ${who} bid ${amount}`); } });
+            stage.post(who, { cmd: "slot", slot }, [slot]);
+            stage.cable(who, who, "page", who === "one" ? "red" : "teal");
+          }
+          owner.say("gave out two slots, kept what they lead to");
+          btn.disabled = true; b1.disabled = b2.disabled = close.disabled = false;
+        } catch {
+          owner.say("This browser cannot transfer streams yet.");
         }
-        owner.say("gave out two slots, kept what they lead to");
-        btn.disabled = true; b1.disabled = b2.disabled = close.disabled = false;
       }, false, true);
     },
   },
@@ -327,19 +338,24 @@ for await (const word of answer) page.append(word + " ");`,
       });
       const text = "A port is one end of a private wire. You can give it to anyone, and whoever holds it can talk to whoever holds the other end. Nothing else is needed: no address, no name, and no check on every message. That is why a stream of words can cross to another origin as easily as this.".split(" ");
       let feed = null, timer = null;
+      stage.cleanup(() => { clearInterval(timer); try { feed?.close(); } catch {} });
       const stop = ui.button("Stop writing", (btn) => { clearInterval(timer); try { feed.close(); } catch {} btn.disabled = true; start.disabled = false; me.say("stopped, and closed the stream"); }, true);
       const start = ui.button("Stream an answer to the viewer", (btn) => {
         let i = 0;
         const answer = new ReadableStream({ start(controller) { feed = controller; } });
-        timer = setInterval(() => {
-          if (!me.node.isConnected) return clearInterval(timer);
-          if (i >= text.length) { clearInterval(timer); feed.close(); stop.disabled = true; btn.disabled = false; return me.say("finished the answer"); }
-          feed.enqueue(text[i++]);
-        }, 110);
-        stage.post("viewer", { cmd: "answer", answer }, [answer]);
-        stage.cable("answer", "page", "viewer", "yellow");
-        me.say("handed over a stream, now writing into it");
-        btn.disabled = true; stop.disabled = false;
+        try {
+          stage.post("viewer", { cmd: "answer", answer }, [answer]);
+          timer = setInterval(() => {
+            if (!me.node.isConnected) return clearInterval(timer);
+            if (i >= text.length) { clearInterval(timer); feed.close(); stop.disabled = true; btn.disabled = false; return me.say("finished the answer"); }
+            feed.enqueue(text[i++]);
+          }, 110);
+          stage.cable("answer", "page", "viewer", "yellow");
+          me.say("handed over a stream, now writing into it");
+          btn.disabled = true; stop.disabled = false;
+        } catch {
+          me.say("This browser cannot transfer streams yet.");
+        }
       }, false, true);
     },
   },
@@ -409,7 +425,7 @@ approveButton.onclick = () => port.postMessage({ answer: "approve" });`,
     tour: { steps: [["Open a line to your phone", "This page opens a meeting place and shows its code. The link is for your phone."], ["Use a stand-in for the phone", "A second page plays the phone, and the two connect directly.", 4500], ["Pay 20 to the florist", "The checkout stops and asks the other device."], ["Other device: approve", "The other device says yes, down its port. The checkout goes ahead."], ["Pay 20 to the florist", "A second payment asks again."], ["Other device: deny", "This time the answer is no, and nothing is paid."]] },
     async setup(stage, ui) {
       const me = logBox(stage, "page", "Laptop: the checkout", `<p class="small" data-code style="margin:0 0 .4rem" hidden></p>`);
-      const phone = stage.box("far", { html: `<div class="here"><h4>Your phone</h4><p class="small muted">Not connected yet.</p></div>` });
+      const phone = stage.box("far", { html: `<div class="here"><div class="box-title">Your phone</div><p class="small muted">Not connected yet.</p></div>` });
       if (!("RTCPeerConnection" in self)) return me.say("no WebRTC in this browser");
       const codeEl = me.node.querySelector("[data-code]");
       let line = null, port = null, code = null, waiting = false;
@@ -490,12 +506,17 @@ writer.write("hello");`,
         return { readable, writable: new WritableStream({ write(chunk) { ws.send(chunk); } }), close: () => ws.close() };
       };
       let line = null, writer = null, n = 0;
+      stage.cleanup(() => { try { line?.close(); } catch {} });
       const give = ui.button("Give the logger the listening half", (btn) => {
-        writer = line.writable.getWriter();
-        stage.post("logger", { cmd: "tap", readable: line.readable }, [line.readable]);
-        stage.cable("tap", "page", "logger", "teal");
-        me.say("gave away the readable, kept the writable");
-        btn.disabled = true; say.disabled = speak.disabled = false;
+        try {
+          writer = line.writable.getWriter();
+          stage.post("logger", { cmd: "tap", readable: line.readable }, [line.readable]);
+          stage.cable("tap", "page", "logger", "teal");
+          me.say("gave away the readable, kept the writable");
+          btn.disabled = true; say.disabled = speak.disabled = false;
+        } catch {
+          me.say("This browser cannot transfer streams yet.");
+        }
       }, true);
       const say = ui.button("This page: say something", () => { writer.write(`hello ${++n}`); me.say(`said hello ${n}`); }, true);
       const speak = ui.button("Logger: try to speak", () => stage.post("logger", { cmd: "speak" }), true);
@@ -633,8 +654,11 @@ navigator.locks.request(lock, () => leave(port));   <span class="c">// runs when
     tour: { steps: [["Close the leader", "The leading tab is destroyed. The worker gets its lock, and promotes the next tab.", 3000], ["Close the leader", "And again. The last tab left is the leader.", 3000]] },
     async setup(stage, ui) {
       const names = ["tab-a", "tab-b", "tab-c"];
-      const boxes = names.map((name) => stage.box(name, { src: "/patterns/crew.html" }));
-      if (!("SharedWorker" in self)) return;
+      const boxes = names.map((name, i) => stage.box(name, { src: "/patterns/crew.html", title: `Tab ${i + 1}` }));
+      if (!("SharedWorker" in self)) {
+        ui.unsupported("This browser does not support SharedWorker.");
+        return;
+      }
       let leader = null;
       stage.on((name, data) => { if (data.wire === "crew" && data.lead) leader = name; });
       await Promise.all(boxes.map((box) => box.whenReady));
@@ -685,7 +709,11 @@ port.onmessage = ({ data }) => {
       const out = stage.box("out", { html: `<canvas width="320" height="180" style="width:100%;height:100%;display:block" aria-label="The video after the plug-in"></canvas>` });
       const source = src.node.querySelector("canvas"), sctx = source.getContext("2d");
       const octx = out.node.querySelector("canvas").getContext("2d");
-      if (!("VideoFrame" in self)) { src.node.insertAdjacentHTML("beforeend", `<p class="small" style="position:absolute;inset:auto 0 0 0;padding:.5rem;background:var(--panel)">This browser has no VideoFrame.</p>`); return; }
+      if (!("VideoFrame" in self)) {
+        src.node.insertAdjacentHTML("beforeend", `<p class="small" style="position:absolute;inset:auto 0 0 0;padding:.5rem;background:var(--panel)">This browser has no VideoFrame.</p>`);
+        ui.unsupported("This browser does not support WebCodecs VideoFrame.");
+        return;
+      }
       let running = false, waiting = false, n = 0;
       const paint = (t) => {
         const { width: w, height: h } = source;
@@ -727,12 +755,14 @@ worker.onmessage = ({ data }) => {
 for (const buffer of pool) worker.postMessage({ buffer }, [buffer]);`,
     tour: { steps: [["Start the pool", "Two buffers are made once, and then only moved.", 3500], ["Stop", "The pool stops. Two buffers were ever made."]] },
     async setup(stage, ui) {
-      const me = stage.box("page", { html: `<div class="here"><h4>This page</h4><p class="small" style="margin:0 0 .25rem">Buffers ever made: <strong data-made>0</strong></p><p class="small" style="margin:0 0 .25rem">Round trips: <strong data-trips>0</strong></p><p class="small" style="margin:0 0 .25rem">Moved: <strong data-moved>0</strong> MB</p><p class="small" style="margin:0 0 .25rem">Copied: <strong>0</strong> MB</p><p class="small" style="margin:0">Held here right now: <strong data-held>0</strong> MB</p></div>` });
+      const me = stage.box("page", { html: `<div class="here"><div class="box-title">This page</div><p class="small" style="margin:0 0 .25rem">Buffers ever made: <strong data-made>0</strong></p><p class="small" style="margin:0 0 .25rem">Round trips: <strong data-trips>0</strong></p><p class="small" style="margin:0 0 .25rem">Moved: <strong data-moved>0</strong> MB</p><p class="small" style="margin:0 0 .25rem">Copied: <strong>0</strong> MB</p><p class="small" style="margin:0">Held here right now: <strong data-held>0</strong> MB</p></div>` });
       const wbox = logBox(stage, "worker", "Worker", "", { kind: "worker", url: "blob:" });
       const q = (name) => me.node.querySelector(`[data-${name}]`);
       const SIZE = 8 * 1024 * 1024;
-      const worker = new Worker(URL.createObjectURL(new Blob([`onmessage = ({ data }) => { new Uint8Array(data.buffer).fill(data.n % 251); postMessage({ buffer: data.buffer, n: data.n }, [data.buffer]); };`], { type: "text/javascript" })));
+      const workerUrl = URL.createObjectURL(new Blob([`onmessage = ({ data }) => { new Uint8Array(data.buffer).fill(data.n % 251); postMessage({ buffer: data.buffer, n: data.n }, [data.buffer]); };`], { type: "text/javascript" }));
+      const worker = new Worker(workerUrl);
       let running = false, trips = 0, n = 0, held = 0;
+      stage.cleanup(() => { running = false; worker.terminate(); URL.revokeObjectURL(workerUrl); });
       const show = () => { q("trips").textContent = trips; q("moved").textContent = (trips * 2 * 8).toLocaleString(); q("held").textContent = held * 8; };
       const send = (buffer) => { held--; worker.postMessage({ buffer, n: ++n }, [buffer]); stage.pulse("pool", "page"); show(); };
       worker.onmessage = ({ data }) => {
@@ -761,7 +791,7 @@ const seal = new TransformStream({ async transform(text, out) {
   const iv = crypto.getRandomValues(new Uint8Array(12));
   out.enqueue({ iv, data: await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, encode(text)) });
 } });
-parent.postMessage({ seal }, "*", [seal.readable, seal.writable]);
+parent.postMessage({ seal: { readable: seal.readable, writable: seal.writable } }, "*", [seal.readable, seal.writable]);
 
 <span class="c">// this page</span>
 lines.pipeThrough(seal).pipeTo(storage);`,
@@ -785,7 +815,11 @@ lines.pipeThrough(seal).pipeTo(storage);`,
             log(`opened line ${++opened}`); tell("pulse", { cable: "open" });
           } });
           log("made a key nobody can read, and two pipes");
-          parent.postMessage({ wire: "pipes", seal: { readable: seal.readable, writable: seal.writable }, open: { readable: open.readable, writable: open.writable } }, "*", [seal.readable, seal.writable, open.readable, open.writable]);
+          try {
+            parent.postMessage({ wire: "pipes", seal: { readable: seal.readable, writable: seal.writable }, open: { readable: open.readable, writable: open.writable } }, "*", [seal.readable, seal.writable, open.readable, open.writable]);
+          } catch {
+            log("This browser cannot transfer streams yet.");
+          }
         }),
       });
       const out = logBox(stage, "out", "What came back opened");
@@ -825,14 +859,16 @@ worker.postMessage({ file }, [file]);
 for await (const chunk of file) { sum = checksum(sum, chunk); postMessage({ read: chunk.length }); }`,
     tour: { steps: [["Stream 64 MB to the worker", "The worker is handed a stream. Each megabyte is made when the worker asks for it, and checked as it lands.", 6000]] },
     async setup(stage, ui) {
-      const me = stage.box("page", { html: `<div class="here"><h4>This page makes the file</h4><div style="height:.7rem;border:1.5px solid currentColor;border-radius:99px;overflow:hidden;margin:0 0 .5rem"><div data-bar style="height:100%;width:0;background:var(--teal)"></div></div><p class="small" style="margin:0 0 .25rem">Made so far: <strong data-made>0</strong> MB</p><p class="small" style="margin:0">Most held at once: <strong data-peak>0</strong> MB</p></div>` });
+      const me = stage.box("page", { html: `<div class="here"><div class="box-title">This page makes the file</div><div style="height:.7rem;border:1.5px solid currentColor;border-radius:99px;overflow:hidden;margin:0 0 .5rem"><div data-bar style="height:100%;width:0;background:var(--teal)"></div></div><p class="small" style="margin:0 0 .25rem">Made so far: <strong data-made>0</strong> MB</p><p class="small" style="margin:0">Most held at once: <strong data-peak>0</strong> MB</p></div>` });
       const wbox = logBox(stage, "worker", "Worker checks it", "", { kind: "worker", url: "blob:" });
       const q = (name) => me.node.querySelector(`[data-${name}]`);
-      const worker = new Worker(URL.createObjectURL(new Blob([`onmessage = async ({ data }) => {
+      const workerUrl = URL.createObjectURL(new Blob([`onmessage = async ({ data }) => {
         const reader = data.file.getReader(); let bytes = 0, sum = 0;
         for (;;) { const { value, done } = await reader.read(); if (done) break; for (let i = 0; i < value.length; i += 4096) sum = (sum + value[i]) >>> 0; bytes += value.length; postMessage({ bytes }); await new Promise((r) => setTimeout(r, 25)); }
         postMessage({ done: true, bytes, sum });
-      };`], { type: "text/javascript" })));
+      };`], { type: "text/javascript" }));
+      const worker = new Worker(workerUrl);
+      stage.cleanup(() => { worker.terminate(); URL.revokeObjectURL(workerUrl); });
       const MB = 1024 * 1024, TOTAL = 64;
       let made = 0, read = 0, peak = 0;
       const start = ui.button("Stream 64 MB to the worker", (btn) => {
@@ -844,9 +880,14 @@ for await (const chunk of file) { sum = checksum(sum, chunk); postMessage({ read
           peak = Math.max(peak, made - read);
           q("made").textContent = made; q("peak").textContent = peak;
         } }, { highWaterMark: 1 });
-        worker.postMessage({ file }, [file]);
-        stage.cable("file", "page", "worker", "teal");
-        wbox.say("given a stream, reading");
+        try {
+          worker.postMessage({ file }, [file]);
+          stage.cable("file", "page", "worker", "teal");
+          wbox.say("given a stream, reading");
+        } catch {
+          wbox.say("This browser cannot transfer streams yet.");
+          btn.disabled = false;
+        }
       }, false, true);
       worker.onmessage = ({ data }) => {
         if (!me.node.isConnected) return worker.terminate();
@@ -1103,9 +1144,12 @@ onconnect = ({ ports: [port] }) => {
 };`,
     tour: { steps: [["Tab one: add an item", "Tab one tells the worker. The worker tells every tab."], ["Tab one: add an item", "A second item, in both tabs."], ["Tab two: tick the first item", "Tab two ticks it, and it is ticked in tab one."]] },
     async setup(stage, ui) {
-      const one = stage.box("tab-one", { src: "/patterns/sync.html" });
-      const two = stage.box("tab-two", { src: "/patterns/sync.html" });
-      if (!("SharedWorker" in self)) return;
+      const one = stage.box("tab-one", { src: "/patterns/sync.html", title: "Shopping list, tab one" });
+      const two = stage.box("tab-two", { src: "/patterns/sync.html", title: "Shopping list, tab two" });
+      if (!("SharedWorker" in self)) {
+        ui.unsupported("This browser does not support SharedWorker.");
+        return;
+      }
       await Promise.all([one.whenReady, two.whenReady]);
       stage.post("tab-one", { cmd: "clear" });
       ui.button("Tab one: add an item", () => stage.post("tab-one", { cmd: "add" }), false, true);
@@ -1124,10 +1168,15 @@ worker.postMessage({ surface }, [surface]);
 onmessage = ({ data }) => { const ctx = data.surface.getContext("2d"); for (;;) drawNextFrame(ctx); };`,
     tour: { steps: [["Draw on the page's thread", "The page draws for two seconds. Watch its counter: it stops.", 3200], ["Draw in the worker", "The worker draws the same frames into a canvas it was handed. The counter keeps going.", 3200]] },
     async setup(stage, ui) {
-      const me = stage.box("page", { html: `<div class="here" style="display:flex;flex-direction:column;height:100%;box-sizing:border-box"><h4>Drawn by this page</h4><p class="small" style="margin:0 0 .3rem">Page ticks: <strong data-ticks>0</strong></p><canvas width="240" height="135" style="width:100%;flex:1;min-height:0;display:block;object-fit:contain;background:#000" aria-label="Drawn on the page's own thread"></canvas><p class="small" data-said style="margin:.3rem 0 0;min-height:2.6em"></p></div>` });
-      const wb = stage.box("worker", { kind: "worker", url: "blob:", html: `<div class="here" style="display:flex;flex-direction:column;height:100%;box-sizing:border-box"><h4>Drawn by a worker</h4><p class="small" style="margin:0 0 .3rem">The canvas below was handed over.</p><canvas width="240" height="135" style="width:100%;flex:1;min-height:0;display:block;object-fit:contain;background:#000" aria-label="Drawn by a worker"></canvas><p class="small" data-said style="margin:.3rem 0 0;min-height:2.6em"></p></div>` });
+      const me = stage.box("page", { html: `<div class="here" style="display:flex;flex-direction:column;height:100%;box-sizing:border-box"><div class="box-title">Drawn by this page</div><p class="small" style="margin:0 0 .3rem">Page ticks: <strong data-ticks>0</strong></p><canvas width="240" height="135" style="width:100%;flex:1;min-height:0;display:block;object-fit:contain;background:#000" aria-label="Drawn on the page's own thread"></canvas><p class="small" data-said style="margin:.3rem 0 0;min-height:2.6em"></p></div>` });
+      const wb = stage.box("worker", { kind: "worker", url: "blob:", html: `<div class="here" style="display:flex;flex-direction:column;height:100%;box-sizing:border-box"><div class="box-title">Drawn by a worker</div><p class="small" style="margin:0 0 .3rem">The canvas below was handed over.</p><canvas width="240" height="135" style="width:100%;flex:1;min-height:0;display:block;object-fit:contain;background:#000" aria-label="Drawn by a worker"></canvas><p class="small" data-said style="margin:.3rem 0 0;min-height:2.6em"></p></div>` });
       const ticksEl = me.node.querySelector("[data-ticks]");
       const said = (box, text) => (box.node.querySelector("[data-said]").textContent = text);
+      if (!("OffscreenCanvas" in self) || typeof HTMLCanvasElement.prototype.transferControlToOffscreen !== "function") {
+        said(wb, "This browser cannot transfer canvas control to a worker.");
+        ui.unsupported("This browser does not support OffscreenCanvas transfer to workers.");
+        return;
+      }
       let ticks = 0;
       const beat = setInterval(() => { if (!ticksEl.isConnected) return clearInterval(beat); ticksEl.textContent = ++ticks; }, 100);
       const frame = function (ctx, k) {
@@ -1143,13 +1192,15 @@ onmessage = ({ data }) => { const ctx = data.surface.getContext("2d"); for (;;) 
         ctx.putImageData(img, 0, 0);
       };
       const ctx = me.node.querySelector("canvas").getContext("2d");
-      const worker = new Worker(URL.createObjectURL(new Blob([`const frame = ${frame}; let ctx = null;
+      const workerUrl = URL.createObjectURL(new Blob([`const frame = ${frame}; let ctx = null;
         onmessage = async ({ data }) => {
           if (data.surface) { ctx = data.surface.getContext("2d"); return; }
           const until = performance.now() + 2000; let k = 0;
           while (performance.now() < until) { frame(ctx, k++); await new Promise((r) => setTimeout(r, 0)); }
           postMessage({ frames: k });
-        };`], { type: "text/javascript" })));
+        };`], { type: "text/javascript" }));
+      const worker = new Worker(workerUrl);
+      stage.cleanup(() => { clearInterval(beat); worker.terminate(); URL.revokeObjectURL(workerUrl); });
       const surface = wb.node.querySelector("canvas").transferControlToOffscreen();
       worker.postMessage({ surface }, [surface]);
       stage.cable("canvas", "page", "worker", "teal");
@@ -1213,7 +1264,7 @@ sieve.byteLength;                                          <span class="c">// 0:
     blurb: "A zipped order needs unzipping, turning from bytes into text, and its card number hiding before it is shown. Each of those is a stream stage supplied by a different origin. This page asks each for a stage, joins the three end to end and sends the file through. Each party sees only what flows through its own stage, and none of them needs to know the others exist.",
     code: `<span class="c">// each party</span>
 const stage = new TransformStream({ transform(chunk, out) { out.enqueue(work(chunk)); } });
-parent.postMessage({ stage }, "*", [stage.readable, stage.writable]);
+parent.postMessage({ readable: stage.readable, writable: stage.writable }, "*", [stage.readable, stage.writable]);
 
 <span class="c">// this page</span>
 zippedFile.pipeThrough(unzip).pipeThrough(decode).pipeThrough(redact).pipeTo(screen);`,
@@ -1227,7 +1278,8 @@ zippedFile.pipeThrough(unzip).pipeThrough(decode).pipeThrough(redact).pipeTo(scr
         const work = kind === "unzip" ? new DecompressionStream("gzip") : kind === "decode" ? new TextDecoderStream() : new TransformStream({ transform(text, out) { out.enqueue(text.replace(/\b\d{4} \d{4} \d{4} (\d{4})\b/g, "•••• •••• •••• $1")); } });
         const readable = seen.readable.pipeThrough(work);
         log("made a stage and handed over both its ends");
-        parent.postMessage({ wire: "stage", kind, readable, writable: seen.writable }, "*", [readable, seen.writable]);
+        try { parent.postMessage({ wire: "stage", kind, readable, writable: seen.writable }, "*", [readable, seen.writable]); }
+        catch { log("This browser cannot transfer streams yet."); }
       });
       await stage.frame("unzip", { title: "Unzip, origin one", color: "red", script });
       await stage.frame("decode", { title: "Bytes to text, origin two", color: "yellow", script });
@@ -1270,10 +1322,15 @@ out.postMessage({ pixels }, [pixels.buffer]);`,
       const me = logBox(stage, "page", "This page", `<p class="small" style="margin:0 0 .4rem">Page ticks: <strong data-ticks>0</strong></p>`);
       const dec = logBox(stage, "decoder", "Decoder worker", "", { kind: "worker", url: "blob:" });
       const screen = stage.box("renderer", { kind: "worker", url: "blob:", html: `<canvas width="160" height="90" style="width:100%;height:100%;display:block;background:#000" aria-label="Painted by the renderer worker"></canvas>` });
+      if (!("OffscreenCanvas" in self) || typeof HTMLCanvasElement.prototype.transferControlToOffscreen !== "function") {
+        me.say("This browser cannot transfer canvas control to a worker.");
+        ui.unsupported("This browser does not support OffscreenCanvas transfer to workers.");
+        return;
+      }
       const ticksEl = me.node.querySelector("[data-ticks]");
       let ticks = 0;
-      const beat = setInterval(() => { if (!ticksEl.isConnected) { decoder.terminate(); renderer.terminate(); return clearInterval(beat); } ticksEl.textContent = ++ticks; }, 100);
-      const work = (source) => new Worker(URL.createObjectURL(new Blob([source], { type: "text/javascript" })));
+      const urls = [];
+      const work = (source) => { const u = URL.createObjectURL(new Blob([source], { type: "text/javascript" })); urls.push(u); return new Worker(u); };
       const decoder = work(`onmessage = ({ data }) => {
         const out = data.out, W = 160, H = 90; let n = 0;
         setInterval(() => {
@@ -1295,6 +1352,8 @@ out.postMessage({ pixels }, [pixels.buffer]);`,
           painted++;
         };
       };`);
+      const beat = setInterval(() => { if (!ticksEl.isConnected) { decoder.terminate(); renderer.terminate(); return clearInterval(beat); } ticksEl.textContent = ++ticks; }, 100);
+      stage.cleanup(() => { clearInterval(beat); decoder.terminate(); renderer.terminate(); urls.forEach((u) => URL.revokeObjectURL(u)); });
       decoder.onmessage = ({ data }) => dec.say(`made ${data.made} frames, kept none`);
       const count = () => new Promise((resolve) => { renderer.onmessage = ({ data }) => resolve(data.painted); renderer.postMessage({ count: true }); });
       const freeze = ui.button("Freeze this page for 3 seconds", async () => {
@@ -1351,12 +1410,16 @@ dashboard.postMessage({ feed: readable }, "*", [readable]);    <span class="c">/
       const read = ui.button("Sensor: try to read the feed", () => stage.post("sensor", { cmd: "read" }), true);
       const write = ui.button("Dashboard: try to write a reading", () => stage.post("dashboard", { cmd: "write" }), true);
       ui.button("Give out the two ends", (btn) => {
-        const { readable, writable } = new TransformStream();
-        stage.post("sensor", { cmd: "feed", feed: writable }, [writable]);
-        stage.post("dashboard", { cmd: "feed", feed: readable }, [readable]);
-        stage.cable("feed", "sensor", "dashboard", "teal");
-        me.say("gave away both ends. I can neither read nor write it now.");
-        btn.disabled = true; report.disabled = read.disabled = write.disabled = false;
+        try {
+          const { readable, writable } = new TransformStream();
+          stage.post("sensor", { cmd: "feed", feed: writable }, [writable]);
+          stage.post("dashboard", { cmd: "feed", feed: readable }, [readable]);
+          stage.cable("feed", "sensor", "dashboard", "teal");
+          me.say("gave away both ends. I can neither read nor write it now.");
+          btn.disabled = true; report.disabled = read.disabled = write.disabled = false;
+        } catch {
+          me.say("This browser cannot transfer streams yet.");
+        }
       }, false, true);
     },
   },
@@ -1384,12 +1447,14 @@ session.postMessage({ ask: "balance" });        <span class="c">// goes nowhere:
           });
         },
       });
-      const worker = new Worker(URL.createObjectURL(new Blob([`onmessage = ({ data }) => {
+      const workerUrl = URL.createObjectURL(new Blob([`onmessage = ({ data }) => {
         const session = data.session;
         session.onmessage = ({ data }) => postMessage({ balance: data.balance });
         const ask = () => { session.postMessage({ ask: "balance" }); postMessage({ asked: true }); };
         ask(); setInterval(ask, 1500);
-      };`], { type: "text/javascript" })));
+      };`], { type: "text/javascript" }));
+      const worker = new Worker(workerUrl);
+      stage.cleanup(() => { worker.terminate(); URL.revokeObjectURL(workerUrl); });
       let session = null;
       worker.onmessage = ({ data }) => {
         if (!me.node.isConnected) return worker.terminate();
@@ -1488,6 +1553,7 @@ give(app, port2);`,
 pip.document.body.append(meter);          <span class="c">// the element moves</span>
 port.onmessage = ({ data }) => { meter.textContent = data; };   <span class="c">// the port and its listener do not</span>
 pip.addEventListener("pagehide", () => sidebar.append(meter));`,
+    tour: { steps: [], then: "Press Float the meter above other windows. Browsers only open a Document Picture-in-Picture window for a real click." },
     async setup(stage, ui) {
       const me = logBox(stage, "page", "This page's sidebar", `<div data-slot><p data-tool style="font:800 2.4rem/1 var(--display);margin:.1rem 0 .4rem">0</p></div>`);
       await stage.frame("feed", {
@@ -1500,6 +1566,7 @@ pip.addEventListener("pagehide", () => sidebar.append(meter));`,
       stage.post("feed", { cmd: "port" }, [channel.port2]);
       stage.cable("line", "page", "feed", "teal");
       let pip = null;
+      stage.cleanup(() => { channel.port1.close(); try { pip?.close(); } catch {} });
       const back = ui.button("Bring it back", () => pip?.close(), true);
       ui.button("Float the meter above other windows", async (btn) => {
         if (!("documentPictureInPicture" in self)) return me.say("This browser has no Document Picture-in-Picture. Chrome and Edge on a desktop do.");
@@ -1578,7 +1645,12 @@ addEventListener("pagehide", () => bank.port.postMessage({ deposit: "orders" }, 
         script: () => on("port", (_, [port]) => { let n = 0; log("granted this site one port"); setInterval(() => send(port, "line", ++n), 400); }),
       });
       const note = logBox(stage, "bank", "Port bank, a SharedWorker", "", { kind: "shared", url: "/patterns/bank.js" });
-      const site = stage.box("site", { src: `/patterns/shop.html?key=${key}` });
+      const site = stage.box("site", { src: `/patterns/shop.html?key=${key}`, title: "Shop site" });
+      if (!("SharedWorker" in self)) {
+        note.say("This browser does not support SharedWorker.");
+        ui.unsupported("This browser does not support SharedWorker.");
+        return;
+      }
       let moves = 0, page = "Shop", grants = 0;
       stage.on((name, data) => {
         if (name !== "site") return;
@@ -1607,8 +1679,8 @@ port.onmessage = async ({ data, ports: [reply] }) => {
     tour: { steps: [["Write three files to the private file system", "A page, a stylesheet and a picture, written by this tab into storage only this origin can see."], ["Load the site from them", "Three requests reach the service worker. Each is answered by this tab, from a file.", 2200], ["Rewrite the stylesheet and reload", "This tab overwrites one file. The site is loaded again and looks different.", 2200]] },
     async setup(stage, ui) {
       const me = logBox(stage, "page", "This tab has the files");
-      const server = await serveFrom(stage, "/patterns/served/files/");
-      const served = stage.box("served", { kind: "iframe", html: `<div class="here"><h4>/patterns/served/files/</h4><p class="small muted">Nothing loaded yet.</p></div>` });
+      const server = await serveFrom(stage, "/patterns/served/files/", ui);
+      const served = stage.box("served", { kind: "iframe", html: `<div class="here"><div class="box-title">/patterns/served/files/</div><p class="small muted">Nothing loaded yet.</p></div>` });
       if (!server) return;
       if (!navigator.storage?.getDirectory) return me.say("This browser has no Origin Private File System.");
       const types = { html: "text/html; charset=utf-8", css: "text/css", svg: "image/svg+xml" };
@@ -1653,8 +1725,8 @@ port.onmessage = ({ data, ports: [reply] }) =>
     tour: { steps: [["Open a reader", "A real page loads, and fetches the notes. This tab answers.", 2000], ["Add a note in this tab", "The note is added to an array in this tab, and nowhere else."], ["Reader: fetch again", "The reader asks again and gets the new note.", 1600]] },
     async setup(stage, ui) {
       const me = logBox(stage, "page", "This tab holds the notes", `<p class="small" style="margin:0 0 .4rem">Notes in memory: <strong data-n>1</strong></p>`);
-      const server = await serveFrom(stage, "/patterns/served/notes/");
-      const served = stage.box("served", { kind: "iframe", html: `<div class="here"><h4>A reader, in another page</h4><p class="small muted">Not open yet.</p></div>` });
+      const server = await serveFrom(stage, "/patterns/served/notes/", ui);
+      const served = stage.box("served", { kind: "iframe", html: `<div class="here"><div class="box-title">A reader, in another page</div><p class="small muted">Not open yet.</p></div>` });
       if (!server) return;
       const notes = ["Water the ferns"], more = ["Order brown paper", "Ring the tulip grower", "Sweep the shop floor"];
       const reader = `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width"><style>body{font:14px system-ui;margin:.7rem;color-scheme:light dark}h1{font-size:1rem;margin:0 0 .3rem}ul{margin:0 0 .4rem;padding-left:1.1rem}p{font:12px ui-monospace,monospace;margin:0}</style><h1>Reader</h1><ul id="list"></ul><p id="said"></p><script>
@@ -1727,7 +1799,7 @@ port.onmessage = ({ data }) =>
     tour: { steps: [["Open a line for the agent", "This page opens a meeting place and shows its code."], ["Use a stand-in for the agent's machine", "A second page plays the other machine. The two connect directly, and the tool list is sent.", 4500], ["Agent: call addTulips", "The call crosses to this browser, which runs its own tool."], ["Agent: call readBasket", "The agent reads what is in the basket."], ["Agent: call deleteAccount", "A name this page never offered. It is refused here."]] },
     async setup(stage, ui) {
       const me = logBox(stage, "page", "This browser has the tools", `<p class="small" data-code style="margin:0 0 .4rem" hidden></p><p class="small" style="margin:0 0 .4rem">Basket: <strong data-basket>empty</strong></p>`);
-      const other = stage.box("far", { html: `<div class="here"><h4>The agent's machine</h4><p class="small muted">Not connected yet.</p></div>` });
+      const other = stage.box("far", { html: `<div class="here"><div class="box-title">The agent's machine</div><p class="small muted">Not connected yet.</p></div>` });
       if (!("RTCPeerConnection" in self)) return me.say("no WebRTC in this browser");
       const codeEl = me.node.querySelector("[data-code]"), basketEl = me.node.querySelector("[data-basket]");
       const basket = [];
@@ -1803,7 +1875,7 @@ serviceWorker.postMessage({ serve: true, prefix: "/app/calendar/" }, [port2]);`,
       const me = logBox(stage, "page", "This tab is the host app's server");
       const server = await serveFrom(stage, "/patterns/served/app/");
       await stage.frame("Invoices", { title: "Invoices plug-in, origin two", color: "red", script: plugin });
-      const view = stage.box("served", { kind: "iframe", html: `<div class="here"><h4>The host app</h4><p class="small muted">Not open yet.</p></div>` });
+      const view = stage.box("served", { kind: "iframe", html: `<div class="here"><div class="box-title">The host app</div><p class="small muted">Not open yet.</p></div>` });
       if (!server) return;
       const installed = [];
       server.handle(() => {
@@ -1861,7 +1933,7 @@ port.onmessage = ({ data, ports: [reply] }) => {
       });
       const me = logBox(stage, "page", "This page is the editor");
       const sw = logBox(stage, "sw", "Service Worker", "", { kind: "service", url: "/patterns/tabserver-sw.js", scope: "/patterns/served/" });
-      const view = stage.box("served", { kind: "iframe", html: `<div class="here"><h4>Preview</h4><p class="small muted">Nothing to preview yet.</p></div>` });
+      const view = stage.box("served", { kind: "iframe", html: `<div class="here"><div class="box-title">Preview</div><p class="small muted">Nothing to preview yet.</p></div>` });
       if (!("serviceWorker" in navigator)) return sw.say("no Service Worker support here");
       const prefix = "/patterns/served/preview/";
       let registration = null, mounted = false;
@@ -1898,12 +1970,17 @@ socket.onclose = () => setTimeout(connect, Math.min(8000, 500 * 2 ** attempt++))
 port.onmessage = ({ data }) => show(data.price);`,
     tour: { steps: [["Drop the connection", "The server hangs up on the worker. The worker waits half a second and connects again. The tabs did nothing.", 3500], ["Close tab one", "One tab goes. The subscription stays up for the other."]] },
     async setup(stage, ui) {
-      const one = stage.box("tab1", { src: "/patterns/feed-tab.html" });
-      const hub = stage.box("worker", { kind: "shared", url: "/patterns/feed-worker.js", html: `<div class="here"><h4>Shared worker</h4><p class="small" style="margin:0 0 .3rem">Connections it has made: <strong data-opened>0</strong></p><p class="small" style="margin:0 0 .3rem">Connected now: <strong data-open>no</strong></p><p class="small" style="margin:0 0 .3rem">Tabs it feeds: <strong data-tabs>none</strong></p><p class="small" data-said style="margin:0;min-height:1.4em"></p></div>` });
-      const two = stage.box("tab2", { src: "/patterns/feed-tab.html" });
+      const one = stage.box("tab1", { src: "/patterns/feed-tab.html", title: "Feed tab one" });
+      const hub = stage.box("worker", { kind: "shared", url: "/patterns/feed-worker.js", html: `<div class="here"><div class="box-title">SharedWorker</div><p class="small" style="margin:0 0 .3rem">Connections it has made: <strong data-opened>0</strong></p><p class="small" style="margin:0 0 .3rem">Connected now: <strong data-open>no</strong></p><p class="small" style="margin:0 0 .3rem">Tabs it feeds: <strong data-tabs>none</strong></p><p class="small" data-said style="margin:0;min-height:1.4em"></p></div>` });
+      const two = stage.box("tab2", { src: "/patterns/feed-tab.html", title: "Feed tab two" });
       const q = (name) => hub.node.querySelector(`[data-${name}]`);
-      if (!("SharedWorker" in self)) { q("said").textContent = "This browser has no SharedWorker."; return; }
+      if (!("SharedWorker" in self)) {
+        q("said").textContent = "This browser has no SharedWorker.";
+        ui.unsupported("This browser does not support SharedWorker.");
+        return;
+      }
       const watch = new SharedWorker("/patterns/feed-worker.js").port;
+      stage.cleanup(() => watch.close());
       watch.onmessage = ({ data }) => {
         if (!hub.node.isConnected) return watch.close();
         const { state } = data; if (!state) return;
@@ -1936,10 +2013,14 @@ port.onmessage = ({ data }) => {
     async setup(stage, ui) {
       const me = logBox(stage, "page", "This page", `<p class="small" style="margin:0 0 .4rem">Page ticks: <strong data-ticks>0</strong></p>`);
       const dec = logBox(stage, "decoder", "Decoder worker", "", { kind: "worker", url: "blob:" });
-      stage.box("audio", { kind: "worklet", url: "blob:", html: `<div class="here"><h4>The audio thread</h4><p class="small muted" style="margin:0">Plays whatever blocks of samples arrive on its port, and reports how many it has played.</p></div>` });
-      if (!("AudioWorkletNode" in self)) return me.say("this browser has no audio worklet");
+      stage.box("audio", { kind: "worklet", url: "blob:", html: `<div class="here"><div class="box-title">The audio thread</div><p class="small muted" style="margin:0">Plays whatever blocks of samples arrive on its port, and reports how many it has played.</p></div>` });
+      if (!("AudioWorkletNode" in self)) {
+        me.say("this browser has no AudioWorklet");
+        ui.unsupported("This browser does not support AudioWorklet.");
+        return;
+      }
       const ticksEl = me.node.querySelector("[data-ticks]");
-      let ticks = 0, audio = null;
+      let ticks = 0, audio = null, playerUrl = null;
       const PLAYER = `class Player extends AudioWorkletProcessor {
         constructor() { super(); this.queue = []; this.at = 0; this.played = 0; this.gaps = 0; this.calls = 0; this.far = null;
           this.port.onmessage = (event) => { this.far = event.ports[0]; this.far.onmessage = ({ data }) => this.queue.push(data.block); this.far.postMessage({ played: 0, gaps: 0 }); }; }
@@ -1957,7 +2038,7 @@ port.onmessage = ({ data }) => {
         }
       }
       registerProcessor("player", Player);`;
-      const worker = new Worker(URL.createObjectURL(new Blob([`let sent = 0, blocks = 0, gaps = 0, phase = 0, t = 0;
+      const workerUrl = URL.createObjectURL(new Blob([`let sent = 0, blocks = 0, gaps = 0, phase = 0, t = 0;
         const tune = [262, 330, 392, 523, 392, 330, 294, 349, 440, 587, 440, 349];
         onmessage = ({ data }) => {
           if (data.count) return postMessage({ blocks, gaps });
@@ -1972,9 +2053,11 @@ port.onmessage = ({ data }) => {
               if (blocks % 20 === 0) postMessage({ said: "decoded " + blocks + " blocks, " + (sent / rate).toFixed(1) + " s of sound" });
             }
           };
-        };`], { type: "text/javascript" })));
-      const stop = () => { audio?.close(); audio = null; worker.terminate(); };
+        };`], { type: "text/javascript" }));
+      const worker = new Worker(workerUrl);
+      const stop = () => { audio?.close(); audio = null; worker.terminate(); if (playerUrl) { URL.revokeObjectURL(playerUrl); playerUrl = null; } };
       const beat = setInterval(() => { if (!ticksEl.isConnected) { clearInterval(beat); stop(); return; } ticksEl.textContent = ++ticks; }, 100);
+      stage.cleanup(() => { clearInterval(beat); stop(); URL.revokeObjectURL(workerUrl); });
       let asked = null;
       worker.onmessage = ({ data }) => { if (data.said) return dec.say(data.said); asked?.(data); };
       const count = () => new Promise((resolve) => { asked = resolve; worker.postMessage({ count: true }); });
@@ -1987,22 +2070,36 @@ port.onmessage = ({ data }) => {
         const after = await count();
         me.say(`3 s frozen: I ticked ${ticks - mine} times, the worker delivered ${after.blocks - before.blocks} blocks, and the sound had ${after.gaps - before.gaps} gaps`);
       }, true);
-      const quiet = ui.button("Stop the sound", (btn) => { stop(); stage.cut("pcm"); btn.disabled = freeze.disabled = true; me.say("stopped"); }, true);
+      const resumeBtn = ui.button("Tap to resume audio", async (btn) => {
+        if (!audio) return;
+        try {
+          await audio.resume();
+          if (audio.state === "running") { btn.hidden = true; me.say("audio resumed"); }
+        } catch (err) { me.say("could not resume audio: " + err.message); }
+      }, false);
+      resumeBtn.hidden = true;
+      const quiet = ui.button("Stop the sound", (btn) => { stop(); stage.cut("pcm"); btn.disabled = freeze.disabled = true; resumeBtn.hidden = true; me.say("stopped"); }, true);
       ui.button("Start the decoder", async (btn) => {
         btn.disabled = true;
         try {
           audio = new AudioContext();
-          await audio.audioWorklet.addModule(URL.createObjectURL(new Blob([PLAYER], { type: "text/javascript" })));
+          const resuming = audio.resume();
+          playerUrl = URL.createObjectURL(new Blob([PLAYER], { type: "text/javascript" }));
+          await audio.audioWorklet.addModule(playerUrl);
           const node = new AudioWorkletNode(audio, "player", { outputChannelCount: [2] });
           node.connect(audio.destination);
           const { port1, port2 } = new MessageChannel();
           worker.postMessage({ port: port1, rate: audio.sampleRate }, [port1]);
           node.port.postMessage({}, [port2]);
-          audio.resume();   // may wait for a tap, so it is not awaited
-          await new Promise((r) => setTimeout(r, 250));
-        } catch (err) { return me.say("could not start: " + err.message); }
+          await Promise.race([resuming, new Promise((r) => setTimeout(r, 250))]);
+        } catch (err) { btn.disabled = false; return me.say("could not start: " + err.message); }
         stage.cable("pcm", "decoder", "audio", "teal");
-        me.say(audio.state === "running" ? "introduced the decoder to the audio thread, and kept no port" : "the browser is holding the sound until you tap");
+        if (audio.state === "running") {
+          me.say("introduced the decoder to the audio thread, and kept no port");
+        } else {
+          resumeBtn.hidden = false;
+          me.say("the browser paused audio until a real tap — press Tap to resume audio");
+        }
         freeze.disabled = quiet.disabled = false;
       }, false, true);
     },
@@ -2020,11 +2117,15 @@ process([input]) {
     tour: { steps: [["Start the tone and the meter", "The audio thread and the meter's worker are given one end each of a channel."], ["Freeze this page for 3 seconds", "The page stops. The meter does not.", 4200], ["Stop the sound", "The audio is closed."]] },
     async setup(stage, ui) {
       const me = logBox(stage, "page", "This page", `<p class="small" style="margin:0 0 .4rem">Page ticks: <strong data-ticks>0</strong></p>`);
-      stage.box("audio", { kind: "worklet", url: "blob:", html: `<div class="here"><h4>The audio thread</h4><p class="small muted" style="margin:0">Measures the level of the sound passing through it, and posts each reading to a port.</p></div>` });
+      stage.box("audio", { kind: "worklet", url: "blob:", html: `<div class="here"><div class="box-title">The audio thread</div><p class="small muted" style="margin:0">Measures the level of the sound passing through it, and posts each reading to a port.</p></div>` });
       const screen = stage.box("meter", { kind: "worker", url: "blob:", html: `<canvas width="300" height="170" style="width:100%;height:100%;display:block" aria-label="A level meter, drawn by a worker"></canvas>` });
-      if (!("AudioWorkletNode" in self) || !("OffscreenCanvas" in self)) return me.say("this browser lacks an audio worklet or an offscreen canvas");
+      if (!("AudioWorkletNode" in self) || !("OffscreenCanvas" in self) || typeof HTMLCanvasElement.prototype.transferControlToOffscreen !== "function") {
+        me.say("this browser lacks an AudioWorklet or OffscreenCanvas transfer");
+        ui.unsupported("This browser lacks AudioWorklet or OffscreenCanvas transfer.");
+        return;
+      }
       const ticksEl = me.node.querySelector("[data-ticks]");
-      let ticks = 0, audio = null;
+      let ticks = 0, audio = null, meterUrl = null;
       const METER = `class Meter extends AudioWorkletProcessor {
         constructor() { super(); this.sum = 0; this.n = 0; this.far = null; this.port.onmessage = (event) => { this.far = event.ports[0]; }; }
         process(inputs, outputs) {
@@ -2039,7 +2140,7 @@ process([input]) {
       }
       registerProcessor("meter", Meter);`;
       const css = getComputedStyle(screen.node);
-      const worker = new Worker(URL.createObjectURL(new Blob([`let ctx = null, look = null, readings = 0, peak = 0;
+      const workerUrl = URL.createObjectURL(new Blob([`let ctx = null, look = null, readings = 0, peak = 0;
         onmessage = ({ data }) => {
           if (data.count) return postMessage({ readings });
           if (data.surface) { ctx = data.surface.getContext("2d"); look = data.look; draw(0); return; }
@@ -2055,11 +2156,13 @@ process([input]) {
           ctx.fillStyle = v > 0.8 ? "#e0364c" : "#0e9f8e"; ctx.fillRect(16, 72, (w - 32) * v, 30);
           ctx.fillStyle = look.ink; ctx.fillRect(16 + (w - 32) * peak - 2, 68, 3, 38);
           ctx.fillText("level " + level.toFixed(3), 14, 128);
-        }`], { type: "text/javascript" })));
+        }`], { type: "text/javascript" }));
+      const worker = new Worker(workerUrl);
       const surface = screen.node.querySelector("canvas").transferControlToOffscreen();
       worker.postMessage({ surface, look: { panel: css.backgroundColor, ink: css.color } }, [surface]);
-      const stop = () => { audio?.close(); audio = null; };
+      const stop = () => { audio?.close(); audio = null; if (meterUrl) { URL.revokeObjectURL(meterUrl); meterUrl = null; } };
       const beat = setInterval(() => { if (!ticksEl.isConnected) { clearInterval(beat); stop(); worker.terminate(); return; } ticksEl.textContent = ++ticks; }, 100);
+      stage.cleanup(() => { clearInterval(beat); stop(); worker.terminate(); URL.revokeObjectURL(workerUrl); });
       const count = () => new Promise((resolve) => { worker.onmessage = ({ data }) => resolve(data.readings); worker.postMessage({ count: true }); });
       const freeze = ui.button("Freeze this page for 3 seconds", async () => {
         const before = await count(), mine = ticks;
@@ -2069,12 +2172,22 @@ process([input]) {
         while (performance.now() < until) { /* the main thread is stuck here */ }
         me.say(`3 s frozen: I ticked ${ticks - mine} times, the worker drew ${(await count()) - before} readings`);
       }, true);
-      const quiet = ui.button("Stop the sound", (btn) => { stop(); stage.cut("levels"); btn.disabled = freeze.disabled = true; me.say("stopped"); }, true);
+      const resumeBtn = ui.button("Tap to resume audio", async (btn) => {
+        if (!audio) return;
+        try {
+          await audio.resume();
+          if (audio.state === "running") { btn.hidden = true; me.say("audio resumed"); }
+        } catch (err) { me.say("could not resume audio: " + err.message); }
+      }, false);
+      resumeBtn.hidden = true;
+      const quiet = ui.button("Stop the sound", (btn) => { stop(); stage.cut("levels"); btn.disabled = freeze.disabled = true; resumeBtn.hidden = true; me.say("stopped"); }, true);
       ui.button("Start the tone and the meter", async (btn) => {
         btn.disabled = true;
         try {
           audio = new AudioContext();
-          await audio.audioWorklet.addModule(URL.createObjectURL(new Blob([METER], { type: "text/javascript" })));
+          const resuming = audio.resume();
+          meterUrl = URL.createObjectURL(new Blob([METER], { type: "text/javascript" }));
+          await audio.audioWorklet.addModule(meterUrl);
           const tone = new OscillatorNode(audio, { frequency: 220 }), swell = new GainNode(audio, { gain: 0.3 });
           const slow = new OscillatorNode(audio, { frequency: 0.4 }), depth = new GainNode(audio, { gain: 0.28 });
           slow.connect(depth).connect(swell.gain);
@@ -2084,11 +2197,15 @@ process([input]) {
           const { port1, port2 } = new MessageChannel();
           worker.postMessage({ port: port1 }, [port1]);
           node.port.postMessage({}, [port2]);
-          audio.resume();   // may wait for a tap, so it is not awaited
-          await new Promise((r) => setTimeout(r, 250));
-        } catch (err) { return me.say("could not start: " + err.message); }
+          await Promise.race([resuming, new Promise((r) => setTimeout(r, 250))]);
+        } catch (err) { btn.disabled = false; return me.say("could not start: " + err.message); }
         stage.cable("levels", "audio", "meter", "teal");
-        me.say(audio.state === "running" ? "introduced the audio thread to the meter's worker, and kept no port" : "the browser is holding the sound until you tap");
+        if (audio.state === "running") {
+          me.say("introduced the audio thread to the meter's worker, and kept no port");
+        } else {
+          resumeBtn.hidden = false;
+          me.say("the browser paused audio until a real tap — press Tap to resume audio");
+        }
         freeze.disabled = quiet.disabled = false;
       }, false, true);
     },

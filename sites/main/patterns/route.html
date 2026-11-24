@@ -7,7 +7,7 @@
   html{color-scheme:light dark}
   body{margin:0;padding:.7rem .8rem;font:14px/1.4 system-ui,sans-serif;background:light-dark(#fff,#141f47);color:light-dark(#0f1c3f,#e9edfa)}
   h1{font:800 1rem/1.1 system-ui,sans-serif;margin:0 0 .15rem;text-transform:capitalize}
-  p{margin:0 0 .35rem;font-size:12px;opacity:.75}
+  p{margin:0 0 .35rem;font-size:12px;opacity:.8}
   ul{list-style:none;margin:0;padding:0;font:12px/1.45 ui-monospace,Menlo,monospace}
   li{padding:.15rem 0;border-top:1px solid light-dark(#c9d1e0,#2b3970);overflow-wrap:anywhere}
   li:first-child{border-top:0;font-weight:700}
@@ -15,45 +15,62 @@
 </style>
 <h1 id="title"></h1>
 <p id="about"></p>
-<ul id="log"></ul>
-<form id="form" hidden><label>Send to <select id="to"><option>orders</option><option>kitchen</option><option>driver</option></select></label><button>Send</button></form>
+<ul id="log" role="log" aria-live="polite"></ul>
+<form id="form" hidden><label>Send to <select id="to"><option>orders</option><option>kitchen</option><option>driver</option></select></label><button type="submit">Send</button></form>
 <script type="module">
   // A window that knows its own name and the router. It has no reference to
   // any other window: no opener, no frame, no port of theirs.
   const params = new URLSearchParams(location.search);
   const name = params.get("name") || "window-" + Math.random().toString(36).slice(2, 5);
   const viaSW = params.get("via") === "sw";
+  const manual = params.get("manual") === "1";
   const embedded = parent !== self;
   const tell = (wire, data = {}) => embedded && parent.postMessage({ wire, ...data }, "*");
   const $ = (id) => document.getElementById(id);
   const log = (text) => { const li = document.createElement("li"); li.textContent = text; $("log").prepend(li); while ($("log").children.length > 5) $("log").lastChild.remove(); };
   $("title").textContent = name;
-  $("about").textContent = "I know my name and the router. Nothing else.";
-  let n = 0, post = null;
+  $("about").textContent = manual ? "Not connected to the router yet." : "I know my name and the router. Nothing else.";
+  let n = 0, post = null, connected = false;
   const heard = (data) => {
     if (data.from !== undefined && data.text) { log(`from ${data.from || "someone"}: ${data.text}`); tell("got"); }
     if (data.undelivered) log(`undelivered: nobody is called ${data.undelivered}`);
   };
   const send = (to) => { if (!post) return; const text = `message ${++n}`; log(`to ${to}: ${text}`); post({ to, text }); tell("sent"); };
 
-  if (viaSW && "serviceWorker" in navigator) {
-    const registration = await navigator.serviceWorker.register("/patterns/route-sw.js", { scope: "/patterns/routed/" });
-    const worker = registration.active || registration.waiting || registration.installing;
-    if (worker.state !== "activated") await new Promise((resolve) => worker.addEventListener("statechange", () => worker.state === "activated" && resolve()));
-    post = (message) => registration.active.postMessage(message);
-    navigator.serviceWorker.addEventListener("message", ({ data }) => { if (data.rollcall) return post({ iam: name }); heard(data); });
-    post({ iam: name });
-  } else if (!viaSW && "SharedWorker" in self) {
-    const port = new SharedWorker("/patterns/router-worker.js").port;
-    post = (message) => port.postMessage(message);
-    port.onmessage = ({ data }) => heard(data);
-    const lock = "pa-route-" + Math.random().toString(36).slice(2);
-    const join = () => post({ iam: name, lock });
-    navigator.locks ? navigator.locks.request(lock, () => { join(); return new Promise(() => {}); }) : join();
-  } else log("This browser cannot run this router.");
+  const connect = async () => {
+    if (connected) return;
+    connected = true;
+    $("about").textContent = "I know my name and the router. Nothing else.";
+    if (viaSW && "serviceWorker" in navigator) {
+      const registration = await navigator.serviceWorker.register("/patterns/route-sw.js", { scope: "/patterns/routed/" });
+      const worker = registration.active || registration.waiting || registration.installing;
+      if (worker.state !== "activated") await new Promise((resolve) => worker.addEventListener("statechange", () => worker.state === "activated" && resolve()));
+      post = (message) => registration.active.postMessage(message);
+      navigator.serviceWorker.addEventListener("message", ({ data }) => { if (data.rollcall) return post({ iam: name }); heard(data); });
+      post({ iam: name });
+      log("registered with the Service Worker");
+      tell("joined");
+    } else if (!viaSW && "SharedWorker" in self) {
+      const port = new SharedWorker("/patterns/router-worker.js").port;
+      post = (message) => port.postMessage(message);
+      port.onmessage = ({ data }) => heard(data);
+      const lock = "pa-route-" + Math.random().toString(36).slice(2);
+      const join = () => post({ iam: name, lock });
+      navigator.locks ? navigator.locks.request(lock, () => { join(); return new Promise(() => {}); }) : join();
+      log("registered with the SharedWorker");
+      tell("joined");
+    } else {
+      log("This browser cannot run this router.");
+    }
+  };
 
-  addEventListener("message", (event) => { if (event.source === parent && event.data?.cmd === "send") send(event.data.to); });
+  addEventListener("message", (event) => {
+    if (event.source !== parent || !event.data) return;
+    if (event.data.cmd === "connect") connect();
+    if (event.data.cmd === "send") send(event.data.to);
+  });
   if (!embedded) { $("form").hidden = false; $("form").onsubmit = (event) => { event.preventDefault(); send($("to").value); }; }
+  if (!manual) await connect();
   tell("ready");
 </script>
 </html>

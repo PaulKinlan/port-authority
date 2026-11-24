@@ -7,6 +7,7 @@
 // can be drawn. The data itself only travels over the ports.
 
 const COLORS = { yellow: "#f5b700", red: "#e0364c", teal: "#0e9f8e", ink: "currentColor" };
+const SVG_NS = "http://www.w3.org/2000/svg";
 
 // What each box on a stage is. A box is drawn differently for each kind, so a
 // window, an iframe and a worker can be told apart without reading the labels.
@@ -15,7 +16,7 @@ export const KINDS = {
   iframe: { label: "<iframe>", about: "A page embedded inside another page. Its address is written underneath." },
   worker: { label: "Worker", about: "A background thread that belongs to one page. The script it runs is written underneath." },
   shared: { label: "SharedWorker", about: "One background thread that every page of a site can connect to." },
-  service: { label: "Service worker", about: "A background thread that answers network requests for one part of a site. The browser starts and stops it." },
+  service: { label: "Service Worker", about: "A background thread that answers network requests for one part of a site. The browser starts and stops it." },
   worklet: { label: "AudioWorklet", about: "Code that runs on the thread that produces sound." },
   device: { label: "Another device", about: "A browser on a different machine." },
   part: { label: "In this page", about: "Something the page draws itself. It is not a separate page or thread." },
@@ -35,6 +36,7 @@ const GLYPHS = {
 };
 const glyph = (kind) => `<svg class="glyph" viewBox="0 0 24 18" width="24" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="miter" stroke-linecap="round">${GLYPHS[kind]}</svg>`;
 const esc = (text) => String(text).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const reducedMotion = () => typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 // An address as a browser shows it: the host stands out, the rest is quieter.
 function address(url) {
@@ -47,12 +49,13 @@ function address(url) {
 
 // A key to the shapes. With no argument it lists every kind, with what each one is.
 export function legend(kinds = Object.keys(KINDS), full = true) {
-  return `<div class="stage-legend${full ? " full" : ""}" role="list" aria-label="What the shapes mean">${kinds.map((kind) => `<div role="listitem">${glyph(kind)}<span><strong>${esc(KINDS[kind].label)}</strong>${full ? " " + KINDS[kind].about : ""}</span></div>`).join("")}</div>`;
+  return `<ul class="stage-legend${full ? " full" : ""}" aria-label="What the shapes mean">${kinds.map((kind) => `<li>${glyph(kind)}<span><strong>${esc(KINDS[kind].label)}</strong>${full ? " " + KINDS[kind].about : ""}</span></li>`).join("")}</ul>`;
 }
 
 // What a box is, when the demo that made it did not say.
 function guess(name, html) {
-  const text = name + " " + ((html.match(/<h4>([^<]*)/) || [])[1] || "");
+  const heading = (html.match(/<(?:h4|div class="box-title")>([^<]*)/) || [])[1] || "";
+  const text = name + " " + heading;
   if (name === "page") return "window";
   if (/service ?worker|^sw\b/i.test(text)) return "service";
   if (/shared ?worker/i.test(text)) return "shared";
@@ -91,27 +94,30 @@ export function runtime() {
 }
 
 function frameDoc(title, color, script, csp) {
-  return `<!doctype html><meta charset="utf-8">${csp ? `<meta http-equiv="Content-Security-Policy" content="${csp}">` : ""}<style>
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>${esc(title)}</title>${csp ? `<meta http-equiv="Content-Security-Policy" content="${csp}">` : ""}<style>
     html{color-scheme:light dark}
     body{margin:0;padding:.7rem .8rem;font:14px/1.4 system-ui,sans-serif;background:light-dark(#fff,#141f47);color:light-dark(#0f1c3f,#e9edfa)}
     h1{font:800 1rem/1.1 "Arial Narrow",system-ui,sans-serif;margin:0 0 .5rem;display:flex;align-items:center;gap:.45rem}
-    h1::before{content:"";width:.8em;height:.8em;border-radius:50%;background:${color}}
+    h1::before{content:"";width:.8em;height:.8em;border-radius:50%;background:${color};flex:none}
     ul{list-style:none;margin:0;padding:0;font:12px/1.45 ui-monospace,Menlo,monospace}
     li{padding:.15rem 0;border-top:1px solid light-dark(#c9d1e0,#2b3970);overflow-wrap:anywhere}
     li:first-child{border-top:0;font-weight:700}
-  </style><h1>${title}</h1><ul id="log"></ul><script>(${runtime})();(${script})();<\/script>`;
+  </style></head><body><h1>${esc(title)}</h1><ul id="log" role="log" aria-live="polite"></ul><script>(${runtime})();(${script})();<\/script></body></html>`;
 }
 
 export class Stage {
   constructor(el) {
     this.el = el;
     el.classList.add("stage");
-    this.svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    this.svg = document.createElementNS(SVG_NS, "svg");
     this.svg.setAttribute("aria-hidden", "true");
     el.append(this.svg);
     this.boxes = new Map();
     this.cables = new Map();
     this.listeners = new Set();
+    this.cleanups = new Set();
+    this.timers = new Set();
+    this.pulseMeta = new Map();
     this.onMessage = (event) => {
       const data = event.data;
       if (!data || !data.wire) return;
@@ -128,6 +134,29 @@ export class Stage {
     // A key under the stage, listing only the shapes that are on it.
     this.key = document.createElement("div");
     el.after(this.key);
+  }
+
+  // Register a teardown callback to run on reset() or destroy().
+  cleanup(fn) {
+    if (typeof fn === "function") this.cleanups.add(fn);
+    return () => this.cleanups.delete(fn);
+  }
+
+  _later(fn, ms) {
+    const id = setTimeout(() => { this.timers.delete(id); fn(); }, ms);
+    this.timers.add(id);
+    return id;
+  }
+
+  _flashBox(name, cls, color, ms = 850) {
+    const box = this.boxes.get(name);
+    if (!box || !box.wrap.isConnected) return;
+    box.wrap.style.setProperty("--active-color", COLORS[color] || color || "var(--accent)");
+    box.wrap.classList.remove("box-active", "box-send", "box-recv");
+    void box.wrap.offsetWidth;
+    box.wrap.classList.add(cls);
+    clearTimeout(box._flashTimer);
+    box._flashTimer = this._later(() => box.wrap.classList.remove(cls), ms);
   }
 
   // Add a sandboxed frame. `script` is a function that runs inside it.
@@ -147,7 +176,7 @@ export class Stage {
   // out, it is worked out from the name and the heading. `url` is the address
   // shown for it: a worker's script, or "blob:" for one made from a string.
   // A box that is given an iframe later becomes an iframe, with that address.
-  box(name, { html = "", src = null, kind = null, url = null, scope = null, wide = false } = {}) {
+  box(name, { html = "", src = null, title = null, kind = null, url = null, scope = null, wide = false } = {}) {
     const wrap = document.createElement("div");
     wrap.className = "ctx" + (wide ? " wide" : "");
     wrap.innerHTML = `<div class="ctx-shape"><div class="ctx-in"><div class="ctx-bar"></div><div class="box"></div><div class="ctx-foot"></div></div></div>`;
@@ -156,7 +185,7 @@ export class Stage {
     if (src) {
       const frame = document.createElement("iframe");
       frame.src = src;
-      frame.title = name;
+      frame.title = title || name;
       node.append(frame);
     } else if (html) {
       node.innerHTML = html;
@@ -211,7 +240,7 @@ export class Stage {
   }
 
   post(name, message, transfer = []) {
-    this.boxes.get(name).frame.contentWindow.postMessage(message, "*", transfer);
+    this.boxes.get(name)?.frame?.contentWindow?.postMessage(message, "*", transfer);
   }
 
   remove(name) {
@@ -223,92 +252,285 @@ export class Stage {
     for (const [id, cable] of this.cables) if (cable.a === name || cable.b === name) this.cut(id);
   }
 
-  cable(id, a, b, color = "yellow") {
+  cable(id, a, b, color = "yellow", opts = {}) {
+    const { label = "", dashed = false } = typeof opts === "string" ? { label: opts } : (opts || {});
     this.cut(id);
-    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-    path.setAttribute("stroke", COLORS[color] || color);
-    path.classList.add("cable");
+    const stroke = COLORS[color] || color;
+    const path = document.createElementNS(SVG_NS, "path");
+    path.setAttribute("stroke", stroke);
+    path.classList.add("cable", "cable-new");
+    if (dashed) path.classList.add("cable-dashed");
     // The plug at each end is one of the channel's two ports.
     const jacks = [0, 1].map(() => {
-      const jack = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+      const jack = document.createElementNS(SVG_NS, "circle");
       jack.setAttribute("r", 6.5);
-      jack.setAttribute("fill", COLORS[color] || color);
+      jack.setAttribute("fill", stroke);
       jack.classList.add("jack-end");
       return jack;
     });
+    let labelGroup = null;
+    if (label) {
+      labelGroup = document.createElementNS(SVG_NS, "g");
+      labelGroup.classList.add("cable-label");
+      const rect = document.createElementNS(SVG_NS, "rect");
+      rect.setAttribute("rx", 8);
+      rect.setAttribute("ry", 8);
+      rect.setAttribute("stroke", stroke);
+      const text = document.createElementNS(SVG_NS, "text");
+      text.setAttribute("text-anchor", "middle");
+      text.setAttribute("dominant-baseline", "central");
+      text.textContent = label;
+      labelGroup.append(rect, text);
+    }
     this.svg.append(path, ...jacks);
-    this.cables.set(id, { a, b, path, color, jacks });
+    if (labelGroup) this.svg.append(labelGroup);
+    const entry = { a, b, path, color, jacks, label, labelGroup };
+    this.cables.set(id, entry);
     this.redraw();
-    path.style.strokeDasharray = path.getTotalLength();
-    path.animate({ strokeDashoffset: [path.getTotalLength(), 0] }, { duration: 500, easing: "ease-out" }).finished.then(() => (path.style.strokeDasharray = ""));
+    this._flashBox(a, "box-active", color, 1000);
+    this._flashBox(b, "box-active", color, 1000);
+    const clearNew = () => path.classList.remove("cable-new");
+    if (reducedMotion()) {
+      this._later(clearNew, 1100);
+    } else {
+      const len = path.getTotalLength();
+      if (len > 0 && typeof path.animate === "function") {
+        path.style.strokeDasharray = `${len}`;
+        const anim = path.animate({ strokeDashoffset: [len, 0] }, { duration: 520, easing: "ease-out" });
+        anim.finished.then(() => { path.style.strokeDasharray = ""; this._later(clearNew, 550); }, clearNew);
+      } else {
+        this._later(clearNew, 700);
+      }
+    }
   }
 
   cut(id) {
     const cable = this.cables.get(id);
-    cable?.path.remove();
-    for (const jack of cable?.jacks || []) jack.remove();
+    if (!cable) return;
+    cable.path.remove();
+    for (const jack of cable.jacks || []) jack.remove();
+    cable.labelGroup?.remove();
     this.cables.delete(id);
+    this.pulseMeta.delete(id);
   }
 
-  anchor(name, towards) {
-    const outer = this.el.getBoundingClientRect();
+  _rect(name, outer) {
     const r = this.boxes.get(name).wrap.getBoundingClientRect();
-    const t = this.boxes.get(towards).wrap.getBoundingClientRect();
-    const stacked = Math.abs(t.top - r.top) > r.height / 2;
-    if (stacked) return { x: r.left + r.width / 2 - outer.left, y: (t.top > r.top ? r.bottom : r.top) - outer.top, stacked };
-    return { x: (t.left > r.left ? r.right : r.left) - outer.left, y: r.top + r.height * 0.3 - outer.top, stacked };
+    return {
+      left: r.left - outer.left,
+      right: r.right - outer.left,
+      top: r.top - outer.top,
+      bottom: r.bottom - outer.top,
+      width: r.width,
+      height: r.height,
+      cx: r.left + r.width / 2 - outer.left,
+      cy: r.top + r.height / 2 - outer.top,
+    };
   }
 
   redraw() {
-    const { width, height } = this.el.getBoundingClientRect();
+    const outer = this.el.getBoundingClientRect();
+    const { width, height } = outer;
+    if (!width || !height) return;
     this.svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
-    let i = 0;
+
+    // Snapshot geometry for all boxes currently on stage.
+    const rects = new Map();
+    for (const name of this.boxes.keys()) rects.set(name, this._rect(name, outer));
+
+    // Group parallel cables between the same pair of boxes so they fan cleanly.
+    const pairTotals = new Map();
+    const pairSeen = new Map();
     for (const cable of this.cables.values()) {
-      if (!this.boxes.get(cable.a) || !this.boxes.get(cable.b)) continue;
-      const p = this.anchor(cable.a, cable.b);
-      const q = this.anchor(cable.b, cable.a);
-      const lift = i++ * 14;
-      // A cable hangs: sag grows with its length, like a patch lead.
-      const d = p.stacked
-        ? `M${p.x + lift},${p.y} C${p.x + lift + 40},${(p.y + q.y) / 2} ${q.x + lift - 40},${(p.y + q.y) / 2} ${q.x + lift},${q.y}`
-        : `M${p.x},${p.y + lift} Q${(p.x + q.x) / 2},${Math.max(p.y, q.y) + lift + 30 + Math.abs(q.x - p.x) * 0.12} ${q.x},${q.y + lift}`;
-      cable.path.setAttribute("d", d);
-      const ends = p.stacked ? [[p.x + lift, p.y], [q.x + lift, q.y]] : [[p.x, p.y + lift], [q.x, q.y + lift]];
-      cable.jacks.forEach((jack, n) => { jack.setAttribute("cx", ends[n][0]); jack.setAttribute("cy", ends[n][1]); });
+      if (!rects.has(cable.a) || !rects.has(cable.b)) continue;
+      const key = [cable.a, cable.b].sort().join("\0");
+      pairTotals.set(key, (pairTotals.get(key) || 0) + 1);
     }
+
+    let spanH = 0;
+    let spanV = 0;
+    let maxCableY = 0;
+
+    for (const cable of this.cables.values()) {
+      const ra = rects.get(cable.a), rb = rects.get(cable.b);
+      if (!ra || !rb) continue;
+      const key = [cable.a, cable.b].sort().join("\0");
+      const slot = pairSeen.get(key) || 0;
+      pairSeen.set(key, slot + 1);
+      const count = pairTotals.get(key) || 1;
+      const spread = (slot - (count - 1) / 2);
+
+      const stacked = Math.abs(rb.top - ra.top) > Math.min(ra.height, rb.height) * 0.55;
+      let d = "", p1, p2;
+
+      if (!stacked) {
+        const leftBox = ra.cx <= rb.cx ? ra : rb;
+        const rightBox = ra.cx <= rb.cx ? rb : ra;
+        const rowTop = Math.min(leftBox.top, rightBox.top);
+        const rowBottom = Math.max(leftBox.bottom, rightBox.bottom);
+        // Check if another box sits horizontally between these two on the same row.
+        const hasMiddle = [...rects.entries()].some(([n, r]) =>
+          n !== cable.a && n !== cable.b &&
+          r.cx > leftBox.right && r.cx < rightBox.left &&
+          r.bottom > rowTop + 10 && r.top < rowBottom - 10
+        );
+
+        if (hasMiddle) {
+          // Route cleanly underneath the row so we never obscure the middle box's log text.
+          const underY = rowBottom + 24 + spanH * 20;
+          spanH++;
+          const ax = ra.cx + spread * 16;
+          const bx = rb.cx + spread * 16;
+          p1 = [ax, ra.bottom];
+          p2 = [bx, rb.bottom];
+          d = `M${p1[0]},${p1[1]} C${p1[0]},${underY} ${p2[0]},${underY} ${p2[0]},${p2[1]}`;
+          maxCableY = Math.max(maxCableY, underY + 12);
+        } else {
+          // Adjacent horizontal boxes: anchor at facing edges around vertical center.
+          const aIsLeft = ra.cx <= rb.cx;
+          const ay = ra.top + ra.height * 0.48 + spread * 22;
+          const by = rb.top + rb.height * 0.48 + spread * 22;
+          p1 = [aIsLeft ? ra.right : ra.left, ay];
+          p2 = [aIsLeft ? rb.left : rb.right, by];
+          const sag = 14 + Math.abs(p2[0] - p1[0]) * 0.08 + Math.abs(spread) * 6;
+          const ctrlY = Math.max(ay, by) + sag;
+          d = `M${p1[0]},${p1[1]} Q${(p1[0] + p2[0]) / 2},${ctrlY} ${p2[0]},${p2[1]}`;
+          maxCableY = Math.max(maxCableY, ctrlY);
+        }
+      } else {
+        const topBox = ra.cy <= rb.cy ? ra : rb;
+        const botBox = ra.cy <= rb.cy ? rb : ra;
+        // Check if another box sits vertically between these two in the same column.
+        const hasMiddleV = [...rects.entries()].some(([n, r]) =>
+          n !== cable.a && n !== cable.b &&
+          r.cy > topBox.bottom && r.cy < botBox.top &&
+          r.right > Math.min(topBox.left, botBox.left) + 10 &&
+          r.left < Math.max(topBox.right, botBox.right) - 10
+        );
+
+        if (hasMiddleV) {
+          // Bypass around the right outer edge so we never draw through middle box text on mobile.
+          const edgeX = Math.min(width + 10, Math.max(topBox.right, botBox.right) + 12 + spanV * 6);
+          spanV++;
+          const aIsTop = ra.cy <= rb.cy;
+          p1 = [ra.right, ra.cy + spread * 14];
+          p2 = [rb.right, rb.cy + spread * 14];
+          d = `M${p1[0]},${p1[1]} C${edgeX},${p1[1]} ${edgeX},${p2[1]} ${p2[0]},${p2[1]}`;
+          void aIsTop;
+        } else {
+          const aIsTop = ra.cy <= rb.cy;
+          const ax = ra.cx + spread * 26;
+          const bx = rb.cx + spread * 26;
+          p1 = [ax, aIsTop ? ra.bottom : ra.top];
+          p2 = [bx, aIsTop ? rb.top : rb.bottom];
+          const midY = (p1[1] + p2[1]) / 2;
+          d = `M${p1[0]},${p1[1]} C${p1[0]},${midY} ${p2[0]},${midY} ${p2[0]},${p2[1]}`;
+        }
+      }
+
+      cable.path.setAttribute("d", d);
+      cable.jacks[0].setAttribute("cx", p1[0]);
+      cable.jacks[0].setAttribute("cy", p1[1]);
+      cable.jacks[1].setAttribute("cx", p2[0]);
+      cable.jacks[1].setAttribute("cy", p2[1]);
+
+      if (cable.labelGroup) {
+        const len = cable.path.getTotalLength();
+        const mid = len > 0 ? cable.path.getPointAtLength(len / 2) : { x: (p1[0] + p2[0]) / 2, y: (p1[1] + p2[1]) / 2 };
+        const text = cable.labelGroup.querySelector("text");
+        const rect = cable.labelGroup.querySelector("rect");
+        const w = Math.max(44, cable.label.length * 6.8 + 14);
+        const h = 18;
+        rect.setAttribute("x", mid.x - w / 2);
+        rect.setAttribute("y", mid.y - h / 2);
+        rect.setAttribute("width", w);
+        rect.setAttribute("height", h);
+        text.setAttribute("x", mid.x);
+        text.setAttribute("y", mid.y + 0.5);
+        maxCableY = Math.max(maxCableY, mid.y + h / 2 + 4);
+      }
+    }
+
+    // Reserve extra bottom space if multiple spanning cables route underneath,
+    // so cables never overlap the legend below the stage.
+    const boxesBottom = Math.max(0, ...[...rects.values()].map((r) => r.bottom));
+    const needed = maxCableY > boxesBottom ? Math.ceil(maxCableY - boxesBottom + 16) : 0;
+    const minPad = needed > 56 ? `${needed}px` : "";
+    if (this.el.style.paddingBottom !== minPad) this.el.style.paddingBottom = minPad;
   }
 
   pulse(id, from) {
     const cable = this.cables.get(id);
     if (!cable) return;
-    // With reduced motion there is no travelling dot: the cable blinks instead.
-    if (matchMedia("(prefers-reduced-motion: reduce)").matches) return void cable.path.animate({ opacity: [0.25, 1] }, { duration: 450 });
-    const dot = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-    dot.setAttribute("r", 7);
-    dot.setAttribute("fill", COLORS[cable.color] || cable.color);
-    dot.classList.add("pulse");
-    this.svg.append(dot);
-    const length = cable.path.getTotalLength();
-    const backwards = from === cable.b;
-    const start = performance.now();
-    const step = (now) => {
-      const t = Math.min(1, (now - start) / 450);
-      if (!cable.path.isConnected) return dot.remove();
-      const point = cable.path.getPointAtLength((backwards ? 1 - t : t) * length);
-      dot.setAttribute("cx", point.x);
-      dot.setAttribute("cy", point.y);
-      t < 1 ? requestAnimationFrame(step) : dot.remove();
+    const to = from === cable.b ? cable.a : cable.b;
+    const now = performance.now();
+    const prev = this.pulseMeta.get(id);
+    // If a message just left in the opposite direction on the same cable, pace
+    // the visual reply dot so the reader sees request arrive before reply leaves.
+    let delay = 0;
+    if (!reducedMotion() && prev && prev.from !== from && now < prev.until) {
+      delay = Math.min(420, Math.max(0, prev.until - now));
+    }
+    this.pulseMeta.set(id, { from, until: now + delay + 380 });
+
+    const fire = () => {
+      if (!cable.path.isConnected) return;
+      this._flashBox(from, "box-send", cable.color, 650);
+      cable.path.classList.add("cable-active");
+      this._later(() => cable.path.classList.remove("cable-active"), 550);
+
+      // With reduced motion there is no travelling dot or WAAPI motion:
+      // highlight the sending box, the cable, and the receiving box cleanly.
+      if (reducedMotion()) {
+        this._flashBox(to, "box-recv", cable.color, 750);
+        return;
+      }
+
+      const dot = document.createElementNS(SVG_NS, "circle");
+      dot.setAttribute("r", 7.5);
+      dot.setAttribute("fill", COLORS[cable.color] || cable.color);
+      dot.classList.add("pulse");
+      this.svg.append(dot);
+      const length = cable.path.getTotalLength();
+      const backwards = from === cable.b;
+      const start = performance.now();
+      const duration = 460;
+      const step = (ts) => {
+        const t = Math.min(1, (ts - start) / duration);
+        if (!cable.path.isConnected) return dot.remove();
+        const point = cable.path.getPointAtLength((backwards ? 1 - t : t) * length);
+        dot.setAttribute("cx", point.x);
+        dot.setAttribute("cy", point.y);
+        if (t < 1) requestAnimationFrame(step);
+        else { dot.remove(); this._flashBox(to, "box-recv", cable.color, 650); }
+      };
+      requestAnimationFrame(step);
     };
-    requestAnimationFrame(step);
+
+    delay > 0 ? this._later(fire, delay) : fire();
   }
 
   on(fn) { this.listeners.add(fn); return () => this.listeners.delete(fn); }
 
   reset() {
+    for (const id of this.timers) clearTimeout(id);
+    this.timers.clear();
+    this.pulseMeta.clear();
+    for (const fn of this.cleanups) { try { fn(); } catch {} }
+    this.cleanups.clear();
     for (const id of [...this.cables.keys()]) this.cut(id);
-    for (const box of this.boxes.values()) { box.watch.disconnect(); box.wrap.remove(); }
+    for (const box of this.boxes.values()) { clearTimeout(box._flashTimer); box.watch.disconnect(); box.wrap.remove(); }
     this.boxes.clear();
+    this.el.style.paddingBottom = "";
     this.showKey();
     this.listeners.clear();
+  }
+
+  destroy() {
+    this.reset();
+    removeEventListener("message", this.onMessage);
+    this.resize.disconnect();
+    this.key.remove();
+    this.svg.remove();
   }
 }

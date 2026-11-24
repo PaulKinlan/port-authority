@@ -2,22 +2,24 @@
 // Same shape as the entries in built.js, which includes these in its list.
 
 const logBox = (stage, name, title, extra = "", what = {}) => {
-  const box = stage.box(name, { html: `<div class="here"><h4>${title}</h4>${extra}<ul class="log"></ul></div>`, ...what });
+  const box = stage.box(name, { html: `<div class="here"><div class="box-title">${title}</div>${extra}<ul class="log" role="log" aria-live="polite"></ul></div>`, ...what });
   const ul = box.node.querySelector("ul");
   const say = (text) => { const li = document.createElement("li"); li.textContent = text; ul.prepend(li); while (ul.children.length > 6) ul.lastChild.remove(); };
   return { say, node: box.node, box };
 };
 
-// The windows of one app around a shared worker (post-worker.js). Every window
+// The windows of one app around a SharedWorker (post-worker.js). Every window
 // is a real page of this site, /patterns/desk.html. Each demo gets a worker of
 // its own, so the three demos on one page do not share a table.
-function postRoom(stage, kind, title) {
+function postRoom(stage, kind, title, ui) {
   const room = `${kind}-${Math.random().toString(36).slice(2, 8)}`;
-  const hub = stage.box("router", { kind: "shared", url: "/patterns/post-worker.js", wide: true, html: `<div class="here"><h4>${title}</h4><p class="small" style="margin:0 0 .3rem">Open windows: <strong data-table>none yet</strong></p><p class="small" style="margin:0 0 .3rem">Holding: <strong data-held>nothing</strong></p><p class="small" data-last style="margin:0;min-height:1.5em;font-family:var(--mono)"></p></div>` });
+  const hub = stage.box("router", { kind: "shared", url: "/patterns/post-worker.js", wide: true, html: `<div class="here"><div class="box-title">${title}</div><p class="small" style="margin:0 0 .3rem">Open windows: <strong data-table>none yet</strong></p><p class="small" style="margin:0 0 .3rem">Holding: <strong data-held>nothing</strong></p><p class="small" data-last style="margin:0;min-height:1.5em;font-family:var(--mono)"></p></div>` });
   const q = (name) => hub.node.querySelector(`[data-${name}]`);
   const ok = "SharedWorker" in self;
-  if (!ok) q("last").textContent = "This browser has no SharedWorker.";
-  else {
+  if (!ok) {
+    q("last").textContent = "This browser has no SharedWorker.";
+    ui?.unsupported("This browser does not support SharedWorker.");
+  } else {
     // This page only watches the worker. It is not one of the windows.
     const watch = new SharedWorker("/patterns/post-worker.js", { name: "pa-post-" + room }).port;
     watch.onmessage = ({ data }) => {
@@ -28,13 +30,14 @@ function postRoom(stage, kind, title) {
       q("last").textContent = data.state.last;
     };
     watch.postMessage({ watch: true });
+    stage.cleanup(() => watch.close());
   }
   stage.on((name, data) => { if (data.wire === "sent") stage.pulse("c-" + name, name); if (data.wire === "got") stage.pulse("c-" + name, "router"); });
   const colors = ["red", "teal", "yellow", "ink"];
   let count = 0;
   const open = async (name, extra = "") => {
     const color = colors[count++ % colors.length];
-    const box = stage.box(name, { src: `/patterns/desk.html?room=${room}&name=${name}${extra}` });
+    const box = stage.box(name, { src: `/patterns/desk.html?room=${room}&name=${name}${extra}`, title: `${name} window` });
     stage.el.insertBefore(box.wrap, hub.wrap);
     await box.whenReady;
     stage.cable("c-" + name, name, "router", color);
@@ -73,7 +76,7 @@ port.onmessage = ({ data }) => {
       ["Orders: send to the driver", "The driver is open now, so this one is passed straight on."],
     ] },
     async setup(stage, ui) {
-      const post = postRoom(stage, "queue", "Router, a shared worker that holds messages");
+      const post = postRoom(stage, "queue", "Router, a SharedWorker that holds messages", ui);
       if (!post.ok) return;
       await post.open("orders"); await post.open("kitchen");
       let n = 0;
@@ -106,7 +109,7 @@ if (data.toRole) {
       ["Settings: tell every editor", "Two editors are left, and those two get it."],
     ] },
     async setup(stage, ui) {
-      const post = postRoom(stage, "roles", "Router, a shared worker that knows each window's role");
+      const post = postRoom(stage, "roles", "Router, a SharedWorker that knows each window's role", ui);
       if (!post.ok) return;
       await post.open("settings"); await post.open("editor-1", "&role=editor"); await post.open("editor-2", "&role=editor"); await post.open("preview", "&role=preview");
       let size = 16;
@@ -142,7 +145,7 @@ if (data.need) {
       ["Shop: ask for a label", "The same request as before. It goes to the back office."],
     ] },
     async setup(stage, ui) {
-      const post = postRoom(stage, "tools", "Router, a shared worker that knows which window offers which tool");
+      const post = postRoom(stage, "tools", "Router, a SharedWorker that knows which window offers which tool", ui);
       if (!post.ok) return;
       await post.open("shop"); await post.open("label-printer", "&tool=print-label"); await post.open("route-finder", "&tool=find-route");
       let n = 0;
@@ -434,16 +437,17 @@ onmessage = ({ data }) => {
       draw();
       // The marker is moved by the page on every frame. While the main thread is busy it cannot move.
       const marker = main.node.querySelector("[data-marker]"), gapEl = main.node.querySelector("[data-gap]");
-      let previous = performance.now(), longest = 0;
+      let previous = performance.now(), longest = 0, alive = true, rafId = 0;
       const frame = (now) => {
-        if (!marker.isConnected) return;
+        if (!alive || !marker.isConnected) return;
         longest = Math.max(longest, now - previous); previous = now;
         marker.style.left = `${41 + 41 * Math.sin(now / 300)}%`;
-        requestAnimationFrame(frame);
+        rafId = requestAnimationFrame(frame);
       };
-      requestAnimationFrame(frame);
+      rafId = requestAnimationFrame(frame);
       const nextFrame = () => new Promise((resolve) => requestAnimationFrame(resolve));
       const worker = new Worker("/patterns/effect-worker.js", { type: "module" });
+      stage.cleanup(() => { alive = false; cancelAnimationFrame(rafId); worker.terminate(); });
       worker.onerror = () => helper.say("the worker could not start in this browser");
       const { blur } = await import("/patterns/effect.js");
       const buttons = [];

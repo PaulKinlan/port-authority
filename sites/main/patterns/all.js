@@ -15,7 +15,7 @@ export const groups = [
   { id: "more", title: "More things a port can carry", demos: [...more, router] },
   { id: "threads", title: "Across threads", demos: threads },
   { id: "origins", title: "Between real sites", demos: [...origins, oneway] },
-  { id: "places", title: "Other devices, service workers, sockets and audio", demos: [...places, swpair] },
+  { id: "places", title: "Other devices, Service Workers, sockets and audio", demos: [...places, swpair] },
   { id: "alive", title: "Knowing the other side is still there", demos: alive },
 ];
 export const all = groups.flatMap((group) => group.demos.map((demo) => ({ ...demo, group })));

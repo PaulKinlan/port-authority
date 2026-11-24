@@ -8,26 +8,34 @@
   body{margin:0;padding:.7rem .8rem;font:14px/1.4 system-ui,sans-serif;background:light-dark(#fff,#141f47);color:light-dark(#0f1c3f,#e9edfa)}
   h1{font:800 1rem/1.1 system-ui,sans-serif;margin:0 0 .15rem;display:flex;align-items:center;gap:.45rem}
   h1::before{content:"";width:.8em;height:.8em;border-radius:50%;background:#e0364c}
-  p{margin:0 0 .45rem;font:11px/1.3 ui-monospace,Menlo,monospace;opacity:.75}
-  button{font:inherit;padding:.5rem .8rem;margin:.2rem 0 .6rem;border-radius:999px;border:1.5px solid currentColor;background:none;color:inherit}
+  p{margin:0 0 .45rem;font:11px/1.3 ui-monospace,Menlo,monospace;opacity:.8}
+  button{font:inherit;padding:.5rem .8rem;margin:.2rem 0 .6rem;border-radius:999px;border:1.5px solid currentColor;background:none;color:inherit;cursor:pointer}
   ul{list-style:none;margin:0;padding:0;font:12px/1.45 ui-monospace,Menlo,monospace}
   li{padding:.15rem 0;border-top:1px solid light-dark(#c9d1e0,#2b3970);overflow-wrap:anywhere}
   li:first-child{border-top:0;font-weight:700}
 </style>
 <h1 id="title">A tab</h1>
-<p id="state">connecting</p>
-<button id="say" hidden>Say hello to the server</button>
-<ul id="log"></ul>
+<p id="state">not connected yet</p>
+<button id="say" type="button" hidden>Say hello to the server</button>
+<ul id="log" role="log" aria-live="polite"></ul>
 <script type="module">
+  const params = new URLSearchParams(location.search);
   const embedded = parent !== self;
-  const cable = new URLSearchParams(location.search).get("cable");
+  const cable = params.get("cable");
+  const manual = params.get("manual") === "1";
   const tell = (wire, data = {}) => embedded && parent.postMessage({ wire, ...data }, "*");
   const log = (text) => { const li = document.createElement("li"); li.textContent = text; const ul = document.getElementById("log"); ul.prepend(li); while (ul.children.length > 5) ul.lastChild.remove(); };
-  let port = null, n = 0;
+  let port = null, n = 0, connected = false;
   const say = () => { if (!port) return; port.postMessage({ say: "hello " + ++n }); tell("pulse", { cable }); };
-  if (!("SharedWorker" in self)) {
-    document.getElementById("state").textContent = "This browser has no SharedWorker.";
-  } else {
+
+  const connect = () => {
+    if (connected) return;
+    if (!("SharedWorker" in self)) {
+      document.getElementById("state").textContent = "This browser has no SharedWorker.";
+      return;
+    }
+    connected = true;
+    document.getElementById("state").textContent = "connecting to SharedWorker…";
     port = new SharedWorker("/patterns/socket-worker.js").port;
     // Held for as long as this tab lives, so the worker can tell when it goes.
     const lock = "pa-socket-" + Math.random().toString(36).slice(2);
@@ -39,8 +47,15 @@
       if (data.state) document.getElementById("state").textContent = `my sockets: 0. the worker's: ${data.state.open ? 1 : 0}, shared by ${data.state.tabs.length}`;
     };
     if (!embedded) { document.getElementById("say").hidden = false; document.getElementById("say").onclick = say; }
-  }
-  addEventListener("message", (event) => { if (embedded && event.source === parent && event.data?.cmd === "say") say(); });
+    tell("joined");
+  };
+
+  addEventListener("message", (event) => {
+    if (!embedded || event.source !== parent || !event.data) return;
+    if (event.data.cmd === "connect") connect();
+    if (event.data.cmd === "say") say();
+  });
+  if (!manual) connect();
   tell("ready");
 </script>
 </html>

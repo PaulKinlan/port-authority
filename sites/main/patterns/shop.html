@@ -16,11 +16,11 @@
 </style>
 </head>
 <body>
-<nav id="nav"></nav>
+<nav id="nav" aria-label="Shop pages"></nav>
 <h1 id="title"></h1>
 <p>Order updates so far: <strong id="n">0</strong></p>
 <p>Missed while changing page: <strong id="gaps">0</strong></p>
-<ul id="log"></ul>
+<ul id="log" role="log" aria-live="polite"></ul>
 <script>
   // Three pages of one site. Each is a real navigation. The port to the order
   // feed is left with a SharedWorker on the way out and collected on the way in.
@@ -31,31 +31,35 @@
   document.getElementById("title").textContent = here;
   for (const page of pages) { const a = document.createElement("a"); a.href = link(page); a.textContent = page; if (page === here) a.setAttribute("aria-current", "page"); document.getElementById("nav").append(a); }
   const log = (text) => { const li = document.createElement("li"); li.textContent = text; document.getElementById("log").prepend(li); };
-  const bank = new SharedWorker("/patterns/bank.js", { name: "port-bank", extendedLifetime: true });
-  let port = null, last = Number(sessionStorage.getItem("last-" + key) || 0), gaps = Number(sessionStorage.getItem("gaps-" + key) || 0);
-  const show = () => { document.getElementById("n").textContent = last; document.getElementById("gaps").textContent = gaps; };
-  show();
-  const use = (p, how) => {
-    port = p; log(how);
-    port.onmessage = (e) => {
-      if (last && e.data !== last + 1) gaps++;
-      last = e.data;
-      sessionStorage.setItem("last-" + key, last); sessionStorage.setItem("gaps-" + key, gaps);
-      show();
-      parent.postMessage({ wire: "tick", n: last, gaps, page: here }, location.origin);
+  if (!("SharedWorker" in self)) {
+    log("This browser does not support SharedWorker.");
+  } else {
+    const bank = new SharedWorker("/patterns/bank.js", { name: "port-bank", extendedLifetime: true });
+    let port = null, last = Number(sessionStorage.getItem("last-" + key) || 0), gaps = Number(sessionStorage.getItem("gaps-" + key) || 0);
+    const show = () => { document.getElementById("n").textContent = last; document.getElementById("gaps").textContent = gaps; };
+    show();
+    const use = (p, how) => {
+      port = p; log(how);
+      port.onmessage = (e) => {
+        if (last && e.data !== last + 1) gaps++;
+        last = e.data;
+        sessionStorage.setItem("last-" + key, last); sessionStorage.setItem("gaps-" + key, gaps);
+        show();
+        parent.postMessage({ wire: "tick", n: last, gaps, page: here }, location.origin);
+      };
     };
-  };
-  bank.port.onmessage = ({ data, ports }) => {
-    if (data.found) use(ports[0], "collected the port I left behind, last saw " + last);
-    else parent.postMessage({ wire: "need-port" }, location.origin);
-  };
-  bank.port.postMessage({ withdraw: key });
-  addEventListener("message", (event) => {
-    if (event.source !== parent || event.origin !== location.origin) return;
-    if (event.data.cmd === "port") use(event.ports[0], "granted a connection to the order feed");
-    if (event.data.cmd === "go") location.href = link(pages[(pages.indexOf(here) + 1) % pages.length]);
-  });
-  addEventListener("pagehide", () => { if (port) { port.onmessage = null; bank.port.postMessage({ deposit: key }, [port]); port = null; } });
+    bank.port.onmessage = ({ data, ports }) => {
+      if (data.found) use(ports[0], "collected the port I left behind, last saw " + last);
+      else parent.postMessage({ wire: "need-port" }, location.origin);
+    };
+    bank.port.postMessage({ withdraw: key });
+    addEventListener("message", (event) => {
+      if (event.source !== parent || event.origin !== location.origin) return;
+      if (event.data.cmd === "port") use(event.ports[0], "granted a connection to the order feed");
+      if (event.data.cmd === "go") location.href = link(pages[(pages.indexOf(here) + 1) % pages.length]);
+    });
+    addEventListener("pagehide", () => { if (port) { port.onmessage = null; bank.port.postMessage({ deposit: key }, [port]); port = null; } });
+  }
 </script>
 </body>
 </html>

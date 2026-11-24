@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>A page that reloads</title>
 <style>
   html { color-scheme: light dark; }
@@ -15,35 +16,49 @@
 <body>
 <h1>A page that reloads</h1>
 <p id="n">...</p>
-<ul id="log"></ul>
+<ul id="log" role="log" aria-live="polite"></ul>
 <script>
-  const key = new URLSearchParams(location.search).get("key");
+  const params = new URLSearchParams(location.search);
+  const key = params.get("key");
+  const manual = params.get("manual") === "1";
   const log = (text) => { const li = document.createElement("li"); li.textContent = text; document.getElementById("log").prepend(li); };
-  const bank = new SharedWorker("/patterns/bank.js", { name: "port-bank", extendedLifetime: true });
-  let port = null, last = 0, gaps = 0;
-  const use = (p, how) => {
-    port = p;
-    log(how);
-    port.onmessage = (e) => {
-      if (last && e.data !== last + 1) gaps++;
-      last = e.data;
-      sessionStorage.setItem("last-" + key, last);
-      document.getElementById("n").textContent = e.data;
-      parent.postMessage({ wire: "tick", n: e.data, gaps }, location.origin);
+  if (!("SharedWorker" in self)) {
+    document.getElementById("n").textContent = "—";
+    log("This browser does not support SharedWorker.");
+  } else {
+    const bank = new SharedWorker("/patterns/bank.js", { name: "port-bank", extendedLifetime: true });
+    let port = null, last = 0, gaps = 0;
+    const use = (p, how) => {
+      port = p;
+      log(how);
+      port.onmessage = (e) => {
+        if (last && e.data !== last + 1) gaps++;
+        last = e.data;
+        sessionStorage.setItem("last-" + key, last);
+        document.getElementById("n").textContent = e.data;
+        parent.postMessage({ wire: "tick", n: e.data, gaps }, location.origin);
+      };
     };
-  };
-  last = Number(sessionStorage.getItem("last-" + key) || 0);
-  bank.port.onmessage = ({ data, ports }) => {
-    if (data.found) use(ports[0], `withdrew my port after a reload, last saw ${last}`);
-    else parent.postMessage({ wire: "need-port" }, location.origin);
-  };
-  bank.port.postMessage({ withdraw: key });
-  addEventListener("message", (event) => {
-    if (event.source === parent && event.origin === location.origin && event.data.cmd === "port") use(event.ports[0], "given a fresh port");
-  });
-  // The page is going away. Put the port in the bank.
-  const deposit = () => { if (port) { port.onmessage = null; bank.port.postMessage({ deposit: key }, [port]); port = null; } };
-  addEventListener(new URLSearchParams(location.search).get("on") || "pagehide", deposit);
+    last = Number(sessionStorage.getItem("last-" + key) || 0);
+    bank.port.onmessage = ({ data, ports }) => {
+      if (data.found) {
+        use(ports[0], `withdrew my port after a reload, last saw ${last}`);
+        parent.postMessage({ wire: "withdrew" }, location.origin);
+      } else if (!manual || last > 0) {
+        parent.postMessage({ wire: "need-port" }, location.origin);
+      } else {
+        log("waiting to connect to the feed");
+      }
+    };
+    bank.port.postMessage({ withdraw: key });
+    addEventListener("message", (event) => {
+      if (event.source === parent && event.origin === location.origin && event.data.cmd === "port") use(event.ports[0], "given a fresh port");
+    });
+    // The page is going away. Put the port in the bank.
+    const deposit = () => { if (port) { port.onmessage = null; bank.port.postMessage({ deposit: key }, [port]); port = null; } };
+    addEventListener(params.get("on") || "pagehide", deposit);
+  }
+  parent.postMessage({ wire: "ready" }, location.origin);
 </script>
 </body>
 </html>

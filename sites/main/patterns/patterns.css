@@ -1,12 +1,42 @@
-.stage { position: relative; display: flex; flex-wrap: wrap; gap: clamp(2.2rem, 7vw, 5.5rem); padding-bottom: 3.6rem; }
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0.5rem;
+  z-index: 100;
+  background: var(--ink);
+  color: var(--paper);
+  padding: 0.5rem 0.9rem;
+  border-radius: 999px;
+  font-weight: 700;
+  text-decoration: none;
+}
+.skip-link:focus { left: 0.75rem; }
+
+.stage { position: relative; display: flex; flex-wrap: wrap; gap: clamp(2.2rem, 6vw, 4.8rem); padding-bottom: 3.6rem; }
 .stage > svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 2; overflow: visible; color: var(--ink); }
-.stage .cable { fill: none; stroke-width: 5; stroke-linecap: round; }
+.stage .cable { fill: none; stroke-width: 4.5; stroke-linecap: round; transition: stroke-width 180ms ease, filter 180ms ease, opacity 180ms ease; }
+.stage .cable.cable-dashed { stroke-dasharray: 8 6; }
+.stage .cable.cable-new { stroke-width: 6.5; filter: drop-shadow(0 0 4px color-mix(in srgb, currentColor 35%, transparent)); }
+.stage .cable.cable-active { stroke-width: 6.5; }
 .stage .pulse { stroke: var(--paper); stroke-width: 2.5; }
+.stage .cable-label rect { fill: var(--paper); stroke-width: 1.8; }
+.stage .cable-label text { font: 700 10.5px/1 var(--mono); fill: var(--ink); }
+
 /* Each box on a stage is drawn as what it is. See KINDS in /wire.js. */
 .ctx { flex: 1 1 11.5rem; min-width: 0; position: relative; isolation: isolate; --bar: 1.8rem; --foot: 2.5rem; --tint: color-mix(in srgb, var(--ink) 9%, var(--panel)); }
 .ctx.wide { flex-basis: 100%; }
-.ctx-shape { border: 2px solid var(--ink); border-radius: 12px; overflow: hidden; background: var(--panel); }
-.ctx-bar { height: var(--bar); display: flex; align-items: center; gap: 0.4rem; padding: 0 0.6rem; border-bottom: 1.5px solid var(--ink); background: var(--tint); font: 700 0.72rem/1 var(--mono); white-space: nowrap; }
+.ctx-shape { border: 2px solid var(--ink); border-radius: 12px; overflow: hidden; background: var(--panel); transition: box-shadow 200ms ease, border-color 200ms ease; }
+.ctx.box-active .ctx-shape,
+.ctx.box-send .ctx-shape,
+.ctx.box-recv .ctx-shape {
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--active-color, var(--accent)) 45%, transparent);
+}
+.ctx.box-active .ctx-bar,
+.ctx.box-send .ctx-bar,
+.ctx.box-recv .ctx-bar {
+  background: color-mix(in srgb, var(--active-color, var(--accent)) 28%, var(--panel));
+}
+.ctx-bar { height: var(--bar); display: flex; align-items: center; gap: 0.4rem; padding: 0 0.6rem; border-bottom: 1.5px solid var(--ink); background: var(--tint); font: 700 0.72rem/1 var(--mono); white-space: nowrap; transition: background 200ms ease; }
 .ctx-foot { height: var(--foot); display: flex; align-items: center; padding: 0 0.6rem; border-top: 1.5px solid var(--ink); }
 .ctx-url { font: 0.7rem/1.2 var(--mono); color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .ctx-foot .ctx-url { white-space: normal; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; }
@@ -29,6 +59,7 @@
 .ctx:is([data-kind="worker"], [data-kind="shared"], [data-kind="service"], [data-kind="worklet"]) .ctx-shape { border: 0; border-radius: 0; padding: 2px; background: var(--ink); clip-path: var(--cut); }
 .ctx:is([data-kind="worker"], [data-kind="shared"], [data-kind="service"], [data-kind="worklet"]) .ctx-in { background: var(--panel); clip-path: polygon(11.8px 0, calc(100% - 11.8px) 0, 100% 11.8px, 100% calc(100% - 11.8px), calc(100% - 11.8px) 100%, 11.8px 100%, 0 calc(100% - 11.8px), 0 11.8px); }
 .ctx:is([data-kind="worker"], [data-kind="shared"], [data-kind="service"], [data-kind="worklet"]) :is(.ctx-bar, .ctx-foot) { padding-inline: 1rem; }
+.ctx:is([data-kind="worker"], [data-kind="shared"], [data-kind="service"], [data-kind="worklet"]):is(.box-active, .box-send, .box-recv) .ctx-shape { background: var(--active-color, var(--accent)); }
 /* A shared worker is one thread for many pages: the same shape, with more behind it. */
 .ctx[data-kind="shared"]::before, .ctx[data-kind="shared"]::after { content: ""; position: absolute; inset: 0; z-index: -1; clip-path: var(--cut); }
 .ctx[data-kind="shared"]::before { translate: 6px 6px; background: var(--muted); }
@@ -41,26 +72,28 @@
 /* Part of the page itself: a thin outline and no more. */
 .ctx[data-kind="part"] .ctx-shape { border: 1.5px solid var(--muted); border-radius: 4px; }
 .ctx[data-kind="part"] .ctx-bar { background: none; border-bottom-color: var(--line); color: var(--muted); }
-.ctx.gone .ctx-shape { border-style: dashed; background: transparent; }
-.ctx.gone :is(.ctx-bar, .ctx-foot) { opacity: 0.5; background: none; }
+.ctx.gone .ctx-shape { border-style: dashed; border-color: var(--muted); background: color-mix(in srgb, var(--paper) 70%, transparent); }
+.ctx.gone :is(.ctx-bar, .ctx-foot) { opacity: 0.82; background: none; color: var(--muted); }
 .box.gone { background: transparent; }
-.box.gone::after { content: "gone"; position: absolute; inset: 0; display: grid; place-items: center; font: 700 var(--step-1) var(--display); color: var(--muted); }
+.box.gone::after { content: "gone"; position: absolute; inset: 0; display: grid; place-items: center; font: 700 var(--step-1) var(--display); color: var(--ink); opacity: 0.78; }
 .stage .jack-end { stroke: var(--ink); stroke-width: 2; }
-.stage-legend { margin: 0.2rem 0 0.5rem; padding: 0; display: flex; flex-wrap: wrap; gap: 0.3rem 1.1rem; font-size: 0.78rem; color: var(--muted); }
-.stage-legend > div { display: flex; align-items: center; gap: 0.35rem; }
+.stage-legend { list-style: none; margin: 0.2rem 0 0.5rem; padding: 0; display: flex; flex-wrap: wrap; gap: 0.3rem 1.1rem; font-size: 0.78rem; color: var(--muted); }
+.stage-legend > li { display: flex; align-items: center; gap: 0.35rem; }
 .stage-legend strong { font: 700 0.72rem/1.2 var(--mono); color: var(--ink); }
 .stage-legend.full { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 19rem), 1fr)); gap: 0.7rem 1.6rem; font-size: var(--step--1); margin: 0; }
-.stage-legend.full > div { align-items: start; }
+.stage-legend.full > li { align-items: start; }
 .stage-legend.full .glyph { width: 2rem; height: 1.5rem; color: var(--ink); margin-top: 0.1rem; }
 .stage-legend.full strong { display: block; font-size: 0.8rem; margin-bottom: 0.15rem; }
-.box .here { padding: 0.7rem 0.8rem; }
+.box .here { padding: 0.7rem 0.8rem; height: 100%; overflow-y: auto; }
+.ctx.wide .box .here { height: auto; overflow-y: visible; }
+.box .here .box-title,
 .box .here h4 { font: 800 1rem/1.1 var(--display); margin: 0 0 0.5rem; }
-.box .here .log { font-size: 12px; max-height: none; }
+.box .here .log { font-size: 12px; max-height: none; overflow: visible; }
 .box .here .log li { padding: 0.15rem 0; }
 .controls { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin-top: 0.4rem; }
 .controls .reset { margin-left: auto; border-color: transparent; }
-.pattern { display: grid; gap: 1.2rem; padding-block: clamp(2.5rem, 6vw, 4.5rem); border-top: 2px solid var(--ink); }
-.pattern h2 { font-size: var(--step-2); max-width: 22ch; }
+.pattern { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1.2rem; padding-block: clamp(2.5rem, 6vw, 4.5rem); border-top: 2px solid var(--ink); }
+.pattern > :is(h2, h3) { font-size: var(--step-2); max-width: 24ch; }
 .pattern .text { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr)); align-items: start; }
 .census { border-collapse: collapse; width: 100%; min-width: 38rem; font-size: var(--step--1); }
 .census th, .census td { text-align: left; padding: 0.6rem 0.8rem 0.6rem 0; border-top: 1px solid var(--line); vertical-align: top; }
@@ -69,18 +102,20 @@
 .census tbody th code { display: block; font-weight: 700; font-size: 0.95rem; background: none; padding: 0; }
 .census td.no { color: var(--muted); }
 .stepper { position: sticky; bottom: 0.4rem; z-index: 3; background: var(--paper); border: 2px solid var(--ink); border-radius: 14px; padding: 0.55rem 0.7rem; margin-top: 0.2rem; display: grid; gap: 0.5rem; }
-.stepper:has(.steps[hidden]) { border-color: transparent; padding-inline: 0; }
+.stepper:has(.steps[hidden]) { position: static; background: transparent; border-color: transparent; padding-inline: 0; }
+.stepper:has(.steps[hidden]):has(.caption:empty) { display: none; }
 .caption { margin: 0; min-height: 2.9em; font-size: var(--step--1); max-width: none; }
-.caption:empty { visibility: hidden; }
-.steps { display: flex; gap: 0.5rem; }
+.caption:empty { min-height: 0; display: none; }
+.steps { display: flex; flex-wrap: wrap; gap: 0.5rem; }
 .steps[hidden] { display: none; }
-.steps .fwd { flex: 1; text-align: center; font-weight: 700; }
+.steps .fwd { flex: 1 1 12rem; text-align: center; font-weight: 700; }
+.steps .pause[hidden] { display: none; }
 .controls .own { flex-basis: 100%; }
 .caption .step { font: 700 0.75rem/1 var(--mono); background: var(--ink); color: var(--paper); padding: 0.25em 0.5em; border-radius: 999px; margin-right: 0.35em; }
-.controls button.next { outline: 3px solid var(--accent); outline-offset: 3px; }
+.controls button.next { background: var(--accent); color: var(--on-accent); border-color: var(--ink); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 45%, transparent); }
 .controls .reset + .reset { margin-left: 0; }
 .pattern .text .more { grid-column: 1 / -1; margin: 0; }
-.pattern h2 a { text-decoration-thickness: 0.08em; }
+.pattern > :is(h2, h3) a { text-decoration-thickness: 0.08em; }
 .contents { display: grid; gap: 1.2rem; grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr)); }
 .contents h3 { font-size: var(--step-0); margin-bottom: .4rem; }
 .contents ol { margin: 0; padding-left: 1.2rem; font-size: var(--step--1); display: grid; gap: .25rem; }

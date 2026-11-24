@@ -80,6 +80,7 @@ async function trySend(kind, connect) {
 }
 
 async function tryStore(kind, db) {
+  if (!db) return { ok: false, why: "IndexedDB unavailable" };
   let value;
   try { value = await kind.make(); } catch { return { ok: false, why: "cannot be made here" }; }
   return new Promise((resolve) => {
@@ -99,20 +100,25 @@ export async function runCensus(table) {
   body.innerHTML = "";
   const worker = makeWorker();
   const frame = await makeFrame();
-  const db = await new Promise((resolve, reject) => {
-    const open = indexedDB.open("pa-census", 1);
-    open.onupgradeneeded = () => open.result.createObjectStore("s");
-    open.onsuccess = () => resolve(open.result);
-    open.onerror = () => reject(open.error);
-  });
+  let db = null;
+  try {
+    db = await new Promise((resolve, reject) => {
+      const open = indexedDB.open("pa-census", 1);
+      open.onupgradeneeded = () => open.result.createObjectStore("s");
+      open.onsuccess = () => resolve(open.result);
+      open.onerror = () => reject(open.error);
+    });
+  } catch {
+    db = null;
+  }
   const cell = (r) => `<td class="${r.ok ? "yes" : "no"}"><span class="jack ${r.ok ? "on" : ""}"></span>${r.ok ? "yes" : `no <span class="muted small">${r.why || ""}</span>`}</td>`;
   const results = {};
   for (const kind of KINDS) {
     const exists = kind.name === "WebAssembly.Module" ? "WebAssembly" in globalThis : kind.name in globalThis;
-    const missing = kind.name === "SharedArrayBuffer" ? "Not on this page: it needs cross-origin isolation. See the isolated room." : "This browser does not have it.";
+    const missing = kind.name === "SharedArrayBuffer" ? 'Not on this page: it needs cross-origin isolation. See <a href="/isolated/">the isolated room</a>.' : "This browser does not have it.";
     const row = body.insertRow();
     row.innerHTML = `<th scope="row"><code>${kind.name}</code><span class="muted small">${kind.note}</span></th><td colspan="3" class="muted">testing</td>`;
-    if (!exists) { row.cells[1].textContent = missing; results[kind.name] = null; continue; }
+    if (!exists) { row.cells[1].innerHTML = missing; results[kind.name] = null; continue; }
     const toWorker = await trySend(kind, (port) => worker.postMessage(null, [port]));
     const toOrigin = await trySend(kind, (port) => frame.contentWindow.postMessage(null, "*", [port]));
     const stored = await tryStore(kind, db);
@@ -121,7 +127,7 @@ export async function runCensus(table) {
   }
   worker.terminate();
   frame.remove();
-  db.close();
+  db?.close();
   table.dataset.done = "true";
   return results;
 }

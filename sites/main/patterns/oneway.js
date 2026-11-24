@@ -3,11 +3,8 @@
 import { sites } from "/_sites.js";
 import { oneWay } from "/oneway.js";
 
-const actor = (stage, name, site, role, title, color) => {
-  const box = stage.box(name, { src: `${sites[site]}/actor.html?role=${role}&title=${encodeURIComponent(title)}&color=${encodeURIComponent(color)}` });
-  box.frame.title = title;
-  return box;
-};
+const actor = (stage, name, site, role, title, color) =>
+  stage.box(name, { src: `${sites[site]}/actor.html?role=${role}&title=${encodeURIComponent(title)}&color=${encodeURIComponent(color)}`, title });
 
 export const oneway = {
   id: "oneway",
@@ -37,17 +34,18 @@ florist.postMessage({ cmd: "feed" }, floristOrigin, [link.receive]);`,
   ] },
   async setup(stage, ui) {
     const library = actor(stage, "pub", "library", "publisher", "Library, a real site", "#0e9f8e");
-    const box = stage.box("page", { html: `<div class="here"><h4>This page, in between</h4>
+    const box = stage.box("page", { html: `<div class="here"><div class="box-title">This page, in between</div>
       <p class="small" style="margin:0 0 .25rem">Passed on to the florist: <strong data-passed>0</strong></p>
       <p class="small" style="margin:0 0 .25rem">Stopped, coming back: <strong data-dropped>0</strong></p>
       <p class="small" style="margin:0 0 .4rem">Refused, going forward: <strong data-refused>0</strong></p>
-      <ul class="log"></ul></div>` });
+      <ul class="log" role="log" aria-live="polite"></ul></div>` });
     const florist = actor(stage, "sub", "florist", "subscriber", "Florist, a real site", "#e0364c");
     const ul = box.node.querySelector("ul");
     const say = (text) => { const li = document.createElement("li"); li.textContent = text; ul.prepend(li); while (ul.children.length > 3) ul.lastChild.remove(); };
     const show = (counts) => { for (const key of ["passed", "dropped", "refused"]) box.node.querySelector(`[data-${key}]`).textContent = counts[key]; };
     await Promise.all([library.whenReady, florist.whenReady]);
     let link = null;
+    stage.cleanup(() => link?.cut());
     const buttons = [
       ui.button("Library: publish a price", () => stage.post("pub", { cmd: "publish" }), true),
       ui.button("Florist: post an order back", () => stage.post("sub", { cmd: "answer" }), true),
@@ -69,8 +67,8 @@ florist.postMessage({ cmd: "feed" }, floristOrigin, [link.receive]);`,
       });
       stage.post("pub", { cmd: "feed" }, [link.send]);
       stage.post("sub", { cmd: "feed" }, [link.receive]);
-      stage.cable("in", "pub", "page", "teal");
-      stage.cable("out", "page", "sub", "red");
+      stage.cable("in", "pub", "page", "teal", "in →");
+      stage.cable("out", "page", "sub", "red", "→ out");
       say("gave each site one end");
       for (const b of buttons) b.disabled = false;
       cut.disabled = false;

@@ -2,7 +2,7 @@
 // the habit that deals with it. Same stage as the patterns.
 
 const logBox = (stage, name, title, extra = "", what = {}) => {
-  const box = stage.box(name, { html: `<div class="here"><h4>${title}</h4>${extra}<ul class="log"></ul></div>`, ...what });
+  const box = stage.box(name, { html: `<div class="here"><div class="box-title">${title}</div>${extra}<ul class="log" role="log" aria-live="polite"></ul></div>`, ...what });
   const ul = box.node.querySelector("ul");
   const say = (text) => { const li = document.createElement("li"); li.textContent = text; ul.prepend(li); while (ul.children.length > 6) ul.lastChild.remove(); };
   return { say, node: box.node, box };
@@ -61,6 +61,7 @@ navigator.locks.request(theirLockName, () => onGone());   <span class="c">// gra
       stage.post("service", { cmd: "port" }, [channel.port2]);
       stage.cable("line", "page", "service", "teal");
       let alive = true, n = 0, beat = null;
+      stage.cleanup(() => { clearInterval(beat); port.close(); });
       port.onmessage = ({ data }) => { if (data === "pong") { alive = true; me.say(`pong ${n}: the other end is there`); } };
       const remove = ui.button("Remove the service", (btn) => { stage.remove("service"); btn.disabled = true; me.say("the frame is gone. My port fired no event."); }, true);
       ui.button("Start a heartbeat", (btn) => {
@@ -129,9 +130,14 @@ port.onmessage = ({ data }) => {
     tour: { steps: [["Send some text", "An ordinary message. The receiver acknowledges it."], ["Send a module, carelessly", "postMessage does not throw. The receiver is not listening for messageerror, and the sender is not timing anything. Silence.", 1800], ["Send a module, with the habits", "The receiver reports that something arrived that it could not read, and the sender's promise rejects."]] },
     async setup(stage, ui) {
       const me = logBox(stage, "page", "This page sends");
-      const there = logBox(stage, "worker", "A shared worker receives", "", { kind: "shared", url: "/patterns/bite-worker.js" });
-      if (!("SharedWorker" in self)) return me.say("This browser has no SharedWorker.");
+      const there = logBox(stage, "worker", "A SharedWorker receives", "", { kind: "shared", url: "/patterns/bite-worker.js" });
+      if (!("SharedWorker" in self)) {
+        me.say("This browser has no SharedWorker.");
+        ui.unsupported("This browser does not support SharedWorker.");
+        return;
+      }
       const port = new SharedWorker("/patterns/bite-worker.js").port;
+      stage.cleanup(() => port.close());
       const waiting = new Map();
       let n = 0;
       const send = (value, limit = 2000) => new Promise((resolve, reject) => {
