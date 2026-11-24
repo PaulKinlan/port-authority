@@ -57,9 +57,81 @@
       <section id="experiments">
         <div class="section-head">
           <h2>Experiments</h2>
-          <p>Everything here runs in your browser, across separate origins. The first four use the hub.</p>
+          <p>Everything here runs in your browser, across separate origins. The basics come first. The last five are bigger experiments: four that use the hub, and the AI router.</p>
         </div>
         <ol class="experiments">
+          <li class="experiment">
+            <div>
+              <h3>The six basic patterns</h3>
+            </div>
+            <div class="body">
+              <p>A channel, an introduction, reply ports, giving away less than you have, a SharedWorker exchange and streams. Each one runs on the page.</p>
+              <p class="go"><a href="/patterns/">See the patterns</a></p>
+            </div>
+          </li>
+          <li class="experiment">
+            <div>
+              <h3>What else a port can carry</h3>
+            </div>
+            <div class="body">
+              <p>A canvas that another origin paints into, a function lent across origins, 64 MB moved in a few milliseconds, and a stream pipeline across three origins. There is also a table that tests which of twenty-three kinds of object your browser will send down a port.</p>
+              <p class="go"><a href="/patterns/canvas/">Paint across origins</a><a href="/patterns/pipeline/">The pipeline</a><a href="/patterns/#census">The census</a></p>
+            </div>
+          </li>
+          <li class="experiment">
+            <div>
+              <h3>Where a port can end up</h3>
+            </div>
+            <div class="body">
+              <p>Tear a widget off into a new window and it carries on working. Make one tab the web server for the other tabs. Leave a port with a SharedWorker and collect it after a reload.</p>
+              <p class="go"><a href="/patterns/tearoff/">Tear-off</a><a href="/patterns/tabserver/">Tab as server</a><a href="/patterns/reload/">Survive a reload</a></p>
+            </div>
+          </li>
+          <li class="experiment">
+            <div>
+              <h3>Workers, video and signing keys</h3>
+            </div>
+            <div class="body">
+              <p>Two workers that keep talking while the page is frozen, live video filtered on another origin, a signing key that is used through a port and never read, and a worker that blocks on a port until you answer.</p>
+              <p class="go"><a href="/patterns/frozen/">Freeze the page</a><a href="/patterns/filter/">Video filter</a><a href="/patterns/signer/">The key that stays</a><a href="/isolated/">Blocking call</a></p>
+            </div>
+          </li>
+          <li class="experiment">
+            <div>
+              <h3>Between real sites: sending keys, streams and connections</h3>
+            </div>
+            <div class="body">
+              <p>Here the other side is a real site with its own storage. Send it a signing key, one side of a stream, your data to transform and send back, or a network connection to borrow.</p>
+              <p class="go"><a href="/patterns/keycopy/">Send a key</a><a href="/patterns/halves/">Send one side of a stream</a><a href="/patterns/roundtrip/">Pipe through another site</a><a href="/patterns/lend/">Lend a connection</a><a href="/patterns/oneway/">A port that only goes one way</a></p>
+            </div>
+          </li>
+          <li class="experiment">
+            <div>
+              <h3>Other devices, service workers, sockets and audio</h3>
+            </div>
+            <div class="body">
+              <p>A port from your phone to a frame on your laptop, another site mounted at a path on this one, one server connection shared by every tab, and a worker that plays music straight into the audio thread.</p>
+              <p class="go"><a href="/patterns/far/">A port to another device</a><a href="/patterns/mounted/">Mount a site at a path</a><a href="/patterns/socket/">One socket for every tab</a><a href="/patterns/audio/">The audio thread</a></p>
+            </div>
+          </li>
+          <li class="experiment">
+            <div>
+              <h3>The lab: what can be sent where</h3>
+            </div>
+            <div class="body">
+              <p>Forty-five kinds of object sent to thirteen places a message can go, including every sort of worker, the audio thread, and frames on this origin, another origin and no origin. Your browser's results are added to everyone else's, so the table shows where browsers disagree.</p>
+              <p class="go"><a href="/lab/">Run the lab</a><a href="/lab/results/">What browsers reported</a><a href="/isolated/lab/">The isolated lab</a></p>
+            </div>
+          </li>
+          <li class="experiment">
+            <div>
+              <h3>The guide</h3>
+            </div>
+            <div class="body">
+              <p>All of this written down in one place: where a message can go, what can be sent, ports as permissions, streams, threads, keys and the things that go wrong. Every claim links to an interactive demo.</p>
+              <p class="go"><a href="/guide/">Read the guide</a></p>
+            </div>
+          </li>
           <li class="experiment">
             <div>
               <h3>Web Intents, with a port at the end</h3>
@@ -110,78 +182,6 @@ await line.call({ bouquet: "ember", recipient: "Ada" });</pre>
             <div class="body">
               <p>A site asks for an AI model. A window from the router opens and you pick one of your own accounts. The site gets a port to send prompts on and never sees your API key. You can see what each site used and stop it.</p>
               <p class="go"><a href="/ai-router/">Try the AI router</a></p>
-            </div>
-          </li>
-          <li class="experiment">
-            <div>
-              <h3>The six basic patterns</h3>
-            </div>
-            <div class="body">
-              <p>A channel, an introduction, reply ports, giving away less than you have, a SharedWorker exchange and streams. Each one runs on the page.</p>
-              <p class="go"><a href="/patterns/">See the patterns</a></p>
-            </div>
-          </li>
-          <li class="experiment">
-            <div>
-              <h3>What else a port can carry</h3>
-            </div>
-            <div class="body">
-              <p>A canvas that another origin paints into, a function lent across origins, 64 MB moved in a few milliseconds, and a stream pipeline across three origins. There is also a table that tests which of twenty-three kinds of object your browser will send down a port.</p>
-              <p class="go"><a href="/patterns/canvas/">Paint across origins</a><a href="/patterns/pipeline/">The pipeline</a><a href="/patterns/#census">The census</a></p>
-            </div>
-          </li>
-          <li class="experiment">
-            <div>
-              <h3>Where a port can end up</h3>
-            </div>
-            <div class="body">
-              <p>Tear a widget off into a new window and it carries on working. Make one tab the web server for the other tabs. Leave a port with a SharedWorker and collect it after a reload.</p>
-              <p class="go"><a href="/patterns/tearoff/">Tear-off</a><a href="/patterns/tabserver/">Tab as server</a><a href="/patterns/reload/">Survive a reload</a></p>
-            </div>
-          </li>
-          <li class="experiment">
-            <div>
-              <h3>Workers, video and signing keys</h3>
-            </div>
-            <div class="body">
-              <p>Two workers that keep talking while the page is frozen, live video filtered on another origin, a signing key that is used through a port and never read, and a worker that blocks on a port until you answer.</p>
-              <p class="go"><a href="/patterns/frozen/">Freeze the page</a><a href="/patterns/filter/">Video filter</a><a href="/patterns/signer/">The key that stays</a><a href="/isolated/">Blocking call</a></p>
-            </div>
-          </li>
-          <li class="experiment">
-            <div>
-              <h3>The lab: what can be sent where</h3>
-            </div>
-            <div class="body">
-              <p>Forty-five kinds of object sent to thirteen places a message can go, including every sort of worker, the audio thread, and frames on this origin, another origin and no origin. Your browser's results are added to everyone else's, so the table shows where browsers disagree.</p>
-              <p class="go"><a href="/lab/">Run the lab</a><a href="/lab/results/">What browsers reported</a><a href="/isolated/lab/">The isolated lab</a></p>
-            </div>
-          </li>
-          <li class="experiment">
-            <div>
-              <h3>Between real sites: sending keys, streams and connections</h3>
-            </div>
-            <div class="body">
-              <p>Here the other side is a real site with its own storage. Send it a signing key, one side of a stream, your data to transform and send back, or a network connection to borrow.</p>
-              <p class="go"><a href="/patterns/keycopy/">Send a key</a><a href="/patterns/halves/">Send one side of a stream</a><a href="/patterns/roundtrip/">Pipe through another site</a><a href="/patterns/lend/">Lend a connection</a><a href="/patterns/oneway/">A port that only goes one way</a></p>
-            </div>
-          </li>
-          <li class="experiment">
-            <div>
-              <h3>Other devices, service workers, sockets and audio</h3>
-            </div>
-            <div class="body">
-              <p>A port from your phone to a frame on your laptop, another site mounted at a path on this one, one server connection shared by every tab, and a worker that plays music straight into the audio thread.</p>
-              <p class="go"><a href="/patterns/far/">A port to another device</a><a href="/patterns/mounted/">Mount a site at a path</a><a href="/patterns/socket/">One socket for every tab</a><a href="/patterns/audio/">The audio thread</a></p>
-            </div>
-          </li>
-          <li class="experiment">
-            <div>
-              <h3>The guide</h3>
-            </div>
-            <div class="body">
-              <p>All of this written down in one place: where a message can go, what can be sent, ports as permissions, streams, threads, keys and the things that go wrong. Every claim links to an interactive demo.</p>
-              <p class="go"><a href="/guide/">Read the guide</a></p>
             </div>
           </li>
         </ol>
