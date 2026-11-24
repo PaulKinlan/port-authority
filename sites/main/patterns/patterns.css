@@ -84,7 +84,7 @@
 .controls { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin-top: 0.4rem; }
 .controls .reset { margin-left: auto; border-color: transparent; }
 .pattern { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1.2rem; padding-block: clamp(2.5rem, 6vw, 4.5rem); border-top: 2px solid var(--ink); }
-.pattern > :is(h2, h3) { font-size: var(--step-2); max-width: 24ch; }
+.pattern > :is(h2, h3) { font-size: var(--step-2); }
 .pattern .text { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr)); align-items: start; }
 .census { border-collapse: collapse; width: 100%; min-width: 38rem; font-size: var(--step--1); }
 .census th, .census td { text-align: left; padding: 0.6rem 0.8rem 0.6rem 0; border-top: 1px solid var(--line); vertical-align: top; }

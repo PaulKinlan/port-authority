@@ -70,7 +70,7 @@ const html = `<!doctype html>
   <style>
     main { display: grid; grid-template-columns: minmax(0, 1fr); gap: clamp(2rem, 5vw, 3.2rem); padding-block: 1rem 4rem; }
     main section { display: grid; gap: .9rem; border-top: 2px solid var(--ink); padding-top: clamp(1.2rem, 3vw, 2rem); grid-template-columns: minmax(0, 1fr); }
-    main h2 { font-size: var(--step-2); max-width: 28ch; }
+    main h2 { font-size: var(--step-2); }
     main section > p { margin: 0; max-width: 66ch; }
     .toc { columns: 2 16rem; padding: 0; margin: 0; list-style: none; }
     .toc li { margin-bottom: .4rem; break-inside: avoid; }
