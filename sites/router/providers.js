@@ -5,14 +5,18 @@
 // The router's pages are served with a Content-Security-Policy that lets them
 // connect to these addresses and nowhere else, so this list is fixed. Adding a
 // provider means adding it here and to ROUTER_CONNECT in src/worker.js.
+//
+// The model names are only what the form offers when an account is added, and
+// the first one is what Test uses. They go out of date. Last checked against
+// each provider on 2026-11-24.
 export const PROVIDERS = {
   practice: { name: "Practice model", needsKey: false, models: ["not a real model"], note: "Not a real model. It needs no key and makes no network call, so you can try the whole flow." },
   builtin: { name: "This browser's built-in model", needsKey: false, models: ["built-in"], note: "Runs on this device. Only offered when the browser has the Prompt API and the model is downloaded." },
-  anthropic: { name: "Anthropic", needsKey: true, kind: "anthropic", baseUrl: "https://api.anthropic.com/v1", models: ["claude-sonnet-5-5", "claude-haiku-5-5", "claude-opus-5-5"], note: "Your key from console.anthropic.com." },
-  openai: { name: "OpenAI", needsKey: true, kind: "chat", baseUrl: "https://api.openai.com/v1", models: ["gpt-5-mini"], note: "Your key from platform.openai.com. Change the model names to the ones you use." },
+  anthropic: { name: "Anthropic", needsKey: true, kind: "anthropic", baseUrl: "https://api.anthropic.com/v1", models: ["claude-sonnet-5-5", "claude-haiku-5-5", "claude-opus-5-5", "claude-fable-5-2"], note: "Your key from console.anthropic.com." },
+  openai: { name: "OpenAI", needsKey: true, kind: "chat", baseUrl: "https://api.openai.com/v1", models: ["gpt-6.2-sol", "gpt-6-luna", "gpt-6.1-terra", "gpt-6.2-astra"], note: "Your key from platform.openai.com. Change the model names to the ones you use." },
   openrouter: { name: "OpenRouter", needsKey: true, kind: "chat", baseUrl: "https://openrouter.ai/api/v1", models: ["openrouter/auto"], note: "Your key from openrouter.ai. Change the model names to the ones you use." },
-  gemini: { name: "Google Gemini", needsKey: true, kind: "chat", baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai", models: ["gemini-2.5-flash"], note: "Your key from aistudio.google.com. Change the model names to the ones you use." },
-  ollama: { name: "Ollama on this computer", needsKey: false, local: true, kind: "chat", baseUrl: "http://localhost:11434/v1", models: ["llama3.2"], note: "No key. Ollama must be running and must allow this address: start it with OLLAMA_ORIGINS set to the router's address." },
+  gemini: { name: "Google Gemini", needsKey: true, kind: "chat", baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai", models: ["gemini-4-hydrogen", "gemini-4-neon", "gemini-4-carbon", "gemini-4-argon"], note: "Your key from aistudio.google.com. Change the model names to the ones you use." },
+  ollama: { name: "Ollama on this computer", needsKey: false, local: true, kind: "chat", baseUrl: "http://localhost:11434/v1", models: ["gemma4", "qwen3.5", "llama3.2"], note: "No key. Ollama must be running and must allow this address: start it with OLLAMA_ORIGINS set to the router's address." },
 };
 
 // True only when the browser has the Prompt API and its model is already on
