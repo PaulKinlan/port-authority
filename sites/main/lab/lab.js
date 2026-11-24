@@ -221,7 +221,7 @@ export async function environment() {
   const full = detail.fullVersionList?.find((b) => b.brand === name)?.version;
   return {
     browser: name, version: String(full || version), platform: navigator.userAgentData?.platform || navigator.platform || "",
-    platformVersion: detail.platformVersion || "", mobile: !!navigator.userAgentData?.mobile, ua,
+    platformVersion: detail.platformVersion || "", mobile: !!navigator.userAgentData?.mobile,
     isolated: !!self.crossOriginIsolated, secure: isSecureContext, lab: globalThis.LAB_VERSION,
   };
 }

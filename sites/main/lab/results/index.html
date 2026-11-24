@@ -3,48 +3,65 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Lab results | Port Authority</title>
-  <meta name="description" content="What every browser that has run the lab reported: which objects can be sent where, and where browsers disagree.">
+  <title>Browser compatibility results — The lab | Port Authority</title>
+  <meta name="description" content="Compare live postMessage compatibility matrices across browsers and versions, see where engines disagree, and inspect reported errors.">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <meta property="og:title" content="Browser compatibility results — The lab | Port Authority">
+  <meta property="og:description" content="Compare live postMessage compatibility matrices across browsers and versions, see where engines disagree, and inspect reported errors.">
+  <meta property="og:type" content="website">
+  <meta name="twitter:card" content="summary">
   <link rel="stylesheet" href="/base.css">
   <link rel="stylesheet" href="/lab/lab.css">
   <script src="/errors.js"></script>
 </head>
 <body>
+  <a class="skip-link" href="#main">Skip to content</a>
   <div class="wrap">
     <header class="site-bar">
       <a class="wordmark" href="/">Port Authority</a>
-      <nav><a href="/guide/">The guide</a><a href="/">Experiments</a><a href="/patterns/">Port patterns</a><a href="/lab/">The lab</a><a href="/lab/results/" aria-current="page">Results</a><a href="/missing/">What is missing</a><a href="/reading/">Further reading</a><a href="/hub/">Your hub</a></nav>
+      <nav aria-label="Primary"><a href="/">Experiments</a><a href="/guide/">The guide</a><a href="/patterns/">Port patterns</a><a href="/comlink/">Comlink today</a><a href="/ai-router/">AI router</a><a href="/lab/" aria-current="page">The lab</a><a href="/missing/">What is missing</a><a href="/reading/">Further reading</a><a href="/hub/">Your hub</a></nav>
     </header>
-    <div class="stack" style="padding-block:2.5rem 1.5rem; --gap:1.1rem">
-      <h1 style="font-size:var(--step-3)">What browsers reported</h1>
-      <p>Every browser that runs <a href="/lab/">the lab</a> sends back what it saw. This page adds the reports up by browser and version and lists the tests where they disagree. The data is public as JSON: <a href="/lab/data/summary"><code>/lab/data/summary</code></a>, <a href="/lab/data/reports"><code>/lab/data/reports</code></a>, <a href="/lab/data/errors"><code>/lab/data/errors</code></a>.</p>
-    </div>
-    <main class="stack" style="--gap:1.6rem; padding-bottom:3rem">
+    <main id="main" class="stack" style="--gap:1.6rem; padding-block:2rem 3rem">
+      <div class="stack" style="--gap:0.9rem">
+        <h1 style="font-size:var(--step-3)">What browsers reported</h1>
+        <p>Every browser that runs <a href="/lab/">the lab</a> with sharing enabled sends back what it saw. This page aggregates reports by browser and version and highlights where engines disagree. The data is public as JSON: <a href="/lab/data/summary"><code>/lab/data/summary</code></a>, <a href="/lab/data/reports"><code>/lab/data/reports</code></a>, <a href="/lab/data/errors"><code>/lab/data/errors</code></a>.</p>
+        <p class="sub-links"><a href="/lab/">Run the lab in this browser</a> <span class="muted">Viewing: <strong>Browser results</strong></span></p>
+      </div>
+
+      <div class="callout-warn" id="load-error" hidden role="alert"></div>
+
       <section class="stack" aria-labelledby="h-browsers">
         <h2 id="h-browsers" style="font-size:var(--step-2)">Browsers seen</h2>
-        <p class="pick" id="groups"><span class="muted">Loading.</span></p>
-        <p class="small muted">Pick one to see its table. Pick a second to compare: tests where the two differ get a red outline.</p>
+        <p class="pick" id="groups"><span class="muted">Loading…</span></p>
+        <p class="small muted">Pick one browser to show its table (<strong>Primary</strong>). Pick a second to compare (<strong>Compare</strong>): cells show the Primary browser's outcome, with a red border wherever Compare disagrees.</p>
       </section>
+
       <section class="stack" aria-labelledby="h-table">
         <h2 id="h-table" style="font-size:var(--step-2)">The table</h2>
-        <ul class="legend" id="legend"></ul>
-        <div class="matrix-wrap"><table class="matrix" id="matrix"></table></div>
+        <ul class="legend" id="legend" aria-label="Result legend"></ul>
+        <div class="matrix-wrap" tabindex="0" aria-label="Browser compatibility matrix"><table class="matrix" id="matrix"></table></div>
         <p class="detail panel" id="detail" aria-live="polite">Press any mark to see the counts behind it.</p>
       </section>
+
+      <div id="pop" popover class="cell-pop" role="dialog" aria-label="Cell breakdown"></div>
+
       <section class="stack" aria-labelledby="h-differ">
         <h2 id="h-differ" style="font-size:var(--step-2)">Where browsers disagree</h2>
-        <ul class="log" id="differ" style="max-height:24rem"><li class="muted">Loading.</li></ul>
+        <ul class="log" id="differ" style="max-height:24rem"><li class="muted">Loading…</li></ul>
       </section>
+
       <section class="stack" aria-labelledby="h-reports">
         <h2 id="h-reports" style="font-size:var(--step-2)">Recent reports</h2>
-        <ul class="log" id="reports" style="max-height:18rem"><li class="muted">Loading.</li></ul>
+        <ul class="log" id="reports" style="max-height:18rem"><li class="muted">Loading…</li></ul>
       </section>
+
       <section class="stack" aria-labelledby="h-errors">
         <h2 id="h-errors" style="font-size:var(--step-2)">Errors, crashes and browser warnings seen on this site</h2>
-        <p class="small muted">Any page here that throws an error tells the server, with the browser's name. The browser also reports for itself, through the Reporting API, when a page crashes, when it blocks or slows something, and when a page uses a feature that is going away. Those are marked "browser report". That is how I find out that an experiment doesn't work in some browser.</p>
-        <ul class="log" id="errors" style="max-height:18rem"><li class="muted">Loading.</li></ul>
+        <p class="small muted">Any page here that throws an error tells the server, with the browser's name and version. The browser also reports for itself, through the Reporting API, when a page crashes, when it blocks or slows something, and when a page uses a feature that is going away. Those are marked "browser report". That is how I find out that an experiment doesn't work in some browser.</p>
+        <ul class="log" id="errors" style="max-height:18rem"><li class="muted">Loading…</li></ul>
       </section>
     </main>
+    <footer class="small muted" style="padding-block:2rem 4rem">Port Authority, by <a href="https://paul.kinlan.me">Paul Kinlan</a>.</footer>
   </div>
   <script src="/lab/kinds.js"></script>
   <script type="module">
@@ -52,9 +69,12 @@
     const $ = (id) => document.getElementById(id);
     const esc = (t) => String(t ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
     const when = (at) => new Date(at).toLocaleString([], { dateStyle: "medium", timeStyle: "short" });
-    const get = (path) => fetch(path).then((r) => r.json());
+    const get = async (path) => {
+      const r = await fetch(path);
+      if (!r.ok) throw new Error(`${path} returned ${r.status}`);
+      return r.json();
+    };
     const KINDS = globalThis.LAB_KINDS;
-    const [summary, reports, errors] = await Promise.all([get("/lab/data/summary"), get("/lab/data/reports"), get("/lab/data/errors")]);
     const name = (g) => `${g.browser} ${g.major}, ${g.platform || "unknown system"}${g.isolated ? ", isolated" : ""}`;
     // What most reports in a group saw for one test, and whether they all agreed.
     const verdict = (g, kind, dest) => {
@@ -63,12 +83,61 @@
       const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
       return { outcome: sorted[0][0], mixed: sorted.length > 1, counts };
     };
-    $("legend").innerHTML = Object.values(OUTCOMES).filter((o) => o.mark.trim()).map((o) => `<li><b>${o.mark}</b>${o.label}</li>`).join("") + `<li><b style="background:color-mix(in srgb, var(--yellow) 22%, transparent)">&nbsp;&nbsp;</b>reports of this browser disagree</li>`;
 
+    $("legend").innerHTML = Object.entries(OUTCOMES).map(([k, o]) =>
+      k === "no-destination"
+        ? `<li><b class="swatch-blank" data-o="${k}" aria-hidden="true"></b>${esc(o.label)}</li>`
+        : `<li><b data-o="${k}" aria-hidden="true">${o.mark}</b>${esc(o.label)}</li>`
+    ).join("")
+      + `<li><b class="swatch-mixed" aria-hidden="true"></b>reports of this browser disagree</li>`
+      + `<li><b class="swatch-differs" aria-hidden="true"></b>differs from comparison browser</li>`;
+
+    let summary = { groups: [] };
     let chosen = [];
-    function drawGroups() {
-      $("groups").innerHTML = summary.groups.length ? summary.groups.map((g, i) => `<button class="tiny quiet" data-i="${i}" aria-pressed="${chosen.includes(i)}">${esc(name(g))} <span class="muted">(${g.reports})</span></button>`).join("") : `<span class="muted">No browser has reported yet. <a href="/lab/">Run the lab</a> to be the first.</span>`;
+
+    const pop = $("pop");
+    let openFor = null;
+    function closePop() {
+      if (!openFor) return;
+      try { pop.hidePopover(); } catch {}
     }
+    const place = (td) => {
+      const cell = td.getBoundingClientRect(), box = pop.getBoundingClientRect();
+      const left = Math.max(8, Math.min(cell.left + cell.width / 2 - box.width / 2, innerWidth - box.width - 8));
+      const below = cell.bottom + 8;
+      const above = cell.top - box.height - 8;
+      const rawTop = below + box.height <= innerHeight - 8 ? below : above >= 8 ? above : below;
+      const top = Math.max(8, Math.min(rawTop, innerHeight - box.height - 8));
+      pop.style.left = left + "px";
+      pop.style.top = top + "px";
+    };
+    pop.addEventListener("toggle", (event) => {
+      if (event.newState === "closed") {
+        if (openFor) {
+          openFor.classList.remove("open");
+          openFor.querySelector("button")?.setAttribute("aria-expanded", "false");
+        }
+        openFor = null;
+      }
+    });
+    pop.addEventListener("click", (event) => {
+      if (event.target.closest(".pop-close")) closePop();
+    });
+    addEventListener("scroll", () => { if (openFor) closePop(); }, { passive: true, capture: true });
+    addEventListener("resize", () => { if (openFor) closePop(); }, { passive: true });
+
+    function drawGroups() {
+      $("groups").innerHTML = summary.groups.length
+        ? summary.groups.map((g, i) => {
+            const pos = chosen.indexOf(i);
+            const tag = chosen.length === 2
+              ? (pos === 0 ? `<span class="role-tag">Primary</span>` : pos === 1 ? `<span class="role-tag">Compare</span>` : "")
+              : "";
+            return `<button type="button" class="tiny quiet" data-i="${i}" aria-pressed="${pos !== -1}">${esc(name(g))} <span class="muted">(${g.reports})</span>${tag}</button>`;
+          }).join("")
+        : `<span class="muted">No browser has reported yet. <a href="/lab/">Run the lab</a> to be the first.</span>`;
+    }
+
     $("groups").onclick = (event) => {
       const b = event.target.closest("button[data-i]"); if (!b) return;
       const i = Number(b.dataset.i);
@@ -76,50 +145,113 @@
       if (!chosen.length) chosen = [i];
       drawGroups(); drawMatrix();
     };
+
     function drawMatrix() {
+      closePop();
       const [a, b] = chosen.map((i) => summary.groups[i]);
       if (!a) return void ($("matrix").innerHTML = "");
-      const dests = Object.values(PLACES).filter((p) => KINDS.some((k) => a.cells[k.name]?.[p.id]));
+      const dests = Object.values(PLACES).filter((p) => KINDS.some((k) => a.cells[k.name]?.[p.id] || b?.cells[k.name]?.[p.id]));
       const groups = [];
       for (const d of dests) { const last = groups.at(-1); last && last.name === d.group ? last.n++ : groups.push({ name: d.group, n: 1 }); }
       let band = "";
       $("matrix").innerHTML = `
-        <caption class="small muted" style="caption-side:top;padding:.5rem;text-align:left">${esc(name(a))}: ${a.reports} report${a.reports === 1 ? "" : "s"}${b ? `, compared with ${esc(name(b))}` : ""}</caption>
+        <caption class="small muted" style="caption-side:top;padding:.5rem;text-align:left"><strong>Primary:</strong> ${esc(name(a))} (${a.reports} report${a.reports === 1 ? "" : "s"})${b ? ` — <strong>Compare:</strong> ${esc(name(b))} (${b.reports} report${b.reports === 1 ? "" : "s"})` : ""}</caption>
         <thead>
-          <tr class="group"><td></td>${groups.map((g) => `<th colspan="${g.n}" scope="colgroup">${esc(g.name)}</th>`).join("")}</tr>
-          <tr class="dest"><td></td>${dests.map((d) => `<th scope="col">${esc(d.label)}</th>`).join("")}</tr>
+          <tr class="group"><td class="corner"></td>${groups.map((g) => `<th colspan="${g.n}" scope="colgroup">${esc(g.name)}</th>`).join("")}</tr>
+          <tr class="dest"><td class="corner"></td>${dests.map((d) => `<th scope="col">${esc(d.label)}</th>`).join("")}</tr>
         </thead>
-        <tbody>${KINDS.map((k) => `${k.group !== band ? `<tr class="band"><th colspan="${dests.length + 1}">${esc(band = k.group)}</th></tr>` : ""}
+        <tbody>${KINDS.map((k) => `${k.group !== band ? `<tr class="band"><th colspan="${dests.length + 1}"><span class="band-label">${esc(band = k.group)}</span></th></tr>` : ""}
           <tr><th scope="row">${esc(k.name)}</th>${dests.map((d) => {
             const v = verdict(a, k.name, d.id), w = b && verdict(b, k.name, d.id);
-            if (!v) return `<td data-o="pending"><button aria-label="no data">·</button></td>`;
-            const differs = w && w.outcome !== v.outcome;
-            return `<td data-o="${v.outcome}" data-k="${esc(k.name)}" data-d="${d.id}" class="${v.mixed ? "mixed" : ""} ${differs ? "differs" : ""}"><button aria-label="${esc(k.name)} to ${esc(d.label)}: ${OUTCOMES[v.outcome].label}${differs ? ", differs" : ""}">${OUTCOMES[v.outcome].mark}</button></td>`;
+            if (!v) {
+              const differs = !!w;
+              const label = `${k.name} to ${d.label}: no data for ${name(a)}${w ? `, ${OUTCOMES[w.outcome].label} in ${name(b)}` : ""}`;
+              return `<td data-o="pending" data-k="${esc(k.name)}" data-d="${d.id}" class="${differs ? "differs" : ""}"><button type="button" aria-haspopup="dialog" aria-expanded="false" aria-label="${esc(label)}">·</button></td>`;
+            }
+            const differs = !!(b && (!w || w.outcome !== v.outcome));
+            const label = `${k.name} to ${d.label}: ${OUTCOMES[v.outcome].label}${differs ? `, differs from ${name(b)}` : ""}`;
+            return `<td data-o="${v.outcome}" data-k="${esc(k.name)}" data-d="${d.id}" class="${v.mixed ? "mixed" : ""} ${differs ? "differs" : ""}"><button type="button" aria-haspopup="dialog" aria-expanded="false" aria-label="${esc(label)}">${OUTCOMES[v.outcome].mark}</button></td>`;
           }).join("")}</tr>`).join("")}
         </tbody>`;
     }
+
     $("matrix").addEventListener("click", (event) => {
       const td = event.target.closest("td[data-k]"); if (!td) return;
-      const line = (g) => { const v = verdict(g, td.dataset.k, td.dataset.d); return v ? `${esc(name(g))}: ${Object.entries(v.counts).map(([o, n]) => `${OUTCOMES[o].label.toLowerCase()} in ${n}`).join(", ")}` : `${esc(name(g))}: no data`; };
-      $("detail").innerHTML = `<strong>${esc(td.dataset.k)}</strong> to <strong>${esc(PLACES[td.dataset.d].label)}</strong>. ${chosen.map((i) => line(summary.groups[i])).join(". ")}.`;
+      const k = td.dataset.k, d = td.dataset.d, placeLabel = PLACES[d]?.label || d;
+      const lineText = (g) => {
+        const v = verdict(g, k, d);
+        return v
+          ? `${esc(name(g))}: ${Object.entries(v.counts).map(([o, n]) => `${OUTCOMES[o].label.toLowerCase()} in ${n}`).join(", ")}`
+          : `${esc(name(g))}: no data`;
+      };
+      $("detail").innerHTML = `<strong>${esc(k)}</strong> to <strong>${esc(placeLabel)}</strong>. ${chosen.map((i) => lineText(summary.groups[i])).join(". ")}.`;
+
+      if (!pop.showPopover) return;
+      const same = openFor === td;
+      closePop();
+      if (same) return;
+
+      const rowsHtml = chosen.map((i, idx) => {
+        const g = summary.groups[i];
+        const v = verdict(g, k, d);
+        const prefix = chosen.length === 2 ? (idx === 0 ? "Primary — " : "Compare — ") : "";
+        if (!v) return `<p class="outcome" data-o="cannot-make"><strong>${esc(prefix + name(g))}:</strong> no data</p>`;
+        const breakdown = Object.entries(v.counts).map(([o, n]) => `${OUTCOMES[o].label.toLowerCase()} in ${n}`).join(", ");
+        return `<p class="outcome" data-o="${v.outcome}"><b>${OUTCOMES[v.outcome].mark}</b> <strong>${esc(prefix + name(g))}:</strong> ${esc(breakdown)}</p>`;
+      }).join("");
+      pop.innerHTML = `<div class="pop-head"><p class="what"><strong>${esc(k)}</strong> to <strong>${esc(placeLabel)}</strong></p><button type="button" class="pop-close" aria-label="Close">×</button></div>${rowsHtml}`;
+      pop.showPopover();
+      openFor = td;
+      td.classList.add("open");
+      td.querySelector("button")?.setAttribute("aria-expanded", "true");
+      place(td);
     });
 
-    // Tests where at least two browsers settled on different outcomes.
-    const rows = [];
-    const plain = summary.groups.filter((g) => !g.isolated);
-    for (const k of KINDS) for (const p of Object.values(PLACES)) {
-      const seen = plain.map((g) => [g, verdict(g, k.name, p.id)]).filter(([, v]) => v && v.outcome !== "no-destination");
-      if (new Set(seen.map(([, v]) => v.outcome)).size > 1) rows.push(`<li><span class="who">${esc(k.name)}</span> to ${esc(p.label)}: ${seen.map(([g, v]) => `${esc(g.browser)} ${esc(g.major)} ${OUTCOMES[v.outcome].label.toLowerCase()}`).join("; ")}</li>`);
+    async function load() {
+      $("load-error").hidden = true;
+      $("groups").innerHTML = `<span class="muted">Loading…</span>`;
+      $("differ").innerHTML = `<li class="muted">Loading…</li>`;
+      $("reports").innerHTML = `<li class="muted">Loading…</li>`;
+      $("errors").innerHTML = `<li class="muted">Loading…</li>`;
+      try {
+        const [sum, reports, errors] = await Promise.all([
+          get("/lab/data/summary"),
+          get("/lab/data/reports"),
+          get("/lab/data/errors"),
+        ]);
+        summary = sum;
+
+        // Tests where at least two browsers settled on different outcomes.
+        const rows = [];
+        const plain = summary.groups.filter((g) => !g.isolated);
+        for (const k of KINDS) for (const p of Object.values(PLACES)) {
+          const seen = plain.map((g) => [g, verdict(g, k.name, p.id)]).filter(([, v]) => v && v.outcome !== "no-destination");
+          if (new Set(seen.map(([, v]) => v.outcome)).size > 1) rows.push(`<li><span class="who">${esc(k.name)}</span> to ${esc(p.label)}: ${seen.map(([g, v]) => `${esc(g.browser)} ${esc(g.major)} ${OUTCOMES[v.outcome].label.toLowerCase()}`).join("; ")}</li>`);
+        }
+        $("differ").innerHTML = rows.join("") || `<li class="muted">${plain.length < 2 ? "Only one browser has reported so far, so there is nothing to compare yet." : "Every browser that has reported agrees on every test."}</li>`;
+
+        $("reports").innerHTML = reports.map((r) => `<li id="${esc(r.id)}"><span class="muted">${when(r.at)}</span> <span class="who">${esc(r.browser)} ${esc(r.version)}</span> on ${esc(r.platform || "unknown")}${r.isolated ? ", isolated" : ""}${r.errors ? `, ${r.errors} error${r.errors === 1 ? "" : "s"}` : ""}${r.died ? `, the run before it stopped while sending ${esc(r.died.kind)} to ${esc(r.died.dest)}` : ""} <a href="/lab/data/report/${esc(r.id)}">${esc(r.id)}</a></li>`).join("") || `<li class="muted">None yet.</li>`;
+        $("errors").innerHTML = errors.map((e) => {
+          const who = [e.browser || "Unknown", e.version].filter(Boolean).join(" ");
+          return `<li><span class="muted">${when(e.at)}</span> <span class="who">${esc(who)}</span> on <code>${esc(e.page)}</code> (${esc(e.place)}): ${esc(e.message)}</li>`;
+        }).join("") || `<li class="muted">None reported.</li>`;
+
+        chosen = summary.groups.length ? [0] : [];
+        drawGroups(); drawMatrix();
+        document.documentElement.dataset.done = "true";
+        if (location.hash) document.getElementById(location.hash.slice(1))?.scrollIntoView();
+      } catch (err) {
+        $("load-error").hidden = false;
+        $("load-error").innerHTML = `<p><strong>Could not load the lab results</strong> (${esc(err.message || "network error")}).</p><p><button type="button" class="tiny accent" id="retry">Try again</button></p>`;
+        $("retry").onclick = load;
+        $("groups").innerHTML = `<span class="muted">Unavailable.</span>`;
+        $("differ").innerHTML = `<li class="muted">Unavailable.</li>`;
+        $("reports").innerHTML = `<li class="muted">Unavailable.</li>`;
+        $("errors").innerHTML = `<li class="muted">Unavailable.</li>`;
+      }
     }
-    $("differ").innerHTML = rows.join("") || `<li class="muted">${plain.length < 2 ? "Only one browser has reported so far, so there is nothing to compare yet." : "Every browser that has reported agrees on every test."}</li>`;
 
-    $("reports").innerHTML = reports.map((r) => `<li id="${esc(r.id)}"><span class="muted">${when(r.at)}</span> <span class="who">${esc(r.browser)} ${esc(r.version)}</span> on ${esc(r.platform || "unknown")}${r.isolated ? ", isolated" : ""}${r.errors ? `, ${r.errors} error${r.errors === 1 ? "" : "s"}` : ""}${r.died ? `, the run before it stopped while sending ${esc(r.died.kind)} to ${esc(r.died.dest)}` : ""} <a href="/lab/data/report/${esc(r.id)}">${esc(r.id)}</a></li>`).join("") || `<li class="muted">None yet.</li>`;
-    $("errors").innerHTML = errors.map((e) => `<li><span class="muted">${when(e.at)}</span> <span class="who">${esc(e.browser || "Unknown")} ${esc(e.version)}</span> on <code>${esc(e.page)}</code> (${esc(e.place)}): ${esc(e.message)}<br><span class="muted">${esc(e.ua)}</span></li>`).join("") || `<li class="muted">None reported.</li>`;
-
-    chosen = summary.groups.length ? [0] : [];
-    drawGroups(); drawMatrix();
-    document.documentElement.dataset.done = "true";
-    if (location.hash) document.getElementById(location.hash.slice(1))?.scrollIntoView();
+    load();
   </script>
   <script type="module" src="/refs.js"></script>
 </body>

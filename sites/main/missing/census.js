@@ -11,15 +11,17 @@
 
 const canvas = () => { const c = document.createElement("canvas"); c.width = c.height = 2; c.getContext("2d").fillRect(0, 0, 2, 2); return c; };
 const pc = () => new RTCPeerConnection();
+const owners = new WeakMap();
+const own = (child, cleanup) => { if (child && (typeof child === "object" || typeof child === "function")) owners.set(child, cleanup); return child; };
 
 // group: what the thing is for. make: builds one, or throws if this browser cannot.
 export const TYPES = [
   // Messaging and control
-  ["Messaging", "MessagePort", () => new MessageChannel().port1],
+  ["Messaging", "MessagePort", () => { const ch = new MessageChannel(); return own(ch.port1, () => ch.port2.close()); }],
   ["Messaging", "BroadcastChannel", () => new BroadcastChannel("census")],
   ["Messaging", "AbortSignal", () => new AbortController().signal],
   ["Messaging", "EventTarget", () => new EventTarget()],
-  ["Messaging", "Worker", () => new Worker(URL.createObjectURL(new Blob([""])))],
+  ["Messaging", "Worker", () => { const u = URL.createObjectURL(new Blob([""])); return own(new Worker(u), () => URL.revokeObjectURL(u)); }],
   ["Messaging", "Function", () => () => 1],
   ["Messaging", "Proxy", () => new Proxy({}, {})],
   ["Messaging", "WeakRef", () => new WeakRef({})],
@@ -53,7 +55,7 @@ export const TYPES = [
   ["Network", "URLSearchParams", () => new URLSearchParams("a=b")],
   ["Network", "WebSocket", () => new Promise((resolve, reject) => { const w = new WebSocket(location.origin.replace(/^http/, "ws") + "/echo"); w.onopen = () => { setTimeout(() => w.close(), 500); resolve(w); }; w.onerror = () => reject(Object.assign(new Error("no socket"), { name: "no socket" })); })],
   ["Network", "RTCPeerConnection", pc],
-  ["Network", "RTCDataChannel", () => pc().createDataChannel("c")],
+  ["Network", "RTCDataChannel", () => { const conn = pc(); return own(conn.createDataChannel("c"), () => conn.close()); }],
   ["Network", "RTCCertificate", () => RTCPeerConnection.generateCertificate({ name: "ECDSA", namedCurve: "P-256" })],
   ["Network", "EventSource", () => new EventSource("data:text/event-stream,")],
 
@@ -76,7 +78,7 @@ export const TYPES = [
   ["Media", "CSSStyleSheet", () => new CSSStyleSheet()],
   ["Media", "GPUAdapter", async () => { const a = await navigator.gpu.requestAdapter(); if (!a) throw new Error("no adapter"); return a; }],
   ["Media", "GPUDevice", async () => { const a = await navigator.gpu.requestAdapter(); if (!a) throw new Error("no adapter"); return a.requestDevice(); }],
-  ["Media", "GPUBuffer", async () => { const a = await navigator.gpu.requestAdapter(); if (!a) throw new Error("no adapter"); return (await a.requestDevice()).createBuffer({ size: 8, usage: GPUBufferUsage.COPY_SRC }); }],
+  ["Media", "GPUBuffer", async () => { const a = await navigator.gpu.requestAdapter(); if (!a) throw new Error("no adapter"); const dev = await a.requestDevice(); return own(dev.createBuffer({ size: 8, usage: GPUBufferUsage.COPY_SRC }), () => dev.destroy()); }],
 
   // Keys, files and other grants
   ["Grants", "CryptoKey (cannot be exported)", () => crypto.subtle.generateKey({ name: "AES-GCM", length: 256 }, false, ["encrypt"])],
@@ -91,7 +93,22 @@ export const TYPES = [
 ];
 
 const tag = (v) => Object.prototype.toString.call(v).slice(8, -1);
-const release = (v) => { try { if (v && /^(VideoFrame|AudioData|ImageBitmap)$/.test(tag(v))) v.close(); if (v && tag(v) === "RTCPeerConnection") v.close(); if (v && /^(Worker)$/.test(tag(v))) v.terminate(); if (v && /^(WebSocket|EventSource|BroadcastChannel)$/.test(tag(v))) v.close(); } catch {} };
+const release = (v) => {
+  if (!v) return;
+  try {
+    const t = tag(v);
+    if (/^(VideoFrame|AudioData|ImageBitmap|RTCPeerConnection|RTCDataChannel|MessagePort|WebSocket|EventSource|BroadcastChannel)$/.test(t)) v.close();
+    else if (t === "Worker") v.terminate();
+    else if (t === "FileSystemWritableFileStream") { if (!v.locked) v.abort().catch(() => {}); }
+    else if (t === "MediaStream") { for (const tr of v.getTracks()) tr.stop(); }
+    else if (/^(MediaStreamTrack|CanvasCaptureMediaStreamTrack)$/.test(t) || typeof v.stop === "function" && "readyState" in v) v.stop();
+    else if (/^(GPUDevice|GPUBuffer)$/.test(t)) v.destroy();
+  } catch {}
+  try {
+    const cleanup = owners.get(v);
+    if (cleanup) { owners.delete(v); cleanup(); }
+  } catch {}
+};
 
 // Try one way of sending inside this page. Returns "yes", a loss, or the error name.
 const local = (value, transfer, lossy) => {
@@ -120,8 +137,12 @@ export async function tryOne([group, name, make, opts = {}], peer) {
         v = await fresh();
         const answer = await peer.post({ census: name, value: v }, how === "move" ? [v] : []);
         if (how === "copy") release(v);
+        else { const cleanup = owners.get(v); if (cleanup) { owners.delete(v); cleanup(); } }
         row.other = answer === null ? { ok: false, note: "no answer" } : answer.unreadable ? { ok: false, note: "messageerror on the other side" } : answer.threw ? { ok: false, note: answer.threw } : { ok: true, note: how === "move" ? "moved" : "copied" };
-      } catch (err) { row.other = { ok: false, note: err.name || String(err) }; }
+      } catch (err) {
+        release(v);
+        row.other = { ok: false, note: err.name || String(err) };
+      }
     }
   }
   return row;

@@ -2,7 +2,7 @@
 // primitives that are not there. Each returns { gap, text } like the others.
 
 const { sites } = await import("/_sites.js");
-const OTHER = sites.florist, otherHost = new URL(OTHER).host;
+const OTHER = sites.florist;
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 const MB = 1024 * 1024;
 
@@ -44,7 +44,10 @@ export const MORE = {
 
   // Post a lot into a port whose receiver is busy, and look for any sign of the queue.
   async backpressure() {
-    const w = new Worker(URL.createObjectURL(new Blob([`onmessage = (e) => { const port = e.ports[0]; let n = 0; port.onmessage = () => { n++; }; const until = Date.now() + 600; while (Date.now() < until); postMessage("free"); };`], { type: "text/javascript" })));
+    // Yield briefly so initial paint and lightweight probes run first without hitching the main thread.
+    await wait(60);
+    const url = URL.createObjectURL(new Blob([`onmessage = (e) => { const port = e.ports[0]; let n = 0; port.onmessage = () => { n++; }; const until = Date.now() + 600; while (Date.now() < until); postMessage("free"); };`], { type: "text/javascript" }));
+    const w = new Worker(url);
     const { port1, port2 } = new MessageChannel();
     w.postMessage(null, [port2]);
     await wait(50);
@@ -53,12 +56,14 @@ export const MORE = {
     for (let i = 0; i < count; i++) port1.postMessage(chunk);
     const took = Math.round(performance.now() - started);
     const signs = ["bufferedAmount", "desiredSize", "ready", "ondrain"].filter((k) => k in port1);
-    w.terminate(); port1.close();
+    w.terminate(); port1.close(); URL.revokeObjectURL(url);
     return { gap: signs.length === 0, text: `I posted ${count} messages of 64 KB (${Math.round(count * 64 / 1024)} MB) into a port whose receiver was busy. Every call returned at once, ${took} ms in all. ${signs.length ? "The port has: " + signs.join(", ") + "." : "The port has no bufferedAmount, no desiredSize and no drain event, so the sender cannot tell how much is waiting."}` };
   },
 
   // Write one large buffer into a stream that has been transferred, and see whether it was moved.
   async "stream-copy"() {
+    // Stagger slightly behind backpressure so the two large allocations don't collide on first paint.
+    await wait(120);
     const size = 32 * MB;
     const { readable, writable } = new TransformStream();
     const far = structuredClone(readable, { transfer: [readable] });
@@ -79,7 +84,7 @@ export const MORE = {
 
   // Waiting for a message without giving up the thread.
   async "sync-receive"() {
-    const isolated = !!self.crossOriginIsolated, shared = typeof SharedArrayBuffer !== "undefined";
+    const shared = typeof SharedArrayBuffer !== "undefined";
     return { gap: !shared, text: shared ? "This page is cross-origin isolated, so a worker here can block on shared memory while it waits." : "This page has no SharedArrayBuffer, because it is not cross-origin isolated. A worker started here has no way to stop and wait for an answer." };
   },
 };

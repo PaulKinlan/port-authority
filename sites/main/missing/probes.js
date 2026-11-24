@@ -124,7 +124,8 @@ export const PROBES = {
   // Give a worker one end of a channel, end the worker, and listen on the other end.
   async "close-event"() {
     const has = "onclose" in MessagePort.prototype;
-    const w = new Worker(URL.createObjectURL(new Blob(["onmessage = (e) => { self.kept = e.ports[0]; postMessage('holding'); };"], { type: "text/javascript" })));
+    const url = URL.createObjectURL(new Blob(["onmessage = (e) => { self.kept = e.ports[0]; postMessage('holding'); };"], { type: "text/javascript" }));
+    const w = new Worker(url);
     const { port1, port2 } = new MessageChannel();
     const holding = new Promise((r) => { w.onmessage = r; });
     w.postMessage(null, [port2]);
@@ -134,6 +135,7 @@ export const PROBES = {
     w.terminate();
     const ms = await Promise.race([fired, wait(1500).then(() => null)]);
     port1.close();
+    URL.revokeObjectURL(url);
     if (ms !== null) return { gap: false, text: `I gave a worker one end of a channel and ended the worker. A close event fired on my end ${ms} ms later.` };
     return { gap: true, text: `I gave a worker one end of a channel and ended the worker. Nothing fired on my end in 1.5 seconds. ${has ? "MessagePort has an onclose property here." : "MessagePort has no onclose property here."}` };
   },
@@ -154,21 +156,46 @@ import { MORE } from "/missing/more-probes.js";
 Object.assign(PROBES, MORE);
 
 // Fill every element that names a check. The canvas check waits for its button.
-export async function runAll(root = document) {
+export async function runAll(root = document, onProgress = () => {}) {
   const targets = [...root.querySelectorAll("[data-probe]")].filter((el) => !el.dataset.manual);
+  const uniqueIds = [...new Set(targets.map((el) => el.dataset.probe).filter((id) => PROBES[id]))];
+  const total = uniqueIds.length;
+  let done = 0;
   const cache = new Map();
+  for (const id of uniqueIds) {
+    cache.set(id, PROBES[id]()
+      .catch((err) => ({ gap: null, text: `The check could not run: ${err.message || err}.` }))
+      .then((res) => { onProgress(++done, total); return res; }));
+  }
   await Promise.all(targets.map(async (el) => {
     const id = el.dataset.probe;
-    if (!PROBES[id]) return;
-    if (!cache.has(id)) cache.set(id, PROBES[id]().catch((err) => ({ gap: null, text: `The check could not run: ${err.message || err}.` })));
+    if (!cache.has(id)) return;
     show(el, await cache.get(id));
   }));
   return Object.fromEntries(await Promise.all([...cache].map(async ([id, p]) => [id, await p])));
 }
 
+const BADGE_LABEL = { gap: "Gap", works: "Works", unknown: "Not tested" };
+
 export function show(el, result) {
-  el.dataset.state = result.gap === true ? "gap" : result.gap === false ? "works" : "unknown";
+  const state = result.gap === true ? "gap" : result.gap === false ? "works" : "unknown";
+  el.dataset.state = state;
   const short = el.dataset.short !== undefined;
-  el.textContent = short ? (result.gap === true ? "No" : result.gap === false ? "Yes" : "Could not check") : result.text;
-  if (short) el.title = result.text;
+  if (short) {
+    const answer = result.gap === true ? "No" : result.gap === false ? "Yes" : "Could not check";
+    el.title = result.text;
+    el.dataset.detail = result.text;
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "probe-detail-btn";
+    btn.setAttribute("aria-expanded", "false");
+    btn.setAttribute("aria-label", `${answer} — show full check result`);
+    btn.textContent = answer;
+    el.replaceChildren(btn);
+    return;
+  }
+  const badge = document.createElement("span");
+  badge.className = `badge badge-${state}`;
+  badge.textContent = BADGE_LABEL[state];
+  el.replaceChildren(badge, document.createTextNode(" " + result.text));
 }

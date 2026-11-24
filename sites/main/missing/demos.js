@@ -11,15 +11,16 @@ const host = (origin) => new URL(origin).host;
 
 // A frame on another origin playing `role`, holding the far end of the port returned.
 const peer = (iframe, role, origin = sites.florist) => new Promise((resolve, reject) => {
-  const timer = setTimeout(() => reject(new Error("the frame never loaded")), 8000);
-  addEventListener("message", function on(event) {
+  const timer = setTimeout(() => { removeEventListener("message", on); reject(new Error("the frame never loaded")); }, 8000);
+  function on(event) {
     if (event.source !== iframe.contentWindow || event.data?.missing !== "ready") return;
     removeEventListener("message", on);
     const { port1, port2 } = new MessageChannel();
     port1.addEventListener("message", function first(e) { if (!e.data?.ready) return; port1.removeEventListener("message", first); clearTimeout(timer); resolve({ port: port1, first: e }); });
     port1.start();
     iframe.contentWindow.postMessage({ missing: true }, origin, [port2]);
-  });
+  }
+  addEventListener("message", on);
   iframe.src = `${origin}/missing-peer.html?role=${role}`;
 });
 const next = (port, test, ms = 2500) => new Promise((resolve) => {
@@ -28,22 +29,51 @@ const next = (port, test, ms = 2500) => new Promise((resolve) => {
   port.addEventListener("message", on);
 });
 
-const fig = (title, inner, note = "") => `<figure>${inner}<figcaption><b>${title}</b><span data-note>${note}</span></figcaption></figure>`;
+const fig = (title, inner, note = "") => `<figure>${inner}<figcaption><b>${title}</b><span data-note aria-live="polite">${note}</span></figcaption></figure>`;
 const frameFig = (title, role, origin = sites.florist) => fig(title, `<iframe title="${title}" data-role="${role}"></iframe>`, `${origin}/missing-peer.html?role=${role}`);
+const BADGE_LABEL = { gap: "Gap", works: "Works" };
 const build = (root, figures, buttons) => {
-  root.innerHTML = `<div class="fx-grid">${figures.join("")}</div><ul class="lanes"></ul><p class="controls">${buttons.map(([id, label], i) => `<button data-do="${id}" disabled${i ? ' class="quiet"' : ""}>${label}</button>`).join(" ")}</p>`;
+  root.innerHTML = `<div class="fx-grid">${figures.join("")}</div><ul class="lanes" aria-live="polite"></ul><p class="controls">${buttons.map(([id, label], i) => `<button type="button" data-do="${id}" disabled${i ? ' class="quiet"' : ""}>${label}</button>`).join(" ")}</p>`;
   const lanes = root.querySelector(".lanes");
   // One line of result for each way of doing the job.
   const lane = (label) => {
     const li = document.createElement("li");
-    li.innerHTML = `<b>${label}</b> <span>Not started.</span>`;
+    li.innerHTML = `<span class="badge" hidden></span><b>${label}</b> <span class="lane-text">Not started.</span>`;
     lanes.append(li);
-    const span = li.querySelector("span");
-    return { set: (text, state) => { span.textContent = text; if (state) li.dataset.state = state; else delete li.dataset.state; }, li };
+    const badge = li.querySelector(".badge");
+    const span = li.querySelector(".lane-text");
+    return {
+      set: (text, state) => {
+        span.textContent = text;
+        if (state) {
+          li.dataset.state = state;
+          badge.className = `badge badge-${state}`;
+          badge.textContent = BADGE_LABEL[state] || state;
+          badge.hidden = false;
+        } else {
+          delete li.dataset.state;
+          badge.hidden = true;
+          badge.textContent = "";
+        }
+      },
+      text: () => span.textContent,
+      li,
+    };
   };
   // A button cannot be pressed until its handler is there. `hold` keeps it off for the demo to turn on.
   const held = new Set();
-  const on = (id, fn) => { const button = root.querySelector(`[data-do="${id}"]`); button.disabled = held.has(id); button.addEventListener("click", async (event) => { event.target.disabled = true; try { await fn(event.target); } catch (err) { lane("The demo").set(`could not run: ${err.message || err}.`, "gap"); } }); };
+  const on = (id, fn) => {
+    const button = root.querySelector(`[data-do="${id}"]`);
+    button.disabled = held.has(id);
+    button.addEventListener("click", async (event) => {
+      event.target.disabled = true;
+      try { await fn(event.target); }
+      catch (err) {
+        lane("The demo").set(`could not run: ${err.message || err}.`, "gap");
+        event.target.disabled = false;
+      }
+    });
+  };
   return { lane, on, hold: (id) => held.add(id), $: (s) => root.querySelector(s), frames: [...root.querySelectorAll("iframe")] };
 };
 const refused = (err) => `postMessage threw ${err.name}.`;
@@ -56,15 +86,17 @@ export const DEMOS = {
       fig("This page's file", `<pre data-file aria-label="The contents of the file"></pre>`, "note.txt, in this origin's private file system."),
       frameFig("An editor, given the file", "editor"),
       frameFig("An editor, given a copy of the text", "editor"),
-    ], [["start", "Open the file in both editors"], ["type", "Type in both editors and save"]]);
+    ], [["start", "Open the file in both editors"], ["type", "Type in both editors and save"], ["reset", "Reset"]]);
     const shown = ui.$("[data-file]");
     const dir = await navigator.storage.getDirectory();
     const handle = await dir.getFileHandle("note.txt", { create: true });
     const write = async (text) => { const w = await handle.createWritable(); await w.write(text); await w.close(); };
     const show = async () => { shown.textContent = await (await handle.getFile()).text(); };
-    await write("Buy tulips for Thursday."); await show();
+    const INITIAL = "Buy tulips for Thursday.";
+    await write(INITIAL); await show();
     const A = ui.lane("Send the file handle:"), B = ui.lane("Send a copy of the text:");
     ui.hold("type");
+    ui.hold("reset");
     let a, b, aOpen = false;
     ui.on("start", async () => {
       [a, b] = await Promise.all([peer(ui.frames[0], "editor"), peer(ui.frames[1], "editor")]);
@@ -76,8 +108,22 @@ export const DEMOS = {
       b.port.postMessage({ text: await (await handle.getFile()).text() });
       B.set("The editor has a copy of the text. It cannot save by itself.", "works");
       ui.$('[data-do="type"]').disabled = false;
+      ui.$('[data-do="reset"]').disabled = false;
     });
-    ui.on("type", async () => { if (aOpen) a.port.postMessage({ type: " And a card.", save: true }); b.port.postMessage({ type: " And a card.", save: true }); });
+    ui.on("type", async (btn) => {
+      if (aOpen) a.port.postMessage({ type: " And a card.", save: true });
+      b.port.postMessage({ type: " And a card.", save: true });
+      btn.disabled = false;
+    });
+    ui.on("reset", async () => {
+      try { a?.port.close(); b?.port.close(); } catch {}
+      a = b = null; aOpen = false;
+      ui.frames.forEach((f) => { f.src = "about:blank"; });
+      await write(INITIAL); await show();
+      A.set("Not started."); B.set("Not started.");
+      ui.$('[data-do="type"]').disabled = true;
+      ui.$('[data-do="start"]').disabled = false;
+    });
   },
 
   // ------------------------------------------------------------ one network connection, to a plug-in
@@ -90,15 +136,16 @@ export const DEMOS = {
     const far = ui.$("[data-far]");
     const A = ui.lane("Send the RTCDataChannel:"), B = ui.lane("Send a port, and copy every message across in this page:");
     ui.hold("close");
-    let pc1, pc2;
+    let pc1, pc2, a, b, bridgePort;
     ui.on("start", async () => {
+      far.textContent = "";
       pc1 = new RTCPeerConnection(); pc2 = new RTCPeerConnection();
       pc1.onicecandidate = (e) => e.candidate && pc2.addIceCandidate(e.candidate);
       pc2.onicecandidate = (e) => e.candidate && pc1.addIceCandidate(e.candidate);
       const counts = {};
       pc2.ondatachannel = ({ channel }) => { channel.onmessage = () => { counts[channel.label] = (counts[channel.label] || 0) + 1; far.textContent = Object.entries(counts).map(([k, n]) => `${n} messages on "${k}"`).join("\n"); if (channel.label === "by port") B.set(`${counts[channel.label]} messages from the plug-in have reached the far end. Each one passed through this page, which has to stay open.`, "works"); else A.set(`${counts[channel.label]} messages from the plug-in have reached the far end, with nothing passing through this page.`, "works"); }; };
       const direct = pc1.createDataChannel("direct"), bridged = pc1.createDataChannel("by port");
-      const [a, b] = await Promise.all([peer(ui.frames[0], "plugin"), peer(ui.frames[1], "plugin")]);
+      [a, b] = await Promise.all([peer(ui.frames[0], "plugin"), peer(ui.frames[1], "plugin")]);
       // The channel has to be sent before it is used, so it goes first.
       const heard = next(a.port, (d) => d.got || d.unreadable);
       try { a.port.postMessage({ channel: direct }, [direct]); const got = await heard; if (!got?.got) A.set(UNREADABLE + " The plug-in has no connection.", "gap"); }
@@ -107,12 +154,17 @@ export const DEMOS = {
       await pc2.setLocalDescription(await pc2.createAnswer()); await pc1.setRemoteDescription(pc2.localDescription);
       await new Promise((r) => { if (bridged.readyState === "open") r(); else bridged.onopen = r; });
       const { port1, port2 } = new MessageChannel();
+      bridgePort = port1;
       port1.onmessage = ({ data }) => { if (bridged.readyState === "open") bridged.send(data); };
       b.port.postMessage({ line: true }, [port2]);
       B.set("The plug-in has a port.", "works");
       ui.$('[data-do="close"]').disabled = false;
     });
-    ui.on("close", async () => { pc1.close(); pc2.close(); B.set(B.li.querySelector("span").textContent + " Closed: the plug-in can send no more.", "works"); });
+    ui.on("close", async () => {
+      try { bridgePort?.close(); a?.port.close(); b?.port.close(); pc1?.close(); pc2?.close(); } catch {}
+      B.set(B.text() + " Closed: the plug-in can send no more.", "works");
+      ui.$('[data-do="start"]').disabled = false;
+    });
   },
 
   // ------------------------------------------------------------ a canvas, to a painter on another origin
@@ -122,15 +174,26 @@ export const DEMOS = {
       frameFig("A painter, sending pictures", "painter"),
       fig("The canvas given away", `<canvas width="320" height="180" data-b aria-label="A canvas whose drawing surface was given to the painter"></canvas>`, "The painter draws on this canvas directly."),
       frameFig("A painter, given the canvas", "painter"),
-    ], [["start", "Ask for pictures"], ["give", "Give the canvas away"]]);
+    ], [["start", "Ask for pictures"], ["stop", "Stop pictures"], ["give", "Give the canvas away"]]);
     const A = ui.lane("Painter sends ImageBitmap pictures:"), B = ui.lane("Painter is given the canvas:");
-    B.set("Not started. In Chrome this ends the painter's frame, and the other painter with it.");
+    const floristHost = host(sites.florist);
+    B.set(`Not started. Warning: in Chrome this can end ${floristHost}'s process, which stops the other ${floristHost} frames on this page until you reload.`);
+    ui.hold("stop");
     let a, pictures = 0;
     ui.on("start", async () => {
+      pictures = 0;
       a = await peer(ui.frames[0], "painter");
       const ctx = ui.$("[data-a]").getContext("2d");
       a.port.addEventListener("message", ({ data }) => { if (!data.bitmap) return; ctx.drawImage(data.bitmap, 0, 0); data.bitmap.close(); if (++pictures % 15 === 1) A.set(`${pictures} pictures drawn. Each one crosses twice: painted there, then drawn again here.`, "works"); });
       a.port.postMessage({ pictures: true, width: 320, height: 180 });
+      ui.$('[data-do="stop"]').disabled = false;
+    });
+    ui.on("stop", async () => {
+      try { a?.port.close(); } catch {}
+      a = null;
+      ui.frames[0].src = "about:blank";
+      A.set("Stopped.");
+      ui.$('[data-do="start"]').disabled = false;
     });
     ui.on("give", async () => {
       const b = await peer(ui.frames[1], "painter");
@@ -151,23 +214,48 @@ export const DEMOS = {
   async track(root) {
     const ui = build(root, [
       fig("This page's video", `<canvas width="320" height="180" data-source aria-label="The video this page is making"></canvas>`, "A drawing, captured as a video track. No camera is in use."),
-    ], [["start", "Hand the track to a worker"]]);
+    ], [["start", "Hand the track to a worker"], ["stop", "Stop"]]);
     const source = ui.$("[data-source]"), ctx = source.getContext("2d");
-    const paint = (t) => { if (!root.isConnected) return; ctx.fillStyle = "#0f1c3f"; ctx.fillRect(0, 0, 320, 180); ctx.fillStyle = "#f5b700"; ctx.beginPath(); ctx.arc(160 + Math.cos(t / 500) * 110, 90 + Math.sin(t / 380) * 55, 22, 0, 7); ctx.fill(); requestAnimationFrame(paint); };
-    requestAnimationFrame(paint);
+    const drawFrame = (t) => {
+      ctx.fillStyle = "#0f1c3f"; ctx.fillRect(0, 0, 320, 180);
+      ctx.fillStyle = "#f5b700"; ctx.beginPath();
+      ctx.arc(160 + Math.cos(t / 500) * 110, 90 + Math.sin(t / 380) * 55, 22, 0, 7);
+      ctx.fill();
+    };
+    drawFrame(0);
+    let rafId = 0, worker = null, activeStream = null;
+    const stopLoop = () => { if (rafId) { cancelAnimationFrame(rafId); rafId = 0; } };
+    const paint = (t) => {
+      rafId = 0;
+      if (!root.isConnected || !worker) return;
+      drawFrame(t);
+      rafId = requestAnimationFrame(paint);
+    };
     const A = ui.lane("Send the MediaStreamTrack to a worker:"), B = ui.lane("Cut the track into frames here, and send the stream of frames:");
+    ui.hold("stop");
     ui.on("start", async () => {
-      const worker = new Worker("/missing/track-worker.js");
-      const track = source.captureStream(30).getVideoTracks()[0];
+      worker = new Worker("/missing/track-worker.js");
+      rafId = requestAnimationFrame(paint);
+      activeStream = source.captureStream(30);
+      const track = activeStream.getVideoTracks()[0];
       const heard = new Promise((r) => worker.addEventListener("message", ({ data }) => (data.got || data.unreadable) && r(data)));
       try { worker.postMessage({ track }, [track]); const got = await Promise.race([heard, wait(2000)]); A.set(got?.got ? "The worker has the track." : "postMessage did not throw, and the worker got no track.", got?.got ? "works" : "gap"); }
       catch (err) { A.set(refused(err) + " The worker has no track.", "gap"); }
+      ui.$('[data-do="stop"]').disabled = false;
       if (!("MediaStreamTrackProcessor" in self)) return B.set("This browser has no MediaStreamTrackProcessor on a page, so there is no way to do this here.", "gap");
-      const live = track.readyState === "live" ? track : source.captureStream(30).getVideoTracks()[0];
+      const live = track.readyState === "live" ? track : (activeStream = source.captureStream(30)).getVideoTracks()[0];
       const frames = new MediaStreamTrackProcessor({ track: live }).readable;
       worker.addEventListener("message", ({ data }) => { if (data.frames) B.set(`The worker has read ${data.frames} frames. It works inside one origin, with an API only Chromium has on a page. The frames still pass through this page's thread.`, "works"); });
       worker.postMessage({ frames }, [frames]);
       B.set("Sent.", "works");
+    });
+    ui.on("stop", async () => {
+      stopLoop();
+      try { worker?.terminate(); } catch {}
+      worker = null;
+      if (activeStream) { for (const t of activeStream.getTracks()) t.stop(); activeStream = null; }
+      A.set("Stopped."); B.set("Stopped.");
+      ui.$('[data-do="start"]').disabled = false;
     });
   },
 
@@ -175,11 +263,15 @@ export const DEMOS = {
   async identity(root) {
     const ui = build(root, [frameFig("A sender on one origin", "hello", sites.florist), frameFig("A sender on another origin", "hello", sites.library)], [["start", "Give each a port and listen"]]);
     const A = ui.lane("First message:"), B = ui.lane("Second message:"), C = ui.lane("What I can tell:");
-    ui.on("start", async () => {
+    let last = [];
+    ui.on("start", async (btn) => {
+      for (const p of last) { try { p.port.close(); } catch {} }
       const got = await Promise.all([peer(ui.frames[0], "hello", sites.florist), peer(ui.frames[1], "hello", sites.library)]);
+      last = got;
       const facts = got.map(({ first }) => `event.origin is ${JSON.stringify(first.origin)}, event.source is ${first.source === null ? "null" : "set"}.`);
       A.set(facts[0], "gap"); B.set(facts[1], "gap");
       C.set(`One came from ${host(sites.florist)} and the other from ${host(sites.library)}. I only know which because I made both ports myself and remember who I gave them to. If either had passed its port on, I would not know.`, "gap");
+      btn.disabled = false;
     });
   },
 
@@ -189,7 +281,7 @@ export const DEMOS = {
     const A = ui.lane("Cancel with an AbortSignal:"), B = ui.lane("Cancel with a port made for the purpose:");
     const body = `onmessage = ({ data, ports }) => { let stop = false, n = 0; if (ports[0]) ports[0].onmessage = () => { stop = true; }; if (data.signal) data.signal.onabort = () => { stop = true; }; const work = () => { if (stop) return postMessage({ stopped: n }); for (let i = 0; i < 2e5; i++) n++; setTimeout(work); }; work(); };`;
     const url = URL.createObjectURL(new Blob([body], { type: "text/javascript" }));
-    ui.on("start", async () => {
+    ui.on("start", async (btn) => {
       const w1 = new Worker(url), w2 = new Worker(url);
       const controller = new AbortController();
       try { w1.postMessage({ signal: controller.signal }); await wait(300); const t = performance.now(); const done = new Promise((r) => { w1.onmessage = r; }); controller.abort(); await done; A.set(`The worker stopped ${Math.round(performance.now() - t)} ms after abort().`, "works"); }
@@ -199,7 +291,8 @@ export const DEMOS = {
       const t = performance.now(); const done = new Promise((r) => { w2.onmessage = r; });
       port1.postMessage("stop"); await done;
       B.set(`The worker stopped ${Math.round(performance.now() - t)} ms after the message. It works, and it is a protocol every library invents for itself.`, "works");
-      w1.terminate(); w2.terminate();
+      w1.terminate(); w2.terminate(); port1.close();
+      btn.disabled = false;
     });
   },
 };

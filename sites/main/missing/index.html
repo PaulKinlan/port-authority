@@ -4,7 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>What the web platform is missing | Port Authority</title>
-  <meta name="description" content="A list of what I want browser vendors to build or fix around message ports, transferable objects and messaging between origins. Each item has the evidence, the reason, what it would let people build, and a check that runs in your browser.">
+  <meta name="description" content="Platform gaps around MessagePort, transferable objects, and cross-origin messaging — with evidence, specs, and live checks that run in your browser.">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <meta property="og:title" content="What the web platform is missing | Port Authority">
+  <meta property="og:description" content="Platform gaps around MessagePort, transferable objects, and cross-origin messaging — with evidence, specs, and live checks that run in your browser.">
+  <meta property="og:type" content="website">
+  <meta name="twitter:card" content="summary">
   <link rel="stylesheet" href="/base.css">
   <link rel="stylesheet" href="/patterns/patterns.css">
   <script src="/errors.js"></script>
@@ -14,6 +19,7 @@
     main h2 { font-size: var(--step-2); max-width: 26ch; }
     main p, main li { max-width: 68ch; }
     main ul { margin: 0; padding-left: 1.2rem; display: grid; gap: 0.45rem; }
+    .intro { padding-top: 1.5rem; }
     .toc { columns: 2 18rem; padding: 0; margin: 0; list-style: none; display: block; }
     .toc li { margin-bottom: 0.4rem; break-inside: avoid; max-width: none; }
     .toc ul { list-style: none; padding-left: 1rem; margin-top: 0.3rem; display: block; font-size: var(--step--1); }
@@ -21,14 +27,29 @@
     .item h3 { font-size: var(--step-1); max-width: 34ch; }
     .item h4 { font: 700 var(--step--1)/1.2 var(--body); letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); margin: 0.5rem 0 0; }
     .item p { margin: 0; }
-    .now { border-left: 5px solid var(--line); background: var(--panel); border-radius: 0 12px 12px 0; padding: 0.7rem 0.9rem; font-size: var(--step--1); max-width: 68ch; display: grid; gap: 0.35rem; }
+    .now { border-left: 5px solid var(--line); background: var(--panel); border-radius: 0 12px 12px 0; padding: 0.7rem 0.9rem; font-size: var(--step--1); max-width: 68ch; display: grid; gap: 0.4rem; }
     .now b { font-weight: 700; }
     .now [data-probe] { display: block; }
     .now [data-probe]::before { content: "Checking. "; color: var(--muted); }
     .now [data-probe][data-state]::before { content: none; }
     [data-probe][data-state="gap"] { box-shadow: -5px 0 0 var(--red); margin-left: -0.9rem; padding-left: 0.9rem; }
     [data-probe][data-state="works"] { box-shadow: -5px 0 0 var(--teal); margin-left: -0.9rem; padding-left: 0.9rem; }
+    .badge {
+      display: inline-block;
+      font: 700 0.72rem/1 var(--body);
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      padding: 0.2em 0.5em;
+      border-radius: 999px;
+      border: 1.5px solid currentColor;
+      vertical-align: 0.06em;
+      margin-right: 0.35em;
+    }
+    .badge-gap { color: var(--red); }
+    .badge-works { color: var(--teal); }
+    .badge-unknown { color: var(--muted); }
     .scroll { overflow-x: auto; }
+    .scroll:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; border-radius: 6px; }
     table { border-collapse: collapse; font-size: var(--step--1); min-width: 38rem; width: 100%; }
     th, td { text-align: left; padding: 0.55rem 0.8rem 0.55rem 0; border-top: 1px solid var(--line); vertical-align: top; }
     thead th { border-top: 0; font-family: var(--display); font-size: var(--step-0); }
@@ -38,6 +59,22 @@
     td[data-probe][data-state="gap"], td[data-probe][data-state="works"] { box-shadow: none; margin: 0; padding-left: 0; }
     td[data-probe][data-state="gap"] { color: var(--red); }
     td[data-probe][data-state="works"] { color: var(--teal); }
+    .probe-detail-btn, .cell-btn {
+      all: unset;
+      cursor: pointer;
+      color: inherit;
+      font: inherit;
+      text-decoration: underline dotted;
+      text-underline-offset: 0.2em;
+      border-radius: 4px;
+      padding: 0.1em 0.25em;
+      margin: -0.1em -0.25em;
+    }
+    .probe-detail-btn:hover, .cell-btn:hover { background: color-mix(in srgb, var(--ink) 8%, transparent); }
+    .probe-detail-btn:focus-visible, .cell-btn:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
+    .probe-detail-btn[aria-expanded="true"], .cell-btn[aria-expanded="true"] { background: color-mix(in srgb, var(--ink) 12%, transparent); }
+    .detail-box { border-left: 4px solid var(--ink); margin: 0; }
+    .back-top { margin-top: 0.5rem; }
     .fx { border: 2px solid var(--ink); border-radius: 18px; padding: clamp(.8rem, 3vw, 1.4rem); background: color-mix(in srgb, var(--yellow) 10%, var(--paper)); display: grid; gap: .9rem; grid-template-columns: minmax(0, 1fr); }
     .fx h4 { font: 800 var(--step-1)/1.1 var(--display); letter-spacing: -0.01em; text-transform: none; color: inherit; margin: 0; }
     .fx-grid { display: grid; gap: .9rem; grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr)); }
@@ -66,17 +103,20 @@
   </style>
 </head>
 <body>
+  <a class="skip-link" href="#main">Skip to content</a>
   <div class="wrap">
     <header class="site-bar">
       <a class="wordmark" href="/">Port Authority</a>
-      <nav><a href="/">Experiments</a><a href="/guide/">The guide</a><a href="/patterns/">Port patterns</a><a href="/lab/">The lab</a><a href="/missing/" aria-current="page">What is missing</a><a href="/reading/">Further reading</a><a href="/hub/">Your hub</a></nav>
+      <nav aria-label="Primary"><a href="/">Experiments</a><a href="/guide/">The guide</a><a href="/patterns/">Port patterns</a><a href="/comlink/">Comlink today</a><a href="/ai-router/">AI router</a><a href="/lab/">The lab</a><a href="/missing/" aria-current="page">What is missing</a><a href="/reading/">Further reading</a><a href="/hub/">Your hub</a></nav>
     </header>
-    <div class="stack" style="padding-block:2.5rem 1.5rem; --gap:1.1rem">
-      <h1 style="font-size:var(--step-3)">What the web platform is missing</h1>
-      <p>This is my list of things I want browser vendors to build or fix. All of it came out of building this site. For each one I say what is missing, why I want it, and link to any specification issue, bug or proposal I found.</p>
-      <p>Where a gap can be tested, this page tests it in your browser. A red bar means the gap is there. A green bar means your browser already does it.</p>
-      <p id="tally" class="small" aria-live="polite">The checks are running.</p>
-      <ul class="toc">
+    <main id="main">
+      <div class="stack intro" style="--gap:1.1rem">
+        <h1 style="font-size:var(--step-3)">What the web platform is missing</h1>
+        <p>This is my list of things I want browser vendors to build or fix. All of it came out of building this site. For each one I say what is missing, why I want it, and link to any specification issue, bug or proposal I found.</p>
+        <p>Where a gap can be tested, this page tests it in your browser. Each check shows a status badge and coloured bar: a red <strong>Gap</strong> badge means the gap is there, and a teal <strong>Works</strong> badge means your browser already does it.</p>
+        <p id="tally" class="small" aria-live="polite">The checks are running.</p>
+        <nav id="contents" aria-label="Table of contents">
+          <ul class="toc">
         <li><a href="#argument">Why this matters to me</a></li>
         <li><a href="#data">1. Rich data cannot cross origins</a>
           <ul>
@@ -136,9 +176,9 @@
         <li><a href="#census">Every kind of object I tried</a></li>
         <li><a href="#not">What I am not asking for</a></li>
         <li><a href="#how">How this list was made</a></li>
-      </ul>
-    </div>
-    <main>
+          </ul>
+        </nav>
+      </div>
       <section id="argument">
         <h2>Why this matters to me</h2>
         <p>There are two ways to use someone else's code on my page. I can load their library into my origin, where it gets everything my page has: the document, storage, cookies and the network with my users' sign-in. Or I can put it in a frame on their origin, where it can touch nothing of mine. That is what I want, but for many jobs I can't pass it the data it needs because the type doesn't cross origins.</p>
@@ -209,19 +249,20 @@
         <div class="item" id="others">
           <h3>File handles, data channels and media sources stop at the origin boundary</h3>
           <p>Each of these works inside one origin and fails to reach a frame on another.</p>
-          <div class="scroll">
-            <table>
-              <thead><tr><th>Type</th><th>Reaches another origin in your browser</th><th>What it would enable if it did</th></tr></thead>
+          <div class="scroll" tabindex="0">
+            <table id="others-table">
+              <thead><tr><th scope="col">Type</th><th scope="col">Reaches another origin in your browser</th><th scope="col">What it would enable if it did</th></tr></thead>
               <tbody>
-                <tr><th><code>FileSystemFileHandle</code></th><td data-probe="filehandle-other" data-short></td><td>An editor on another origin that opens the one file I picked and saves it in place. It never sees the folder, and nothing is uploaded.</td></tr>
-                <tr><th><code>RTCDataChannel</code></th><td data-probe="datachannel-other" data-short></td><td>A plug-in in a frame with no network access that can talk on one connection I opened, until I close it.</td></tr>
-                <tr><th><code>MediaSourceHandle</code></th><td data-probe="mediasource-other" data-short></td><td>A player engine on another origin that feeds a video element in my page.</td></tr>
-                <tr><th><code>EncodedVideoChunk</code></th><td data-probe="chunk-other" data-short></td><td>A decoder or a transcoder as a service on another origin.</td></tr>
-                <tr><th><code>ReadableStream</code>, for comparison</th><td data-probe="stream-other" data-short></td><td>This one crosses, and it is what makes <a href="/patterns/roundtrip/">a transform on another origin</a> possible.</td></tr>
+                <tr><th scope="row"><code>FileSystemFileHandle</code></th><td data-probe="filehandle-other" data-short></td><td>An editor on another origin that opens the one file I picked and saves it in place. It never sees the folder, and nothing is uploaded.</td></tr>
+                <tr><th scope="row"><code>RTCDataChannel</code></th><td data-probe="datachannel-other" data-short></td><td>A plug-in in a frame with no network access that can talk on one connection I opened, until I close it.</td></tr>
+                <tr><th scope="row"><code>MediaSourceHandle</code></th><td data-probe="mediasource-other" data-short></td><td>A player engine on another origin that feeds a video element in my page.</td></tr>
+                <tr><th scope="row"><code>EncodedVideoChunk</code></th><td data-probe="chunk-other" data-short></td><td>A decoder or a transcoder as a service on another origin.</td></tr>
+                <tr><th scope="row"><code>ReadableStream</code>, for comparison</th><td data-probe="stream-other" data-short></td><td>This one crosses, and it is what makes <a href="/patterns/roundtrip/">a transform on another origin</a> possible.</td></tr>
               </tbody>
             </table>
           </div>
-          <p class="small muted">Hover over an answer for the full result. The third column is to the right on a small screen.</p>
+          <p class="small muted">Select any answer to read the full result from your browser. The third column is to the right on a small screen.</p>
+          <p class="small panel detail-box" id="others-detail" aria-live="polite" hidden></p>
           <div class="fx demo" id="demo-editor">
             <h4>Running: one file, opened by an editor on another origin</h4>
             <p>Two copies of an editor run in frames on another origin. One is sent the handle for a file in this page's private file system. The other is sent a copy of the text and has to ask this page to do the saving.</p>
@@ -259,6 +300,7 @@
             <li>WebKit has a bug for the same case under its site isolation work: <a href="https://bugs.webkit.org/show_bug.cgi?id=325214">WebKit 325214</a>. The Electron report above describes the frame crashing too.</li>
           </ul>
         </div>
+        <p class="small back-top"><a href="#contents">Back to contents ↑</a></p>
       </section>
 
       <section id="silent">
@@ -298,6 +340,7 @@
             <li><a href="https://chromestatus.com/feature/5086799659794432">Chrome's status page</a> still says "Enabled by default". The check above shows what your browser does.</li>
           </ul>
         </div>
+        <p class="small back-top"><a href="#contents">Back to contents ↑</a></p>
       </section>
 
       <section id="permissions">
@@ -355,6 +398,7 @@
           </div>
           <p>I want to cancel work on another thread or origin with the same signal I'd pass to <code>fetch</code>. Today each library builds its own, as <a href="/comlink/">Hawser</a> does with a port. The lab shows it refused everywhere, and there is an open issue from 2021: <a href="https://github.com/whatwg/dom/issues/948">whatwg/dom #948</a>.</p>
         </div>
+        <p class="small back-top"><a href="#contents">Back to contents ↑</a></p>
       </section>
 
       <section id="reach">
@@ -380,6 +424,7 @@
           <p>To get a <code>SharedArrayBuffer</code> a page has to be cross-origin isolated. The headers that do that also cut it off from any window on another origin that it opens, so it can't hand that window a port. <a href="/isolated/">The isolated room</a> shows what changes.</p>
           <p>Chrome has had an answer on desktop since version 137: <a href="https://developer.chrome.com/blog/document-isolation-policy">Document-Isolation-Policy</a>, which isolates one document and leaves its popups reachable. I want it in Chrome on Android, Safari and Firefox.</p>
         </div>
+        <p class="small back-top"><a href="#contents">Back to contents ↑</a></p>
       </section>
 
       <section id="unsendable">
@@ -441,6 +486,7 @@
           <div class="now"><b>In your browser, now</b><span data-probe="class-copy"></span><span data-probe="error-copy"></span></div>
           <p><a href="/comlink/">Hawser</a> on this site has to pack and rebuild errors itself. I'd like a library type (a money amount, a date range, a handle that wraps a port) to cross a port as itself, and a type of my own that can be moved so the sender's copy stops working, the way a buffer's does. There is an open issue from 2021: <a href="https://github.com/whatwg/html/issues/7428">whatwg/html #7428</a>.</p>
         </div>
+        <p class="small back-top"><a href="#contents">Back to contents ↑</a></p>
       </section>
 
       <section id="primitives">
@@ -459,7 +505,7 @@
           <h3>A worker cannot be started with less than my page has</h3>
           <p>A frame can be sandboxed: no origin, no storage and, with a content security policy, no network. A worker can't. It always gets the origin, storage and network access of the page that started it.</p>
           <p>Every demo on this site that says "this code has no network access" runs in a sandboxed frame because there is no other way. In current Chrome each of those frames costs a process, and it is the kind of frame that <a href="#frames">video frames do not reach</a>.</p>
-          <p>I'd like options on <code>new Worker()</code> for an opaque origin and no network, so I can run code I didn't write (a spreadsheet formula, a plug-in, code written by an AI model) on data I must not leak. <a href="https://github.com/tc39/proposal-shadowrealm">ShadowRealm</a>, at stage 2.7 in TC39, is related. It runs on the same thread and takes only plain values across its boundary.</p>
+          <p>I'd like options on <code>new Worker()</code> for an opaque origin (a unique throwaway origin that matches nothing else, not even your own site) and no network, so I can run code I didn't write (a spreadsheet formula, a plug-in, code written by an AI model) on data I must not leak. <a href="https://github.com/tc39/proposal-shadowrealm">ShadowRealm</a>, at stage 2.7 in TC39, is related. It runs on the same thread and takes only plain values across its boundary.</p>
         </div>
 
         <div class="item" id="pressure">
@@ -494,14 +540,15 @@
           <p>Bytes can be moved or shared. A JavaScript object can't: a large tree of objects is copied in full each time it is posted, on the sender's thread. I'd like a document model, a scene or a parsed file that the page and its workers all read with no copy on every change.</p>
           <p>TC39 has a proposal at stage 2 for objects of fixed shape that can be shared between threads without copying: <a href="https://github.com/tc39/proposal-structs">JavaScript structs</a>.</p>
         </div>
+        <p class="small back-top"><a href="#contents">Back to contents ↑</a></p>
       </section>
 
       <section id="usecases">
         <h2>What cannot be built today</h2>
         <p>The same list as things I want to build, what stops each one, and the nearest thing that works.</p>
-        <div class="scroll">
+        <div class="scroll" tabindex="0">
           <table class="usecases">
-            <thead><tr><th>I want to</th><th>What stops it</th><th>The nearest thing today</th></tr></thead>
+            <thead><tr><th scope="col">I want to</th><th scope="col">What stops it</th><th scope="col">The nearest thing today</th></tr></thead>
             <tbody>
               <tr><td>Use webcam effects from another origin</td><td><a href="#frames">Video frames stop at the origin</a></td><td>Send bitmaps, and lose what a frame carries</td></tr>
               <tr><td>Get live captions from a service with no microphone access</td><td><a href="#frames">Audio data stops at the origin</a></td><td>Copy samples into buffers</td></tr>
@@ -522,13 +569,16 @@
             </tbody>
           </table>
         </div>
+        <p class="small back-top"><a href="#contents">Back to contents ↑</a></p>
       </section>
 
       <section id="census">
         <h2>Every kind of object I tried</h2>
         <p>For each one: can it be copied, can it be moved, and does it reach a frame on another origin. The answers come from your browser. <a href="/lab/">The lab</a> tests fewer kinds in thirteen places, and checks that each one still works where it lands.</p>
-        <p><button id="run-census">Try them all in this browser</button> <span id="census-note" class="small muted"></span></p>
-        <div class="scroll"><table id="census-table" hidden><thead><tr><th>Kind</th><th>Copied</th><th>Moved</th><th>To another origin</th></tr></thead><tbody></tbody></table></div>
+        <p><button id="run-census" type="button">Try them all in this browser</button> <span id="census-note" class="small muted" aria-live="polite"></span></p>
+        <p class="small panel detail-box" id="census-detail" aria-live="polite" hidden></p>
+        <div class="scroll" tabindex="0"><table id="census-table" hidden><thead><tr><th scope="col">Kind</th><th scope="col">Copied</th><th scope="col">Moved</th><th scope="col">To another origin</th></tr></thead><tbody></tbody></table></div>
+        <p class="small back-top"><a href="#contents">Back to contents ↑</a></p>
       </section>
 
       <section id="not">
@@ -542,11 +592,12 @@
 
       <section id="how">
         <h2>How this list was made</h2>
-        <p>Every item comes from something I built on this site that didn't work or needed a workaround. The measurements are from <a href="/lab/">the lab</a>: Chromium 157 while building, and Chrome 160 on a Mac in the reports people have sent. I have no results from Safari or Firefox yet, so if you run the lab in one of them it will make this list more accurate.</p>
+        <p>Every item comes from something I built on this site that didn't work or needed a workaround. The baseline measurements are from <a href="/lab/">the lab</a> in Chromium and Chrome. See <a href="/lab/results/">the live lab results</a> for what other browsers have reported, or <a href="/lab/">run the lab</a> in yours to add to them.</p>
         <p>If something here is wrong, already fixed, or already proposed somewhere I didn't find, please <a href="https://github.com/PaulKinlan/port-authority/issues">open an issue</a>. There is more background in <a href="/reading/">Further reading</a>, under <a href="/reading/#history">how the standards changed</a> and <a href="/reading/#specs">the specifications</a>.</p>
+        <p class="small back-top"><a href="#contents">Back to contents ↑</a></p>
       </section>
     </main>
-    <footer class="small muted" style="padding-block:2rem 4rem">Port Authority is a working name. By <a href="https://paul.kinlan.me">Paul Kinlan</a>.</footer>
+    <footer class="small muted" style="padding-block:2rem 4rem">Port Authority, by <a href="https://paul.kinlan.me">Paul Kinlan</a>.</footer>
   </div>
   <script type="module">
     import { runAll, show, PROBES, otherHost } from "/missing/probes.js";
@@ -556,8 +607,33 @@
     import { all } from "/patterns/all.js";
     import { built } from "/patterns/built.js";
     import { bites } from "/patterns/bites.js";
+    const esc = (t) => String(t ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
     mount(document.getElementById("effects-demo"));
     mountAll();
+
+    // Tap/click-accessible details for the short-answer table in #others.
+    const othersTable = document.getElementById("others-table");
+    const othersDetail = document.getElementById("others-detail");
+    let activeOthersBtn = null;
+    othersTable.addEventListener("click", (event) => {
+      const btn = event.target.closest(".probe-detail-btn");
+      if (!btn) return;
+      const td = btn.closest("td[data-probe]");
+      const tr = btn.closest("tr");
+      const typeName = tr?.querySelector("th")?.textContent?.trim() || "Check";
+      const same = activeOthersBtn === btn;
+      if (activeOthersBtn) activeOthersBtn.setAttribute("aria-expanded", "false");
+      if (same) {
+        activeOthersBtn = null;
+        othersDetail.hidden = true;
+        return;
+      }
+      activeOthersBtn = btn;
+      btn.setAttribute("aria-expanded", "true");
+      othersDetail.hidden = false;
+      othersDetail.innerHTML = `<strong>${esc(typeName)}:</strong> ${esc(td?.dataset.detail || td?.title || "No details available.")}`;
+    });
+
     // Demos that already exist elsewhere on the site, running here beside the gap they show.
     const find = (id) => all.find((d) => d.id === id) || built.find((d) => d.id === id) || bites.find((d) => d.id === id);
     for (const set of document.querySelectorAll(".live-set")) {
@@ -573,35 +649,95 @@
         new IntersectionObserver((entries, io) => { if (entries[0].isIntersecting) { io.disconnect(); mountStage(el, demo, undefined, { autoplay: false }); } }, { rootMargin: "300px" }).observe(el);
       }
     }
+
+    // Tap/click-accessible details for the census table.
+    const censusTable = document.getElementById("census-table");
+    const censusDetail = document.getElementById("census-detail");
+    let activeCensusBtn = null;
+    censusTable.addEventListener("click", (event) => {
+      const btn = event.target.closest(".cell-btn");
+      if (!btn) return;
+      const same = activeCensusBtn === btn;
+      if (activeCensusBtn) activeCensusBtn.setAttribute("aria-expanded", "false");
+      if (same) {
+        activeCensusBtn = null;
+        censusDetail.hidden = true;
+        return;
+      }
+      activeCensusBtn = btn;
+      btn.setAttribute("aria-expanded", "true");
+      censusDetail.hidden = false;
+      censusDetail.innerHTML = `<strong>${esc(btn.dataset.kind)} (${esc(btn.dataset.col)}):</strong> ${esc(btn.dataset.detail)}`;
+    });
+
     // The wide table, on a click.
     document.getElementById("run-census").addEventListener("click", async (event) => {
-      event.target.disabled = true;
-      const { runCensus, TYPES } = await import("/missing/census.js");
-      const { sites } = await import("/_sites.js");
-      const table = document.getElementById("census-table"), body = table.tBodies[0], note = document.getElementById("census-note");
-      table.hidden = false;
-      const frame = Object.assign(document.createElement("iframe"), { hidden: true });
-      const ready = new Promise((r) => addEventListener("message", function on(e) { if (e.source === frame.contentWindow && e.data?.missing === "ready") { removeEventListener("message", on); r(); } }));
-      frame.src = sites.florist + "/missing-peer.html?role=census"; document.body.append(frame);
-      await ready;
-      const { port1, port2 } = new MessageChannel();
-      const hello = new Promise((r) => { port1.onmessage = r; });
-      frame.contentWindow.postMessage({ missing: true }, sites.florist, [port2]); await hello;
-      const peer = { post: (message, transfer) => new Promise((resolve) => {
-        const timer = setTimeout(() => resolve(null), 2000);
-        port1.onmessage = (e) => { clearTimeout(timer); resolve(e.data); };
-        try { port1.postMessage(message, transfer); } catch (err) { clearTimeout(timer); resolve({ threw: err.name }); }
-      }) };
-      const cell = (c) => !c ? "<td></td>" : c.ok === true ? `<td class="yes">Yes</td>` : c.ok === "lossy" ? `<td class="no">Yes, but ${c.note}</td>` : `<td class="no" title="${c.note}">No</td>`;
-      let group = "", n = 0;
-      const NAMES = { Messaging: "Messaging and plain objects", Memory: "Bytes and memory", Streams: "Streams", Network: "Network", Media: "Pictures, video and sound", Grants: "Keys, files and other grants" };
-      await runCensus(peer, (row) => {
-        if (row.group !== group) { group = row.group; body.insertAdjacentHTML("beforeend", `<tr class="group"><th colspan="4">${NAMES[group]}</th></tr>`); }
-        body.insertAdjacentHTML("beforeend", row.made ? `<tr><th>${row.name}</th>${cell(row.copy)}${cell(row.move)}${cell(row.other)}</tr>` : `<tr><th>${row.name}</th><td colspan="3" class="muted">This browser could not make one (${row.note}).</td></tr>`);
-        note.textContent = `${++n} of ${TYPES.length} tried.`;
-      });
-      frame.remove();
-      table.dataset.done = "1";
+      const btn = event.target;
+      btn.disabled = true;
+      const table = censusTable, body = table.tBodies[0], note = document.getElementById("census-note");
+      body.innerHTML = "";
+      delete table.dataset.done;
+      censusDetail.hidden = true;
+      activeCensusBtn = null;
+      note.textContent = "Connecting to the cross-origin frame…";
+      let frame, port1;
+      try {
+        const { runCensus, TYPES } = await import("/missing/census.js");
+        const { sites } = await import("/_sites.js");
+        frame = Object.assign(document.createElement("iframe"), { hidden: true });
+        const ready = new Promise((resolve, reject) => {
+          const timer = setTimeout(() => { removeEventListener("message", on); reject(new Error("the cross-origin frame did not respond in time")); }, 8000);
+          function on(e) {
+            if (e.source === frame.contentWindow && e.data?.missing === "ready") {
+              clearTimeout(timer); removeEventListener("message", on); resolve();
+            }
+          }
+          addEventListener("message", on);
+        });
+        frame.src = sites.florist + "/missing-peer.html?role=census";
+        document.body.append(frame);
+        await ready;
+
+        const ch = new MessageChannel();
+        port1 = ch.port1;
+        const hello = new Promise((resolve, reject) => {
+          const timer = setTimeout(() => reject(new Error("the cross-origin frame did not answer on its port")), 6000);
+          port1.onmessage = () => { clearTimeout(timer); resolve(); };
+        });
+        frame.contentWindow.postMessage({ missing: true }, sites.florist, [ch.port2]);
+        await hello;
+
+        table.hidden = false;
+        const peer = { post: (message, transfer) => new Promise((resolve) => {
+          const timer = setTimeout(() => resolve(null), 2000);
+          port1.onmessage = (e) => { clearTimeout(timer); resolve(e.data); };
+          try { port1.postMessage(message, transfer); } catch (err) { clearTimeout(timer); resolve({ threw: err.name }); }
+        }) };
+        const cell = (c, kind, col) => !c
+          ? "<td></td>"
+          : c.ok === true
+            ? `<td class="yes">Yes</td>`
+            : c.ok === "lossy"
+              ? `<td class="no">Yes, but ${esc(c.note)}</td>`
+              : `<td class="no" title="${esc(c.note)}"><button type="button" class="cell-btn" aria-expanded="false" data-kind="${esc(kind)}" data-col="${esc(col)}" data-detail="${esc(c.note)}" aria-label="No: ${esc(c.note)}">No</button></td>`;
+        let group = "", n = 0;
+        const NAMES = { Messaging: "Messaging and plain objects", Memory: "Bytes and memory", Streams: "Streams", Network: "Network", Media: "Pictures, video and sound", Grants: "Keys, files and other grants" };
+        await runCensus(peer, (row) => {
+          if (row.group !== group) { group = row.group; body.insertAdjacentHTML("beforeend", `<tr class="group"><th colspan="4" scope="colgroup">${esc(NAMES[group] || group)}</th></tr>`); }
+          body.insertAdjacentHTML("beforeend", row.made
+            ? `<tr><th scope="row">${esc(row.name)}</th>${cell(row.copy, row.name, "Copied")}${cell(row.move, row.name, "Moved")}${cell(row.other, row.name, "To another origin")}</tr>`
+            : `<tr><th scope="row">${esc(row.name)}</th><td colspan="3" class="muted">This browser could not make one (${esc(row.note)}).</td></tr>`);
+          note.textContent = `${++n} of ${TYPES.length} tried. Select any "No" to see why.`;
+        });
+        table.dataset.done = "1";
+        btn.textContent = "Run them all again";
+      } catch (err) {
+        note.textContent = `Could not run the full table (${err.message || err}). Try again.`;
+      } finally {
+        try { port1?.close(); } catch {}
+        frame?.remove();
+        btn.disabled = false;
+      }
     });
     for (const el of document.querySelectorAll("[data-host]")) el.textContent = otherHost;
     const tally = document.getElementById("tally");
@@ -612,7 +748,9 @@
       const n = (s) => states.filter((x) => x === s).length;
       tally.textContent = `This page ran ${states.length} checks in your browser. ${n("gap")} found the gap described. ${n("works")} found that your browser already does it. ${n("unknown") ? n("unknown") + " could not be run here." : ""}`;
     };
-    runAll().then(count, (err) => { tally.textContent = "The checks could not run: " + err.message; });
+    runAll(document, (done, total) => {
+      tally.textContent = `Running checks in your browser (${done} of ${total})…`;
+    }).then(count, (err) => { tally.textContent = "The checks could not run: " + err.message; });
     document.getElementById("run-canvas").addEventListener("click", async (event) => {
       event.target.disabled = true;
       const out = document.querySelector('[data-probe="canvas-other"]');

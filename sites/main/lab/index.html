@@ -3,90 +3,166 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>The lab | Port Authority</title>
-  <meta name="description" content="A live test of what can be sent with postMessage: every kind of object, to every kind of destination, in your browser.">
+  <title>The postMessage compatibility lab | Port Authority</title>
+  <meta name="description" content="Run ~585 live postMessage compatibility tests in your browser across workers, frames, service workers, BroadcastChannel, IndexedDB, and more.">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <meta property="og:title" content="The postMessage compatibility lab | Port Authority">
+  <meta property="og:description" content="Run ~585 live postMessage compatibility tests in your browser across workers, frames, service workers, BroadcastChannel, IndexedDB, and more.">
+  <meta property="og:type" content="website">
+  <meta name="twitter:card" content="summary">
   <link rel="stylesheet" href="/base.css">
   <link rel="stylesheet" href="/lab/lab.css">
   <script src="/errors.js"></script>
 </head>
 <body>
+  <a class="skip-link" href="#main">Skip to content</a>
   <div class="wrap">
     <header class="site-bar">
       <a class="wordmark" href="/">Port Authority</a>
-      <nav><a href="/guide/">The guide</a><a href="/">Experiments</a><a href="/patterns/">Port patterns</a><a href="/lab/" aria-current="page">The lab</a><a href="/lab/results/">Results</a><a href="/missing/">What is missing</a><a href="/reading/">Further reading</a><a href="/hub/">Your hub</a></nav>
+      <nav aria-label="Primary"><a href="/">Experiments</a><a href="/guide/">The guide</a><a href="/patterns/">Port patterns</a><a href="/comlink/">Comlink today</a><a href="/ai-router/">AI router</a><a href="/lab/" aria-current="page">The lab</a><a href="/missing/">What is missing</a><a href="/reading/">Further reading</a><a href="/hub/">Your hub</a></nav>
     </header>
-    <div class="stack" style="padding-block:2.5rem 1.5rem; --gap:1.1rem">
-      <h1 style="font-size:var(--step-3)">The lab</h1>
-      <p>This sends every kind of object that might go through <code>postMessage</code> to every place a message can go, in your browser. Each test also uses the object where it lands, because some things arrive and then don't work.</p>
-      <p class="small muted" id="mode"></p>
-    </div>
-    <main class="stack" style="--gap:1.2rem; padding-bottom:3rem">
-      <div class="facts" id="facts"></div>
-      <ul class="legend" id="legend"></ul>
-      <div class="matrix-wrap"><table class="matrix" id="matrix"><caption class="small muted" style="caption-side:bottom;padding:.5rem;text-align:left">Press any mark to see what happened in that test.</caption></table></div>
-      <p class="detail panel" id="detail" aria-live="polite">Running.</p>
+    <main id="main" class="stack" style="--gap:1.25rem; padding-block:2rem 3rem">
+      <div class="stack" style="--gap:0.9rem">
+        <h1 style="font-size:var(--step-3)">The lab</h1>
+        <p>This sends every kind of object that might go through <code>postMessage</code> to every place a message can go, in your browser. Each test also uses the object where it lands, because some things arrive and then don't work.</p>
+        <p class="small muted" id="mode"></p>
+        <p class="sub-links"><a href="/lab/results/">See what every browser has reported</a> <a id="other-mode-top" href="/isolated/lab/">Switch to the isolated lab</a></p>
+      </div>
+
+      <div class="callout-warn" id="died" hidden role="alert"></div>
+
+      <section class="panel launch-bar" aria-label="Run the lab">
+        <div class="launch-actions">
+          <button id="start" class="accent" type="button">Run the lab in this browser</button>
+          <label class="share-toggle"><input type="checkbox" id="share" checked> Share results with the public table</label>
+          <span id="progress" class="small muted"></span>
+        </div>
+        <p class="small muted" id="sent">When sharing is checked, finishing a run submits your browser's name, version, operating system, isolation status, the test matrix below, and any errors caught during the run to the <a href="/lab/results/">public results table</a>. No IP address, full user-agent string, or identifier is kept. Uncheck to keep the run private to this browser.</p>
+      </section>
+
+      <div class="facts" id="facts">
+        <div><strong id="fact-browser">…</strong><span class="small muted" id="fact-platform">Checking browser</span></div>
+        <div><strong id="fact-total">0</strong><span class="small muted" id="fact-time">ready to run</span></div>
+        <div><strong id="fact-works">–</strong><span class="small muted">arrived and worked</span></div>
+        <div><strong id="fact-broken">–</strong><span class="small muted">sent, then went wrong</span></div>
+      </div>
+
+      <ul class="legend" id="legend" aria-label="Result legend"></ul>
+      <div class="matrix-wrap" tabindex="0" aria-label="Compatibility test matrix"><table class="matrix" id="matrix"><caption class="small muted" style="caption-side:bottom;padding:.5rem;text-align:left">Press any mark to see what happened in that test.</caption></table></div>
+      <p class="detail panel" id="detail" aria-live="polite">Press "Run the lab in this browser" to start. Press any cell mark after running to inspect what happened.</p>
+
       <section class="problems panel" id="problems" hidden aria-live="polite">
         <h2 style="font-size:var(--step-1);margin:0 0 .4rem">Errors during this run</h2>
         <ul id="problem-list"></ul>
         <p class="small muted" style="margin:.5rem 0 0">These are errors the page itself could catch: uncaught errors, rejected promises, places that could not be set up and receivers that stopped answering. Warnings that a browser prints only to its own console cannot be read by a page, so they cannot be listed here.</p>
       </section>
-      <div id="pop" popover class="cell-pop"></div>
+
+      <div id="pop" popover class="cell-pop" role="dialog" aria-label="Test result details"></div>
+
       <p class="pick">
-        <button class="tiny quiet" id="again">Run it again</button>
-        <button class="tiny quiet" id="popup">Also test a popup on another origin</button>
-        <a class="button tiny quiet" id="other-mode" style="font-size:var(--step--1);padding:.5em .8em;border-width:1.5px"></a>
+        <button class="tiny quiet" id="again" type="button" hidden>Run it again</button>
+        <button class="tiny quiet" id="popup" type="button" disabled>Also test a popup on another origin</button>
+        <a class="button tiny quiet" id="other-mode" href="/isolated/lab/"></a>
+        <a class="button tiny quiet" href="/lab/results/">View all browser results</a>
       </p>
-      <p class="small muted" id="sent">Your results are sent to this site when the run ends: the browser's name, version and operating system, the table above, and any errors. No address and no identifier is kept. <a href="/lab/results/">See what every browser has reported.</a></p>
     </main>
+    <footer class="small muted" style="padding-block:2rem 4rem">Port Authority, by <a href="https://paul.kinlan.me">Paul Kinlan</a>.</footer>
   </div>
   <script type="module">
     import { KINDS, DESTINATIONS, POPUP, OUTCOMES, ISOLATED, run, report, environment, diedLastTime, onError } from "/lab/lab.js";
 
     const $ = (id) => document.getElementById(id);
     const esc = (t) => String(t ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+    const isPrivateQuery = new URLSearchParams(location.search).has("private");
+    if (isPrivateQuery) $("share").checked = false;
+
     $("mode").textContent = ISOLATED
       ? "This is the cross-origin isolated copy of the lab, so shared memory exists here. A popup on another origin cannot be reached from an isolated page."
       : "This page is not cross-origin isolated, so shared memory cannot be made here. The isolated copy tests that.";
-    $("other-mode").textContent = ISOLATED ? "Run the ordinary lab" : "Run the isolated lab";
-    $("other-mode").href = ISOLATED ? "/lab/" : "/isolated/lab/";
-    $("legend").innerHTML = Object.entries(OUTCOMES).filter(([k]) => k !== "no-destination").map(([, o]) => `<li><b>${o.mark}</b>${o.label}</li>`).join("");
+    const otherHref = ISOLATED ? "/lab/" : "/isolated/lab/";
+    const otherLabel = ISOLATED ? "Run the ordinary lab" : "Run the isolated lab";
+    $("other-mode").textContent = otherLabel;
+    $("other-mode").href = otherHref;
+    $("other-mode-top").textContent = otherLabel;
+    $("other-mode-top").href = otherHref;
+
+    if (diedLastTime) {
+      $("died").hidden = false;
+      $("died").innerHTML = `<strong>Previous run stopped early:</strong> Last time this page stopped part-way while sending <code>${esc(diedLastTime.kind)}</code> to <code>${esc(diedLastTime.dest)}</code>. If you share this run, that crash note will be included in the report.`;
+    }
+
+    $("legend").innerHTML = Object.entries(OUTCOMES).map(([k, o]) =>
+      k === "no-destination"
+        ? `<li><b class="swatch-blank" data-o="${k}" aria-hidden="true"></b>${esc(o.label)}</li>`
+        : `<li><b data-o="${k}" aria-hidden="true">${o.mark}</b>${esc(o.label)}</li>`
+    ).join("");
 
     let destinations = [...DESTINATIONS];
     let results = {};
+    let totalMs = 0;
+    let running = false;
+
+    const pop = $("pop");
+    let openFor = null;
+
+    function closePop() {
+      if (!openFor) return;
+      try { pop.hidePopover(); } catch {}
+    }
+
     function draw() {
+      closePop();
       const groups = [];
       for (const d of destinations) { const last = groups.at(-1); last && last.name === d.group ? last.n++ : groups.push({ name: d.group, n: 1 }); }
       let band = "";
       $("matrix").tHead?.remove(); [...$("matrix").tBodies].forEach((b) => b.remove());
       $("matrix").insertAdjacentHTML("beforeend", `
         <thead>
-          <tr class="group"><td></td>${groups.map((g) => `<th colspan="${g.n}" scope="colgroup">${esc(g.name)}</th>`).join("")}</tr>
-          <tr class="dest"><td></td>${destinations.map((d) => `<th scope="col">${esc(d.label)}</th>`).join("")}</tr>
+          <tr class="group"><td class="corner"></td>${groups.map((g) => `<th colspan="${g.n}" scope="colgroup">${esc(g.name)}</th>`).join("")}</tr>
+          <tr class="dest"><td class="corner"></td>${destinations.map((d) => `<th scope="col">${esc(d.label)}</th>`).join("")}</tr>
         </thead>
-        <tbody>${KINDS.map((k) => `${k.group !== band ? `<tr class="band"><th colspan="${destinations.length + 1}">${esc(band = k.group)}</th></tr>` : ""}
-          <tr><th scope="row">${esc(k.name)}</th>${destinations.map((d) => `<td data-o="pending" data-k="${esc(k.name)}" data-d="${d.id}"><button aria-label="${esc(k.name)} to ${esc(d.label)}: not run yet">·</button></td>`).join("")}</tr>`).join("")}
+        <tbody>${KINDS.map((k) => `${k.group !== band ? `<tr class="band"><th colspan="${destinations.length + 1}"><span class="band-label">${esc(band = k.group)}</span></th></tr>` : ""}
+          <tr><th scope="row">${esc(k.name)}</th>${destinations.map((d) => `<td data-o="pending" data-k="${esc(k.name)}" data-d="${d.id}"><button type="button" aria-haspopup="dialog" aria-expanded="false" aria-label="${esc(k.name)} to ${esc(d.label)}: not run yet">·</button></td>`).join("")}</tr>`).join("")}
         </tbody>`);
     }
+
     const cellFor = (dest, kind) => $("matrix").querySelector(`td[data-d="${dest.id}"][data-k="${CSS.escape(kind.name)}"]`);
     function paint(dest, kind, result) {
       const td = cellFor(dest, kind);
       if (!td) return;
       td.dataset.o = result.outcome;
-      td.firstChild.textContent = OUTCOMES[result.outcome].mark;
-      td.firstChild.setAttribute("aria-label", `${kind.name} to ${dest.label}: ${OUTCOMES[result.outcome].label}`);
+      const btn = td.firstChild;
+      btn.textContent = OUTCOMES[result.outcome].mark;
+      btn.setAttribute("aria-label", `${kind.name} to ${dest.label}: ${OUTCOMES[result.outcome].label}`);
       td.title = `${OUTCOMES[result.outcome].label}${result.note ? ": " + result.note : ""}`;
     }
+
     // Pressing a mark opens what happened in that test, right beside the mark.
-    const pop = $("pop");
-    let openFor = null;
     const place = (td) => {
       const cell = td.getBoundingClientRect(), box = pop.getBoundingClientRect();
       const left = Math.max(8, Math.min(cell.left + cell.width / 2 - box.width / 2, innerWidth - box.width - 8));
-      const below = cell.bottom + 8, top = below + box.height > innerHeight - 8 && cell.top - box.height - 8 > 8 ? cell.top - box.height - 8 : below;
-      pop.style.left = left + "px"; pop.style.top = top + "px";
+      const below = cell.bottom + 8;
+      const above = cell.top - box.height - 8;
+      const rawTop = below + box.height <= innerHeight - 8 ? below : above >= 8 ? above : below;
+      const top = Math.max(8, Math.min(rawTop, innerHeight - box.height - 8));
+      pop.style.left = left + "px";
+      pop.style.top = top + "px";
     };
-    pop.addEventListener("toggle", (event) => { if (event.newState === "closed") { openFor?.classList.remove("open"); openFor = null; } });
-    addEventListener("scroll", () => { if (openFor) place(openFor); }, { passive: true, capture: true });
+    pop.addEventListener("toggle", (event) => {
+      if (event.newState === "closed") {
+        if (openFor) {
+          openFor.classList.remove("open");
+          openFor.querySelector("button")?.setAttribute("aria-expanded", "false");
+        }
+        openFor = null;
+      }
+    });
+    pop.addEventListener("click", (event) => {
+      if (event.target.closest(".pop-close")) closePop();
+    });
+    addEventListener("scroll", () => { if (openFor) closePop(); }, { passive: true, capture: true });
+    addEventListener("resize", () => { if (openFor) closePop(); }, { passive: true });
+
     $("matrix").addEventListener("click", (event) => {
       const td = event.target.closest("td[data-k]");
       if (!td) return;
@@ -94,18 +170,20 @@
       const kind = KINDS.find((k) => k.name === td.dataset.k);
       const bad = r && !["works", "cannot-make"].includes(r.outcome);
       const html = r
-        ? `<p class="what"><strong>${esc(kind.name)}</strong> ${kind.how === "move" ? "moved" : "copied"} to <strong>${esc(dest.label)}</strong></p>
+        ? `<div class="pop-head"><p class="what"><strong>${esc(kind.name)}</strong> ${kind.how === "move" ? "moved" : "copied"} to <strong>${esc(dest.label)}</strong></p><button type="button" class="pop-close" aria-label="Close">×</button></div>
            <p class="outcome" data-o="${r.outcome}"><b>${OUTCOMES[r.outcome].mark}</b> ${esc(OUTCOMES[r.outcome].label)}. ${esc(OUTCOMES[r.outcome].text)}</p>
            ${r.note ? `<p class="small muted" style="margin:0">${bad ? "What it said:" : "What happened there:"}</p><pre class="note ${bad ? "bad" : ""}">${esc(r.note)}</pre>` : ""}`
-        : `<p class="what"><strong>${esc(kind.name)}</strong> to <strong>${esc(dest.label)}</strong></p><p style="margin:0">That test has not run yet.</p>`;
+        : `<div class="pop-head"><p class="what"><strong>${esc(kind.name)}</strong> to <strong>${esc(dest.label)}</strong></p><button type="button" class="pop-close" aria-label="Close">×</button></div><p>That test has not run yet.</p>`;
       $("detail").innerHTML = r ? `<strong>${esc(kind.name)}</strong> ${kind.how === "move" ? "moved" : "copied"} to <strong>${esc(dest.label)}</strong>: ${esc(OUTCOMES[r.outcome].text)} ${r.note ? `<span class="muted">${esc(r.note)}</span>` : ""}` : "That test has not run yet.";
       if (!pop.showPopover) return;
       const same = openFor === td;
-      try { pop.hidePopover(); } catch {}
+      closePop();
       if (same) return;
       pop.innerHTML = html;
       pop.showPopover();
-      openFor = td; td.classList.add("open");
+      openFor = td;
+      td.classList.add("open");
+      td.querySelector("button")?.setAttribute("aria-expanded", "true");
       place(td);
     });
 
@@ -117,38 +195,87 @@
     function facts(env, ms) {
       const all = Object.values(results).flatMap((row) => Object.values(row));
       const count = (o) => all.filter((r) => r.outcome === o).length;
+      const totalPlanned = destinations.length * KINDS.length;
       $("facts").innerHTML = `
         <div><strong>${esc(env.browser)} ${esc(env.version.split(".")[0])}</strong><span class="small muted">${esc(env.platform)}${env.isolated ? ", isolated" : ""}</span></div>
-        <div><strong>${all.length}</strong><span class="small muted">tests${ms ? ` in ${(ms / 1000).toFixed(1)} s` : ""}</span></div>
-        <div><strong>${count("works")}</strong><span class="small muted">arrived and worked</span></div>
-        <div><strong>${count("arrives-broken") + count("unreadable") + count("no-answer")}</strong><span class="small muted">sent, then went wrong</span></div>`;
+        <div><strong>${all.length || totalPlanned}</strong><span class="small muted">${all.length ? `tests${ms ? ` in ${(ms / 1000).toFixed(1)} s` : ""}` : "tests ready to run"}</span></div>
+        <div><strong>${all.length ? count("works") : "–"}</strong><span class="small muted">arrived and worked</span></div>
+        <div><strong>${all.length ? count("arrives-broken") + count("unreadable") + count("no-answer") : "–"}</strong><span class="small muted">sent, then went wrong</span></div>`;
     }
 
     async function go(only) {
+      if (running) return;
+      running = true;
       const list = only || destinations;
-      if (!only) { results = {}; draw(); }
-      $("again").disabled = $("popup").disabled = true;
-      $("detail").textContent = "Running.";
+      const total = list.length * KINDS.length;
+      let completed = 0;
+      if (!only) {
+        results = {};
+        totalMs = 0;
+        draw();
+      }
+      $("start").disabled = $("again").disabled = $("popup").disabled = $("share").disabled = true;
+      $("progress").textContent = `Running 0 / ${total}…`;
+      $("detail").textContent = `Running ${total} tests in this browser…`;
       const env = await environment();
       const start = performance.now();
-      Object.assign(results, await run(list, (dest, kind, result) => { (results[dest.id] ||= {})[kind.name] = result; paint(dest, kind, result); }));
+      try {
+        Object.assign(results, await run(list, (dest, kind, result) => {
+          (results[dest.id] ||= {})[kind.name] = result;
+          paint(dest, kind, result);
+          completed++;
+          $("progress").textContent = `Running ${completed} / ${total}…`;
+        }));
+      } finally {
+        running = false;
+      }
       const ms = performance.now() - start;
-      facts(env, ms);
+      totalMs = only ? totalMs + ms : ms;
+      facts(env, totalMs);
       document.documentElement.dataset.done = "true";
+      $("progress").textContent = `Finished ${completed} tests in ${(ms / 1000).toFixed(1)} s.`;
       $("detail").textContent = "Done. Press any mark to see what happened in that test.";
-      $("again").disabled = false; $("popup").disabled = ISOLATED;
-      if (new URLSearchParams(location.search).has("private")) return void ($("sent").textContent = "Nothing was sent: this run is private.");
+      $("start").textContent = "Run the lab again";
+      $("start").disabled = false;
+      $("again").hidden = false;
+      $("again").disabled = false;
+      $("popup").disabled = ISOLATED;
+      $("share").disabled = false;
+
+      if (!$("share").checked) {
+        $("sent").innerHTML = `Nothing was sent: results were kept private to this browser. <a href="/lab/results/">See what other browsers have reported.</a>`;
+        return;
+      }
       try {
         const subset = Object.fromEntries(list.map((d) => [d.id, results[d.id]]));
         const { id } = await report(subset, { ms: Math.round(ms) });
-        $("sent").innerHTML = `Sent as report <a href="/lab/results/#${id}"><code>${id}</code></a>: the browser's name, version and operating system, the table above, and any errors. No address and no identifier is kept. <a href="/lab/results/">See what every browser has reported.</a>`;
+        $("sent").innerHTML = `Sent as report <a href="/lab/results/#${esc(id)}"><code>${esc(id)}</code></a>: your browser's name, version, operating system, isolation status, the table above, and any errors. No IP address, full user-agent string, or identifier is kept. <a href="/lab/results/">See what every browser has reported.</a>`;
         document.documentElement.dataset.report = id;
-      } catch (err) { $("sent").textContent = `The results could not be sent (${err.message}).`; }
+      } catch (err) {
+        $("sent").textContent = `The results could not be sent (${err.message}).`;
+      }
     }
-    $("again").onclick = () => { document.documentElement.dataset.done = ""; go(); };
-    $("popup").onclick = () => { if (!destinations.includes(POPUP)) { destinations.push(POPUP); const keep = results; draw(); results = keep; for (const d of destinations) for (const k of KINDS) if (results[d.id]?.[k.name]) paint(d, k, results[d.id][k.name]); } go([POPUP]); };
-    if (diedLastTime) $("mode").textContent += ` Last time this page stopped part-way, while sending ${diedLastTime.kind} to ${diedLastTime.dest}. That is included in the report.`;
-    go();
+
+    const rerunAll = () => {
+      document.documentElement.dataset.done = "";
+      go();
+    };
+    $("start").onclick = rerunAll;
+    $("again").onclick = rerunAll;
+    $("popup").onclick = () => {
+      if (!destinations.includes(POPUP)) {
+        destinations.push(POPUP);
+        const keep = results;
+        draw();
+        results = keep;
+        for (const d of destinations) for (const k of KINDS) if (results[d.id]?.[k.name]) paint(d, k, results[d.id][k.name]);
+      }
+      go([POPUP]);
+    };
+
+    // Draw the empty matrix and populate browser info immediately, without running tests.
+    draw();
+    environment().then((env) => facts(env, 0));
   </script>
   <script type="module" src="/refs.js"></script>
 </body>

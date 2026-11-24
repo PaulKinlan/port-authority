@@ -15,6 +15,7 @@ const check = (name, ok, extra = "") => { console.log(`${ok ? "ok  " : "FAIL"} $
 const cell = (kind, dest) => page.locator(`#matrix td[data-k="${kind}"][data-d="${dest}"]`).getAttribute("data-o");
 
 await page.goto(root + "/lab/" + (LIVE ? "?private" : ""));
+await page.locator("#start").click();
 await page.waitForSelector('html[data-done="true"]', { timeout: 120000 });
 const rows = await page.locator("#matrix tbody tr:not(.band)").count();
 const pending = await page.locator('#matrix td[data-o="pending"]').count();
@@ -44,6 +45,7 @@ if (!LIVE) {
 }
 
 await page.goto(root + "/isolated/lab/?private");
+await page.locator("#start").click();
 await page.waitForSelector('html[data-done="true"]', { timeout: 120000 });
 check("isolated lab: shared memory is shared with a worker", (await cell("SharedArrayBuffer", "worker")) === "works");
 check("isolated lab: shared memory does not reach another origin", (await cell("SharedArrayBuffer", "frame-other")) !== "works");
