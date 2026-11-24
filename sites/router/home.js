@@ -8,6 +8,9 @@ const esc = (text) => String(text).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<
 $("main-link").href = sites.main + "/ai-router/";
 $("main-link-inline").href = sites.main + "/ai-router/";
 $("pa-link").href = sites.main + "/";
+$("about-pa-link").href = sites.main + "/";
+$("explainer-link").href = sites.main + "/ai-router/";
+$("limits-link").href = sites.main + "/ai-router/#limits";
 $("try").innerHTML = [
   [sites.florist + "/card/", "Stem and Petal", "A florist that writes the card for a bouquet."],
   [sites.library + "/digest/", "Harbour Street Library", "A library that hands its port to a worker, and lends a 3-request port."],

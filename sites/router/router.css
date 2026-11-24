@@ -16,6 +16,12 @@ form.fields { display: grid; gap: 0.8rem; max-width: 34rem; }
 .error { color: var(--red); font-weight: 600; }
 .actions { display: flex; gap: 0.6rem; flex-wrap: wrap; align-items: center; }
 
+/* About, and How it works */
+.prose { --gap: 0.9rem; scroll-margin-top: 1rem; }
+.prose h3 { font-size: var(--step-0); letter-spacing: 0; margin-top: 1.5rem; }
+.prose p { max-width: 66ch; }
+.prose ul, .prose ol { margin-bottom: 0; padding-left: 1.2rem; max-width: 66ch; display: grid; gap: 0.5rem; }
+
 /* The picker window */
 body.picker { padding: 1.2rem; }
 .picker h1 { font-size: var(--step-2); font-stretch: 100%; letter-spacing: -0.02em; line-height: 1.05; overflow-wrap: anywhere; }

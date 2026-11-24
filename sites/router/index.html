@@ -18,8 +18,10 @@
   <div class="wrap">
     <header class="site-bar">
       <a class="wordmark" href="/">AI router</a>
-      <nav aria-label="Related pages">
-        <a id="main-link" href="#">About AI router</a>
+      <nav aria-label="On this page, and related pages">
+        <a href="#about">About</a>
+        <a href="#how">How it works</a>
+        <a id="main-link" href="#">Try it</a>
         <a id="pa-link" href="#">Port Authority</a>
       </nav>
     </header>
@@ -60,6 +62,52 @@
       <section class="panel stack">
         <h2>Sites to try it on</h2>
         <ul class="rows" id="try"></ul>
+      </section>
+
+      <section class="panel stack prose" id="about">
+        <h2>About</h2>
+        <p>A site that wants to use an AI model has had two choices. It can pay for the model itself and run a server that hides its key. Or it can ask you to paste your API key into its page, where its scripts can read it and send it anywhere.</p>
+        <p>This router is a third way. You give your key to one place that you choose to trust. Every other site asks that place for access and gets a port: something it can send prompts down and read answers from. There is no key in a port to copy.</p>
+        <ul>
+          <li><strong>You use the accounts you already have.</strong> There is nothing to sign up for here and nothing to buy. Your prompts go from your browser to your provider, on your own account.</li>
+          <li><strong>You decide, one site at a time.</strong> When a site asks, you see its address, pick an account and a model, and set a limit in requests and days.</li>
+          <li><strong>You can see it and stop it.</strong> This page lists every site you allowed and what it has used. Stop takes effect on that site's next request.</li>
+          <li><strong>Any site can ask.</strong> A site adds one script to its page. It needs no account with the router and no key of its own.</li>
+        </ul>
+        <p class="small muted">The router is an experiment by <a href="https://paul.kinlan.me">Paul Kinlan</a>, and part of <a id="about-pa-link" href="#">Port Authority</a>, a site about what the web can do when pages hand each other message ports.</p>
+      </section>
+
+      <section class="panel stack prose" id="how">
+        <h2>How it works</h2>
+        <h3>When a site asks for a model</h3>
+        <ol>
+          <li>The site adds a hidden frame from this address to its page and gives it one end of a <code>MessageChannel</code>. The site keeps the other end. That end is its port.</li>
+          <li>When you press the site's button, a small window from this address opens. Only pages from this address can read the accounts you saved here, so the window can list them and the site cannot.</li>
+          <li>The frame tells the window which site it is inside. It learned that from the browser, not from anything the site wrote, and the window shows you that address.</li>
+          <li>You choose an account, a model and a limit. The window records your choice on the router's server and gets back an unlock key. It encrypts your API key with that, gives the encrypted copy to the frame, and closes.</li>
+        </ol>
+        <h3>When the site sends a prompt</h3>
+        <ol>
+          <li>The prompt goes down the site's port to a worker inside the frame.</li>
+          <li>The worker asks the router's server whether your permission still stands. The server counts the request and returns the unlock key, or refuses.</li>
+          <li>The worker decrypts your API key in memory and calls the provider straight from your browser. The answer comes back down the port a few words at a time.</li>
+        </ol>
+        <h3>When you press Stop</h3>
+        <p>The server deletes the unlock key. The encrypted copy of your API key that was left with that site can no longer be opened, and the frame deletes it the next time it checks.</p>
+        <h3>Who can see what</h3>
+        <ul>
+          <li><strong>The site</strong> sees your prompts and the answers, because it wrote the first and asked for the second. It never sees your API key.</li>
+          <li><strong>The router's server</strong> keeps one record for each site you allowed: the site's address, the names of the account and the model, counts of requests and tokens, and the unlock key. It holds no API keys and sees no prompts or answers.</li>
+          <li><strong>Your provider</strong> sees your prompts and answers, and the API key it issued to you.</li>
+          <li><strong>This browser</strong> holds your accounts, in its storage for this address.</li>
+        </ul>
+        <h3>What you are trusting</h3>
+        <ul>
+          <li>You are trusting the router's code. The frame and the window are pages from this address, and they handle your API key. A site is kept away from the key by the browser's rule that a page cannot read a frame from another origin.</li>
+          <li>The router's pages can run only the router's own scripts, and can connect only to the router and to Anthropic, OpenAI, OpenRouter, Google Gemini and an Ollama on your own computer. A changed or injected script could not send your key anywhere else.</li>
+          <li>Limits are counted in requests and days, not money. A site with 20 requests can still send 20 long prompts.</li>
+        </ul>
+        <p class="small muted">There is a longer version with a diagram, the code a site writes and <a id="limits-link" href="#">what does not work yet</a> in <a id="explainer-link" href="#">the full explanation on Port Authority</a>.</p>
       </section>
     </main>
   </div>
