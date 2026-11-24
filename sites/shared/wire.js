@@ -461,14 +461,13 @@ export class Stage {
         );
 
         if (hasMiddleV) {
-          // Bypass around the right outer edge so we never draw through middle box text on mobile.
-          const edgeX = Math.min(width + 10, Math.max(topBox.right, botBox.right) + 12 + spanV * 6);
+          // Bypass around the right outer edge inside a reserved gutter so we
+          // never draw through middle box text or clip off-screen on mobile.
+          const edgeX = Math.min(width - 4, Math.max(topBox.right, botBox.right) + 14 + spanV * 6);
           spanV++;
-          const aIsTop = ra.cy <= rb.cy;
           p1 = [ra.right, ra.cy + spread * 14];
           p2 = [rb.right, rb.cy + spread * 14];
           d = `M${p1[0]},${p1[1]} C${edgeX},${p1[1]} ${edgeX},${p2[1]} ${p2[0]},${p2[1]}`;
-          void aIsTop;
         } else {
           const aIsTop = ra.cy <= rb.cy;
           const ax = ra.cx + spread * 26;
@@ -500,10 +499,13 @@ export class Stage {
         // Two lines of one kind between the same boxes share one word.
         const mid = len > 0 ? cable.path.getPointAtLength(len / 2) : { x: (p1[0] + p2[0]) / 2, y: (p1[1] + p2[1]) / 2 };
         const duplicate = slot > 0 && [...this.cables.values()].some((other) => other !== cable && other.kind === cable.kind && [other.a, other.b].sort().join("\0") === key);
-        cable.kindLabel.textContent = duplicate ? "" : (cable.label || LINES[cable.kind]);
-        cable.kindLabel.setAttribute("x", mid.x + (stacked ? 12 : 0));
+        const text = duplicate ? "" : (cable.label || LINES[cable.kind]);
+        cable.kindLabel.textContent = text;
+        const nearRight = mid.x > width - 64;
+        const lx = stacked ? (nearRight ? mid.x - 10 : mid.x + 12) : Math.max(28, Math.min(width - 28, mid.x));
+        cable.kindLabel.setAttribute("x", lx);
         cable.kindLabel.setAttribute("y", mid.y - (stacked ? 0 : 12));
-        cable.kindLabel.style.textAnchor = stacked ? "start" : "middle";
+        cable.kindLabel.style.textAnchor = stacked ? (nearRight ? "end" : "start") : "middle";
         maxCableY = Math.max(maxCableY, mid.y + 10);
       }
 
@@ -513,22 +515,25 @@ export class Stage {
         const rect = cable.labelGroup.querySelector("rect");
         const w = Math.max(44, cable.label.length * 6.8 + 14);
         const h = 18;
-        rect.setAttribute("x", mid.x - w / 2);
+        const cx = Math.max(w / 2 + 2, Math.min(width - w / 2 - 2, mid.x));
+        rect.setAttribute("x", cx - w / 2);
         rect.setAttribute("y", mid.y - h / 2);
         rect.setAttribute("width", w);
         rect.setAttribute("height", h);
-        text.setAttribute("x", mid.x);
+        text.setAttribute("x", cx);
         text.setAttribute("y", mid.y + 0.5);
         maxCableY = Math.max(maxCableY, mid.y + h / 2 + 4);
       }
     }
 
-    // Reserve extra bottom space if multiple spanning cables route underneath,
-    // so cables never overlap the legend below the stage.
+    // Reserve extra bottom/right space when spanning cables route underneath or
+    // along the right edge, so cables never overlap legends or clip on mobile.
     const boxesBottom = Math.max(0, ...[...rects.values()].map((r) => r.bottom));
     const needed = maxCableY > boxesBottom ? Math.ceil(maxCableY - boxesBottom + 16) : 0;
     const minPad = needed > 56 ? `${needed}px` : "";
     if (this.el.style.paddingBottom !== minPad) this.el.style.paddingBottom = minPad;
+    const rightPad = spanV > 0 ? `${Math.min(36, 18 + spanV * 6)}px` : "";
+    if (this.el.style.paddingRight !== rightPad) this.el.style.paddingRight = rightPad;
   }
 
   pulse(id, from) {
@@ -594,6 +599,7 @@ export class Stage {
     for (const box of this.boxes.values()) { clearTimeout(box._flashTimer); box.watch.disconnect(); box.wrap.remove(); }
     this.boxes.clear();
     this.el.style.paddingBottom = "";
+    this.el.style.paddingRight = "";
     this.seen.clear();
     this.showKey();
     this.listeners.clear();

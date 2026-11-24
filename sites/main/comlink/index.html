@@ -19,7 +19,7 @@
     .lede p { font-size: var(--step-1); line-height: 1.35; max-width: 40ch; }
     .toc-nav { display: flex; flex-wrap: wrap; gap: 0.45rem 1.1rem; font-size: var(--step--1); padding-top: 0.4rem; }
     .toc-nav a { font-weight: 600; }
-    .prose { display: grid; gap: 1rem; }
+    .prose { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem; min-width: 0; }
     .prose ul, .prose ol { margin: 0; padding-left: 1.1rem; max-width: 62ch; display: grid; gap: 0.5rem; }
     .pair { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(min(100%, 19rem), 1fr)); }
     .pane, .widget, .card { margin: 0; border: 2px solid var(--ink); border-radius: 14px; background: var(--panel); overflow: hidden; }

@@ -279,6 +279,13 @@ function run(root) {
 }
 
 if (typeof document !== "undefined") {
-  const start = () => run(document.body);
+  const start = () => {
+    const nav = document.querySelector(".site-bar nav");
+    const active = nav?.querySelector('a[aria-current="page"]');
+    if (nav && active && nav.scrollWidth > nav.clientWidth) {
+      nav.scrollLeft = Math.max(0, active.offsetLeft - (nav.clientWidth - active.offsetWidth) / 2);
+    }
+    run(document.body);
+  };
   document.readyState === "loading" ? document.addEventListener("DOMContentLoaded", start) : start();
 }

@@ -67,7 +67,7 @@ const html = `<!doctype html>
   <link rel="stylesheet" href="/base.css">
   <script src="/errors.js"></script>
   <style>
-    main { display: grid; gap: clamp(2rem, 5vw, 3.2rem); padding-block: 1rem 4rem; }
+    main { display: grid; grid-template-columns: minmax(0, 1fr); gap: clamp(2rem, 5vw, 3.2rem); padding-block: 1rem 4rem; }
     main section { display: grid; gap: .9rem; border-top: 2px solid var(--ink); padding-top: clamp(1.2rem, 3vw, 2rem); grid-template-columns: minmax(0, 1fr); }
     main h2 { font-size: var(--step-2); max-width: 28ch; }
     main section > p { margin: 0; max-width: 66ch; }

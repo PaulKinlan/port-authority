@@ -13,19 +13,19 @@
   <link rel="stylesheet" href="/base.css">
   <link rel="stylesheet" href="/patterns/patterns.css">
   <style>
-    .hero { padding-block: clamp(2rem, 6vw, 5rem) 1rem; display: grid; gap: clamp(1.5rem, 4vw, 2.5rem); }
-    .hero .intro { display: grid; gap: 0.9rem; max-width: 62ch; }
+    .hero { padding-block: clamp(1.5rem, 6vw, 5rem) 1rem; display: grid; grid-template-columns: minmax(0, 1fr); gap: clamp(1.2rem, 4vw, 2.5rem); }
+    .hero .intro { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.9rem; max-width: 62ch; }
     .hero .intro p:first-child { font-size: var(--step-1); line-height: 1.35; max-width: 34ch; }
-    .hero-demo { background: color-mix(in srgb, var(--yellow) 22%, var(--paper)); border-radius: 22px; padding: clamp(1rem, 3vw, 1.8rem); }
+    .hero-demo { background: color-mix(in srgb, var(--yellow) 22%, var(--paper)); border-radius: 22px; padding: clamp(0.85rem, 3vw, 1.8rem); min-width: 0; }
     .hero-demo > p { font-size: var(--step-0); max-width: 60ch; margin-bottom: 1.2rem; }
     .experiments { list-style: none; margin: 0; padding: 0; }
     .experiment { display: grid; gap: 0.6rem 2rem; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); padding-block: clamp(1.6rem, 4vw, 2.6rem); border-top: 2px solid var(--ink); align-items: start; }
     .experiment h3 { font-size: var(--step-2); letter-spacing: -0.025em; line-height: 1; }
     .experiment .state { font-size: var(--step--1); font-weight: 600; margin-top: 0.7rem; }
-    .experiment .body { display: grid; gap: 0.9rem; }
+    .experiment .body { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.9rem; min-width: 0; }
     .experiment .go { display: flex; flex-wrap: wrap; gap: 0.6rem 1.2rem; align-items: center; font-weight: 600; }
-    @media (max-width: 44rem) { .experiment { grid-template-columns: 1fr; } }
-    .section-head { padding-block: clamp(3rem, 8vw, 6rem) 1.5rem; display: grid; gap: 1rem; }
+    @media (max-width: 44rem) { .experiment { grid-template-columns: minmax(0, 1fr); } }
+    .section-head { padding-block: clamp(2.5rem, 8vw, 6rem) 1.5rem; display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem; }
     .lineage { columns: 2 18rem; column-gap: 3rem; padding: 0; margin: 0; list-style: none; }
     .lineage li { break-inside: avoid; padding-block: 0.6rem; border-top: 1px solid var(--line); }
     .lineage time { font-family: var(--mono); font-size: var(--step--1); color: var(--muted); margin-right: 0.6rem; }
