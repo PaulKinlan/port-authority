@@ -5,70 +5,90 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>The far end | Port Authority</title>
   <meta name="description" content="The other end of a MessagePort that crosses devices.">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <meta property="og:title" content="The far end | Port Authority">
+  <meta property="og:description" content="The other end of a MessagePort that crosses devices.">
+  <meta property="og:type" content="website">
+  <meta name="twitter:card" content="summary">
   <link rel="stylesheet" href="/base.css">
   <script src="/errors.js"></script>
   <style>
     body.embed { background: var(--panel); }
     body.embed .wrap { padding: .7rem .8rem; max-width: none; }
-    body.embed .site-bar, body.embed .intro, body.embed footer { display: none; }
+    body.embed .site-bar, body.embed .intro, body.embed footer, body.embed .refs, body.embed .skip-link { display: none; }
     body.embed h2 { font: 800 1rem/1.1 var(--display); margin: 0 0 .3rem; }
-    .panel { border: 2px solid var(--ink); border-radius: 14px; padding: 1rem; max-width: 26rem; }
+    .panel { border: 2px solid var(--ink); border-radius: 14px; padding: 1rem; max-width: 28rem; }
     body.embed .panel { border: 0; padding: 0; }
     .count { font: 800 clamp(2.2rem, 12vw, 4rem)/1 var(--display); display: flex; align-items: center; gap: .6rem; margin: .3rem 0 .6rem; }
     body.embed .count { font-size: 1.8rem; margin: .1rem 0 .4rem; }
     .swatch { width: .6em; height: .6em; border-radius: 50%; border: 2px solid var(--ink); background: transparent; }
     .row { display: flex; flex-wrap: wrap; gap: .5rem; }
     #state { margin: 0 0 .3rem; }
-    .pick { display: inline-flex; align-items: center; cursor: pointer; border: 1.5px solid var(--ink); border-radius: 999px; padding: .45rem .9rem; background: var(--yellow, #f5b700); color: #0f1c3f; font-weight: 700; }
+    .pick { display: inline-flex; align-items: center; cursor: pointer; border: 1.5px solid var(--ink); border-radius: 999px; padding: .45rem .9rem; background: var(--yellow, #f5b700); color: #0f1c3f; font-weight: 700; margin-bottom: 0; }
     .pick:focus-within { outline: 3px solid var(--ink); outline-offset: 2px; }
+    .pick.is-disabled { opacity: 0.45; cursor: not-allowed; pointer-events: none; }
     body.embed #file > p:first-child, body.embed #lent > p:first-child, body.embed .pick { display: none; }
     .card { border: 1.5px solid var(--ink); border-radius: 10px; padding: .5rem .6rem; margin: 0 0 .5rem; }
     .card h3 { font: 800 1rem/1.1 var(--display); margin: 0 0 .35rem; }
     .card p { margin: .35rem 0 0; font: 12px/1.4 var(--mono); }
     .card.taken { border-style: dashed; opacity: .7; }
     body.embed .card { padding: .35rem .5rem; margin-bottom: .35rem; }
-    form { display: flex; gap: .5rem; flex-wrap: wrap; margin-top: .6rem; }
-    form input { flex: 1 1 8rem; font: inherit; padding: .5rem .6rem; }
+    .join-form { display: grid; gap: .45rem; margin-top: .7rem; }
+    .join-form label { margin-bottom: 0; }
+    .join-row { display: flex; gap: .5rem; flex-wrap: wrap; align-items: stretch; }
+    .join-row input { flex: 1 1 9rem; padding: .5rem .65rem; }
+    .form-error { color: var(--red); font-weight: 600; margin: 0; }
   </style>
 </head>
 <body>
+  <a class="skip-link" href="#main">Skip to content</a>
   <div class="wrap">
     <header class="site-bar">
       <a class="wordmark" href="/">Port Authority</a>
-      <nav><a href="/guide/">The guide</a><a href="/patterns/far/">The experiment</a></nav>
+      <nav aria-label="Primary"><a href="/">Experiments</a><a href="/guide/">The guide</a><a href="/patterns/">Port patterns</a><a href="/comlink/">Comlink today</a><a href="/ai-router/">AI router</a><a href="/lab/">The lab</a><a href="/missing/">What is missing</a><a href="/reading/">Further reading</a><a href="/hub/">Your hub</a></nav>
     </header>
-    <div class="stack intro" style="padding-block:2rem 1.2rem; --gap:1rem">
-      <h1 style="font-size:var(--step-3)">The far end</h1>
-      <p>This page holds one end of a <code>MessagePort</code>. The other end is on another device, and they were joined with the pairing code.</p>
-    </div>
-    <main class="panel">
-      <h2 id="title">Another device</h2>
-      <p class="small muted" id="state">No code yet.</p>
-      <div id="live" hidden>
-        <p class="count"><span class="swatch" id="swatch"></span><span id="count">0</span></p>
-        <div class="row"><button class="tiny accent" id="add">Add one</button><button class="tiny quiet" id="colour">Change the colour</button></div>
+    <main id="main">
+      <div class="stack intro" style="padding-block:2rem 1.2rem; --gap:1rem">
+        <h1 style="font-size:var(--step-3)">The far end</h1>
+        <p>This page holds one end of a <code>MessagePort</code>. The other end is on another device, and they were joined with the pairing code from <a href="/patterns/far/">the cross-device experiment</a>.</p>
       </div>
-      <div id="asked" hidden>
-        <p id="question" style="font:800 1.15rem/1.2 var(--display);margin:.3rem 0 .6rem"></p>
-        <div class="row"><button class="tiny accent" id="approve">Approve</button><button class="tiny quiet" id="deny">Deny</button></div>
+      <div class="panel">
+        <h2 id="title">Another device</h2>
+        <p class="small muted" id="state" role="status" aria-live="polite">No code yet.</p>
+        <div id="live" hidden>
+          <p class="count"><span class="swatch" id="swatch" role="img" aria-label="Current colour: default"></span><span id="count" aria-live="polite">0</span></p>
+          <div class="row"><button class="tiny accent" id="add" type="button">Add one</button><button class="tiny quiet" id="colour" type="button">Change the colour</button></div>
+        </div>
+        <div id="asked" hidden>
+          <p id="question" style="font:800 1.15rem/1.2 var(--display);margin:.3rem 0 .6rem"></p>
+          <div class="row"><button class="tiny accent" id="approve" type="button">Approve</button><button class="tiny quiet" id="deny" type="button">Deny</button></div>
+        </div>
+        <div id="tools" hidden>
+          <p class="small" style="margin:.3rem 0 .5rem">The other browser offers these tools. On a real setup an agent would choose which to call. Here the buttons are yours.</p>
+          <div class="row" id="toolButtons" style="flex-wrap:wrap"></div>
+          <ul id="results" class="small" aria-live="polite" style="list-style:none;padding:0;margin:.6rem 0 0;font-family:var(--mono)"></ul>
+        </div>
+        <div id="file" hidden>
+          <p class="small" style="margin:.3rem 0 .5rem">Pick a picture. Its bytes go down the port as a stream, straight to the other device. Nothing is uploaded to a server.</p>
+          <div class="row"><label class="pick">Choose a picture<input type="file" id="pick" accept="image/*" style="position:absolute;opacity:0;width:1px;height:1px"></label><button class="tiny quiet" id="sample" type="button">Send a sample picture</button></div>
+          <p class="small" id="sent" role="status" aria-live="polite" style="font-family:var(--mono);margin:.6rem 0 0"></p>
+        </div>
+        <div id="lent" hidden>
+          <p class="small" style="margin:.3rem 0 .5rem">Each card is a port the other device sent down the line. Its buttons post into that port and nothing else.</p>
+          <div id="cards"></div>
+        </div>
+        <form id="join" class="join-form" hidden novalidate>
+          <label for="code">Pairing code</label>
+          <p class="small muted" id="code-help">Get a 6–12 character code by opening <a href="/patterns/far/">the cross-device demo</a> on your other device.</p>
+          <div class="join-row">
+            <input id="code" type="text" placeholder="e.g. a1b2c3" autocomplete="off" autocapitalize="none" spellcheck="false" aria-describedby="code-help code-error">
+            <button class="tiny accent" type="submit">Join</button>
+          </div>
+          <p id="code-error" class="small form-error" role="alert" hidden></p>
+        </form>
       </div>
-      <div id="tools" hidden>
-        <p class="small" style="margin:.3rem 0 .5rem">The other browser offers these tools. On a real setup an agent would choose which to call. Here the buttons are yours.</p>
-        <div class="row" id="toolButtons" style="flex-wrap:wrap"></div>
-        <ul id="results" class="small" style="list-style:none;padding:0;margin:.6rem 0 0;font-family:var(--mono)"></ul>
-      </div>
-      <div id="file" hidden>
-        <p class="small" style="margin:.3rem 0 .5rem">Pick a picture. Its bytes go down the port as a stream, straight to the other device. Nothing is uploaded to a server.</p>
-        <div class="row"><label class="pick">Choose a picture<input type="file" id="pick" accept="image/*" style="position:absolute;opacity:0;width:1px;height:1px"></label><button class="tiny quiet" id="sample">Send a sample picture</button></div>
-        <p class="small" id="sent" style="font-family:var(--mono);margin:.6rem 0 0"></p>
-      </div>
-      <div id="lent" hidden>
-        <p class="small" style="margin:.3rem 0 .5rem">Each card is a port the other device sent down the line. Its buttons post into that port and nothing else.</p>
-        <div id="cards"></div>
-      </div>
-      <form id="join" hidden><input id="code" aria-label="Pairing code" placeholder="Pairing code" autocomplete="off" autocapitalize="none" spellcheck="false"><button class="tiny accent">Join</button></form>
     </main>
-    <footer class="small muted" style="padding-block:2rem 4rem">Port Authority is a working name. By <a href="https://paul.kinlan.me">Paul Kinlan</a>.</footer>
+    <footer class="small muted" style="padding-block:2rem 4rem">Port Authority, by <a href="https://paul.kinlan.me">Paul Kinlan</a>.</footer>
   </div>
   <script type="module">
     import { far } from "/farport.js";
@@ -77,21 +97,50 @@
     const embedded = params.has("embed") && parent !== self;
     if (embedded) document.body.classList.add("embed");
     const tell = (wire, data = {}) => embedded && parent.postMessage({ wire, ...data }, "*");
-    const WORDS = { waiting: "Waiting for the other device.", found: "Found it. Connecting directly.", direct: "Connected directly. This is a port.", gone: "The other end hung up.", failed: "Could not connect." };
+    const WORDS = { waiting: "Waiting for the other device.", found: "Found it. Connecting directly.", direct: "Connected directly. This is a port.", gone: "The other end hung up.", failed: "Could not connect. Check the pairing code and try again." };
     let port = null;
+
+    function disableAllControls() {
+      $("add").disabled = $("colour").disabled = true;
+      $("approve").disabled = $("deny").disabled = true;
+      $("pick").disabled = true;
+      $("pick").closest(".pick")?.classList.add("is-disabled");
+      for (const b of document.querySelectorAll("#file button, #lent button, #toolButtons button")) b.disabled = true;
+    }
+
+    function enableFileControls() {
+      $("pick").disabled = false;
+      $("pick").closest(".pick")?.classList.remove("is-disabled");
+      for (const b of document.querySelectorAll("#file button")) b.disabled = false;
+    }
 
     function join(code) {
       $("join").hidden = true;
+      $("code-error").hidden = true;
       $("state").textContent = "Joining " + code + ".";
       far({
         code,
-        onState(state) { $("state").textContent = WORDS[state] || state; if (state === "gone") { port = null; $("add").disabled = $("colour").disabled = true; for (const b of document.querySelectorAll("#file button, #lent button")) b.disabled = true; } tell("far", { state }); },
+        onState(state) {
+          $("state").textContent = WORDS[state] || state;
+          if (state === "gone") {
+            port = null;
+            disableAllControls();
+          } else if (state === "failed") {
+            port = null;
+            disableAllControls();
+            if (!embedded) {
+              $("join").hidden = false;
+              $("code").value = code;
+            }
+          }
+          tell("far", { state });
+        },
         // From here on this is ordinary port code. It has no idea how far away the other end is.
         onPort(p) {
           port = p;
           port.onmessage = ({ data }) => {
             // The other end wants a file. Show the picker.
-            if (data.want === "file") { $("live").hidden = true; $("file").hidden = false; $("title").textContent = "Send a picture"; return; }
+            if (data.want === "file") { $("live").hidden = true; $("file").hidden = false; enableFileControls(); $("title").textContent = "Send a picture"; return; }
             // A port to one thing on the other device. It arrived inside this message.
             if (data.lent) return lent(data.lent, data.port);
             if (data.taken) return taken(data.taken);
@@ -100,12 +149,14 @@
             // A list of tools the other end will run for whoever holds this port.
             if (data.tools) {
               $("live").hidden = true; $("tools").hidden = false; $("title").textContent = "An agent, on another machine";
-              $("toolButtons").replaceChildren(...data.tools.map((tool) => { const b = document.createElement("button"); b.className = "tiny quiet"; b.textContent = tool.name; b.title = tool.about; b.onclick = () => act("call:" + tool.name); return b; }));
+              $("toolButtons").replaceChildren(...data.tools.map((tool) => { const b = document.createElement("button"); b.type = "button"; b.className = "tiny quiet"; b.textContent = tool.name; b.title = tool.about; b.onclick = () => act("call:" + tool.name); return b; }));
               return;
             }
             if (data.result !== undefined || data.error) { const li = document.createElement("li"); li.textContent = data.tool + ": " + (data.error ? "refused, " + data.error : data.result); $("results").prepend(li); tell("pulse", { cable: "air" }); return; }
             if (data.count === undefined) return;
-            $("count").textContent = data.count; $("swatch").style.background = data.colour;
+            $("count").textContent = data.count;
+            $("swatch").style.background = data.colour;
+            $("swatch").setAttribute("aria-label", "Current colour: " + data.colour);
             tell("pulse", { cable: "air" });
           };
           $("live").hidden = false; $("add").disabled = $("colour").disabled = false;
@@ -116,34 +167,44 @@
     // ---- sending a file as a stream. The stream is transferred into the port like any other.
     const size = (n) => n > 1e6 ? (n / 1e6).toFixed(1) + " MB" : Math.round(n / 1e3) + " kB";
     function sendFile(blob, name) {
-      if (!port) return;
-      let gone = 0;
-      const counted = blob.stream().pipeThrough(new TransformStream({
-        // Hand the file over in pieces of 64 kB, so the other end can show how far it has got
-        // and so this side is asked for the next piece only when the last has been taken.
-        transform(chunk, controller) {
-          for (let i = 0; i < chunk.byteLength; i += 65536) controller.enqueue(chunk.subarray(i, i + 65536));
-          gone += chunk.byteLength; $("sent").textContent = `${name}: read ${size(gone)} of ${size(blob.size)} for the other device`; tell("pulse", { cable: "air" });
-        },
-        flush() { $("sent").textContent = `${name}: all ${size(blob.size)} handed to the port`; },
-      }));
-      port.postMessage({ file: { name, type: blob.type, size: blob.size }, body: counted }, [counted]);
+      if (!port) { $("sent").textContent = "Not connected to the other device."; return; }
+      if (!blob) { $("sent").textContent = "Could not read that file."; return; }
+      try {
+        let gone = 0;
+        const counted = blob.stream().pipeThrough(new TransformStream({
+          // Hand the file over in pieces of 64 kB, so the other end can show how far it has got
+          // and so this side is asked for the next piece only when the last has been taken.
+          transform(chunk, controller) {
+            for (let i = 0; i < chunk.byteLength; i += 65536) controller.enqueue(chunk.subarray(i, i + 65536));
+            gone += chunk.byteLength; $("sent").textContent = `${name}: read ${size(gone)} of ${size(blob.size)} for the other device`; tell("pulse", { cable: "air" });
+          },
+          flush() { $("sent").textContent = `${name}: all ${size(blob.size)} handed to the port`; },
+        }));
+        port.postMessage({ file: { name, type: blob.type, size: blob.size }, body: counted }, [counted]);
+      } catch (err) {
+        $("sent").textContent = `Could not send ${name}: ${err?.message || "transfer failed"}.`;
+      }
     }
     $("pick").onchange = () => { const file = $("pick").files[0]; if (file) sendFile(file, file.name); };
     // A picture made here, for when there is no photo to hand. The noise keeps it from compressing to nothing.
     async function sample() {
-      const canvas = document.createElement("canvas"); canvas.width = 640; canvas.height = 400;
-      const c = canvas.getContext("2d");
-      const sky = c.createLinearGradient(0, 0, 0, 400); sky.addColorStop(0, "#1c2f6b"); sky.addColorStop(1, "#f5b700");
-      c.fillStyle = sky; c.fillRect(0, 0, 640, 400);
-      c.fillStyle = "#e0364c"; c.beginPath(); c.arc(470, 250, 90, 0, 7); c.fill();
-      c.fillStyle = "#0e9f8e"; c.beginPath(); c.moveTo(0, 400); c.lineTo(220, 170); c.lineTo(420, 400); c.fill();
-      const pixels = c.getImageData(0, 0, 640, 400);
-      for (let i = 0; i < pixels.data.length; i += 4) for (let k = 0; k < 3; k++) pixels.data[i + k] = Math.max(0, Math.min(255, pixels.data[i + k] + Math.random() * 36 - 18));
-      c.putImageData(pixels, 0, 0);
-      c.fillStyle = "#fff"; c.font = "800 34px system-ui, sans-serif"; c.fillText("Made on the other device", 28, 56);
-      c.font = "20px ui-monospace, monospace"; c.fillText(new Date().toLocaleTimeString(), 28, 88);
-      sendFile(await new Promise((resolve) => canvas.toBlob(resolve, "image/png")), "sample.png");
+      try {
+        const canvas = document.createElement("canvas"); canvas.width = 640; canvas.height = 400;
+        const c = canvas.getContext("2d");
+        const sky = c.createLinearGradient(0, 0, 0, 400); sky.addColorStop(0, "#1c2f6b"); sky.addColorStop(1, "#f5b700");
+        c.fillStyle = sky; c.fillRect(0, 0, 640, 400);
+        c.fillStyle = "#e0364c"; c.beginPath(); c.arc(470, 250, 90, 0, 7); c.fill();
+        c.fillStyle = "#0e9f8e"; c.beginPath(); c.moveTo(0, 400); c.lineTo(220, 170); c.lineTo(420, 400); c.fill();
+        const pixels = c.getImageData(0, 0, 640, 400);
+        for (let i = 0; i < pixels.data.length; i += 4) for (let k = 0; k < 3; k++) pixels.data[i + k] = Math.max(0, Math.min(255, pixels.data[i + k] + Math.random() * 36 - 18));
+        c.putImageData(pixels, 0, 0);
+        c.fillStyle = "#fff"; c.font = "800 34px system-ui, sans-serif"; c.fillText("Made on the other device", 28, 56);
+        c.font = "20px ui-monospace, monospace"; c.fillText(new Date().toLocaleTimeString(), 28, 88);
+        const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
+        sendFile(blob, "sample.png");
+      } catch (err) {
+        $("sent").textContent = `Could not create sample picture: ${err?.message || "unexpected error"}.`;
+      }
     }
     $("sample").onclick = sample;
 
@@ -154,7 +215,7 @@
       const card = document.createElement("div"); card.className = "card";
       card.innerHTML = `<h3></h3><div class="row"></div><p>nothing heard yet</p>`;
       card.querySelector("h3").textContent = tool.title;
-      for (const b of tool.buttons) { const button = document.createElement("button"); button.className = "tiny quiet"; button.textContent = b.label; button.onclick = () => use(tool.name, b.do); card.querySelector(".row").append(button); }
+      for (const b of tool.buttons) { const button = document.createElement("button"); button.type = "button"; button.className = "tiny quiet"; button.textContent = b.label; button.onclick = () => use(tool.name, b.do); card.querySelector(".row").append(button); }
       // Ordinary port code. This port was made on this device to stand for one on the other.
       toolPort.onmessage = ({ data }) => { card.querySelector("p").textContent = data.show; tell("pulse", { cable: "air" }); };
       cards.get(tool.name)?.card.remove();
@@ -171,7 +232,23 @@
     $("add").onclick = () => act("add");
     $("colour").onclick = () => act("colour");
     addEventListener("message", (event) => { if (embedded && event.source === parent && event.data?.cmd) act(event.data.cmd); });
-    $("join").onsubmit = (event) => { event.preventDefault(); const code = $("code").value.trim().toLowerCase(); if (/^[a-z0-9]{6,12}$/.test(code)) { history.replaceState(null, "", "#" + code); join(code); } };
+    $("code").oninput = () => { $("code-error").hidden = true; $("code").removeAttribute("aria-invalid"); };
+    $("join").onsubmit = (event) => {
+      event.preventDefault();
+      const code = $("code").value.trim().toLowerCase();
+      if (/^[a-z0-9]{6,12}$/.test(code)) {
+        $("code-error").hidden = true;
+        $("code-error").textContent = "";
+        $("code").removeAttribute("aria-invalid");
+        history.replaceState(null, "", "#" + code);
+        join(code);
+      } else {
+        $("code-error").textContent = "Enter a 6 to 12 character code using letters and numbers only.";
+        $("code-error").hidden = false;
+        $("code").setAttribute("aria-invalid", "true");
+        $("code").focus();
+      }
+    };
 
     const code = location.hash.slice(1).toLowerCase();
     if (/^[a-z0-9]{6,12}$/.test(code)) join(code); else $("join").hidden = false;

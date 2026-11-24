@@ -94,7 +94,7 @@ export const refs = [
 
   // Storage and security
   { name: "Origin private file system", what: "Storage for files that belongs to one origin and that the person never sees in their own folders. A worker can open a file in it for fast, exclusive access.", text: ["OPFS"], loose: ["origin private file system"], mdn: API + "File_System_API/Origin_private_file_system", spec: ["https://fs.spec.whatwg.org/#sandboxed-filesystem", "File System Standard"] },
-  { name: "Web Locks", what: "Lets pages and workers on one origin take a named lock, so that only one of them does a piece of work at a time.", loose: ["web locks"], code: ["navigator.locks"], mdn: API + "Web_Locks_API", spec: ["https://w3c.github.io/web-locks/", "Web Locks"] },
+  { name: "Web Locks", what: "Lets pages and workers on one origin take a named lock, so that only one of them does a piece of work at a time.", loose: ["web lock"], code: ["navigator.locks"], mdn: API + "Web_Locks_API", spec: ["https://w3c.github.io/web-locks/", "Web Locks"] },
   { name: "Content Security Policy", what: "A header that limits what a page may load and where it may connect.", text: ["CSP"], loose: ["content security policy"], mdn: MDN + "Web/HTTP/Guides/CSP", spec: ["https://w3c.github.io/webappsec-csp/", "Content Security Policy"] },
   { name: "Storage Access API", what: "Lets an embedded frame ask for the storage it would have as a top-level page.", text: ["requestStorageAccess"], mdn: API + "Storage_Access_API", spec: ["https://privacycg.github.io/storage-access/", "Storage Access API"] },
 
@@ -129,17 +129,18 @@ export const href = (ref) => ref.mdn || ref.url || ref.spec[0];
 
 const escape = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const longest = (a, b) => b.length - a.length;
-function matcher(key, flags, plural) {
+function matcher(key, flags, plural, allowDot = false) {
   const words = new Map();
   for (const ref of refs) for (const word of ref[key] || []) words.set(flags.includes("i") ? word.toLowerCase() : word, ref);
   if (!words.size) return null;
-  // Not in the middle of a longer name, a property path, or a file name.
-  const re = new RegExp(`(?<![\\w.$/-])(${[...words.keys()].sort(longest).map(escape).join("|")})${plural ? "s?" : ""}(?![\\w])`, flags);
+  // Not in the middle of a longer name, a property path (unless allowDot is enabled for code methods), or a file name.
+  const before = allowDot ? "(?<![\\w$/-])" : "(?<![\\w.$/-])";
+  const re = new RegExp(`${before}(${[...words.keys()].sort(longest).map(escape).join("|")})${plural ? "s?" : ""}(?![\\w])`, flags);
   return { re, find: (hit) => words.get(flags.includes("i") ? hit.toLowerCase() : hit) };
 }
 const TEXT = matcher("text", "g", true);
 const LOOSE = matcher("loose", "gi", true);
-const CODE = matcher("code", "g", false);
+const CODE = matcher("code", "g", false, true);
 
 // Every place in a string that names something, in order, with no overlaps.
 export function mentions(string, inCode = false) {
@@ -156,8 +157,8 @@ export function mentions(string, inCode = false) {
 }
 
 // Places where a name is not turned into a link: links and controls, code
-// listings, headings, the site's own navigation, and the running demos.
-const SKIP = "a, pre, button, nav, header, footer, h1, h2, h3, h4, summary, label, select, option, textarea, input, script, style, svg, dialog, [contenteditable], .demo, .no-refs, .refs";
+// listings, headings, the site's own navigation, hidden elements, and the running demos.
+const SKIP = "a, pre, button, nav, header, footer, h1, h2, h3, h4, summary, label, select, option, textarea, input, script, style, svg, dialog, [hidden], [contenteditable], .demo, .no-refs, .refs, body.embed .intro";
 
 function run(root) {
   const doc = root.ownerDocument;
@@ -244,9 +245,14 @@ function run(root) {
       box = doc.createElement("section");
       box.className = "refs";
       box.setAttribute("aria-labelledby", "refs-title");
-      const wrap = doc.querySelector(".wrap") || doc.body;
-      const footer = [...wrap.children].filter((el) => el.localName === "footer").pop();
-      footer ? footer.before(box) : wrap.append(box);
+      const main = doc.querySelector("main");
+      if (main) {
+        main.append(box);
+      } else {
+        const wrap = doc.querySelector(".wrap") || doc.body;
+        const footer = [...wrap.children].filter((el) => el.localName === "footer").pop();
+        footer ? footer.before(box) : wrap.append(box);
+      }
     }
     const esc = (text) => text.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
     const link = (url, text, label) => `<a href="${url}"${label ? ` aria-label="${esc(label)}"` : ""}>${esc(text)}</a>`;

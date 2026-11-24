@@ -7,9 +7,11 @@
   --ink: light-dark(#0f1c3f, #e9edfa);
   --muted: light-dark(#56628a, #9aa6cf);
   --line: light-dark(#c9d1e0, #2b3970);
+  --field-border: light-dark(#6c789c, #6879b3);
   --yellow: #f5b700;
-  --red: #e0364c;
-  --teal: #0e9f8e;
+  --red: light-dark(#c41e3a, #ff7a8a);
+  --teal: light-dark(#087366, #2cd4bf);
+  --link-underline: light-dark(#8f6200, #f5b700);
   --accent: var(--yellow);
   --on-accent: #0f1c3f;
   --display: "Bricolage Grotesque", "Arial Narrow", system-ui, sans-serif;
@@ -37,16 +39,31 @@ h1 { font-size: var(--step-4); font-weight: 800; font-stretch: 85%; letter-spaci
 h2 { font-size: var(--step-3); font-weight: 750; }
 h3 { font-size: var(--step-1); font-weight: 700; letter-spacing: -0.01em; line-height: 1.15; }
 p { margin: 0; max-width: 62ch; text-wrap: pretty; }
-a { color: inherit; text-decoration-color: var(--accent); text-decoration-thickness: 0.14em; text-underline-offset: 0.18em; }
+a { color: inherit; text-decoration-color: var(--link-underline); text-decoration-thickness: 0.15em; text-underline-offset: 0.18em; }
 a:hover { text-decoration-thickness: 0.24em; }
 code, pre, kbd { font-family: var(--mono); font-size: 0.86em; }
 :not(pre) > code { background: color-mix(in srgb, var(--ink) 9%, transparent); padding: 0.1em 0.35em; border-radius: 4px; }
 pre {
   margin: 0; padding: 1rem 1.1rem; overflow-x: auto; line-height: 1.5;
-  background: #0f1c3f; color: #e9edfa; border-radius: 10px; tab-size: 2;
+  background: light-dark(#0f1c3f, #070d22); color: #e9edfa;
+  border: 1px solid light-dark(transparent, #3a4b8c);
+  border-radius: 10px; tab-size: 2;
 }
 pre .c { color: #8f9bc7; }
-:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
+:focus-visible { outline: 3px solid var(--ink); outline-offset: 3px; border-radius: 4px; }
+
+.skip-link {
+  position: fixed; top: 0.75rem; left: 0.75rem; z-index: 1000;
+  padding: 0.6rem 1rem; border-radius: 999px;
+  background: var(--ink); color: var(--paper);
+  font-weight: 700; text-decoration: none;
+  transform: translateY(-200%);
+}
+.skip-link:focus-visible {
+  transform: translateY(0);
+  outline: 3px solid var(--ink);
+  outline-offset: 3px;
+}
 
 .wrap { width: min(100% - 2rem, 70rem); margin-inline: auto; }
 .stack > * + * { margin-top: var(--gap, 1rem); }
@@ -61,18 +78,21 @@ button, .button {
   border: 2px solid var(--ink); background: var(--ink); color: var(--paper);
   text-decoration: none;
 }
-button:hover, .button:hover { background: color-mix(in srgb, var(--ink) 82%, var(--accent)); }
+button:hover:not(:disabled), .button:hover { background: color-mix(in srgb, var(--ink) 82%, var(--accent)); }
 button:disabled { opacity: 0.45; cursor: not-allowed; }
 button.quiet, .button.quiet { background: transparent; color: var(--ink); }
-button.quiet:hover, .button.quiet:hover { background: color-mix(in srgb, var(--ink) 10%, transparent); }
-button.accent { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
-button.tiny { font-size: var(--step--1); padding: 0.5em 0.8em; border-width: 1.5px; }
+button.quiet:hover:not(:disabled), .button.quiet:hover { background: color-mix(in srgb, var(--ink) 10%, transparent); }
+button.accent, .button.accent { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+button.accent:hover:not(:disabled), .button.accent:hover { background: color-mix(in srgb, var(--accent) 84%, #000); border-color: var(--ink); }
+button.tiny, .button.tiny { font-size: var(--step--1); padding: 0.5em 0.8em; border-width: 1.5px; }
 
-input[type="text"], textarea, select {
+input[type="text"], input[type="password"], input[type="url"], input[type="search"], input[type="email"], input[type="number"], textarea, select {
   font: inherit; color: inherit; background: var(--panel);
-  border: 2px solid var(--line); border-radius: 10px; padding: 0.65em 0.8em; width: 100%;
+  border: 2px solid var(--field-border); border-radius: 10px; padding: 0.65em 0.8em; width: 100%;
 }
-input[type="text"]:focus-visible, textarea:focus-visible { outline-offset: 0; border-color: var(--ink); }
+:is(input[type="text"], input[type="password"], input[type="url"], input[type="search"], input[type="email"], input[type="number"], textarea, select):focus-visible {
+  outline: 3px solid var(--ink); outline-offset: 2px; border-color: var(--ink);
+}
 label { font-weight: 600; display: block; margin-bottom: 0.3rem; }
 
 .panel { background: var(--panel); border-radius: 16px; padding: clamp(1rem, 3vw, 1.6rem); }
@@ -97,7 +117,18 @@ label { font-weight: 600; display: block; margin-bottom: 0.3rem; }
   display: flex; gap: 1rem; align-items: center; justify-content: space-between; flex-wrap: wrap;
   padding: 0.9rem 0; font-weight: 600;
 }
-.site-bar nav { display: flex; gap: 1.1rem; flex-wrap: wrap; font-size: var(--step--1); }
+.site-bar nav { display: flex; gap: 0.7rem 1.1rem; flex-wrap: wrap; align-items: center; font-size: var(--step--1); }
+.site-bar nav a[aria-current="page"] {
+  font-weight: 800;
+  text-decoration: underline;
+  text-decoration-color: var(--ink);
+  text-decoration-thickness: 0.22em;
+  text-underline-offset: 0.28em;
+  background: color-mix(in srgb, var(--accent) 28%, transparent);
+  padding: 0.15em 0.45em;
+  margin-inline: -0.45em;
+  border-radius: 6px;
+}
 .wordmark { font: 800 1.25rem/1 var(--display); letter-spacing: -0.03em; text-decoration: none; display: inline-flex; align-items: center; gap: 0.5rem; }
 .wordmark::before {
   content: ""; width: 1.1em; height: 1.1em; border-radius: 50%;
@@ -109,8 +140,8 @@ label { font-weight: 600; display: block; margin-bottom: 0.3rem; }
 }
 
 /* Links that refs.js adds to the names of platform features, and its list. */
-a.ref { text-decoration-thickness: 0.08em; }
-a.ref:hover { text-decoration-thickness: 0.2em; }
+a.ref { text-decoration-thickness: 0.12em; }
+a.ref:hover { text-decoration-thickness: 0.22em; }
 .refs { border-top: 2px solid var(--ink); padding-block: clamp(1.6rem, 4vw, 2.6rem) 1rem; display: grid; gap: 1rem; }
 .refs h2 { font-size: var(--step-2); }
 .refs-features { margin: 0; columns: 2 20rem; column-gap: 3rem; font-size: var(--step--1); }

@@ -190,6 +190,10 @@ export default {
     }
 
     if (request.method !== "GET" && request.method !== "HEAD") return new Response("method not allowed", { status: 405 });
+    // Pattern pages live at /patterns/<slug>/; redirect bare /patterns/<slug> so links without a trailing slash work.
+    if (site === "main" && /^\/patterns\/[a-z0-9-]+$/.test(url.pathname) && url.pathname !== "/patterns/served") {
+      return Response.redirect(url.origin + url.pathname + "/" + url.search, 301);
+    }
     return (await serve(env, site, url.pathname)) || new Response("Not found", { status: 404, headers: { "content-type": TYPES.txt } });
   },
 };

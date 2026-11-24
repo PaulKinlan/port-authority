@@ -5,27 +5,39 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>The isolated room | Port Authority</title>
   <meta name="description" content="A worker that makes a synchronous call over a MessagePort, by blocking on shared memory until the answer is written.">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <meta property="og:title" content="The isolated room | Port Authority">
+  <meta property="og:description" content="A worker that makes a synchronous call over a MessagePort, by blocking on shared memory until the answer is written.">
+  <meta property="og:type" content="website">
+  <meta name="twitter:card" content="summary">
   <link rel="stylesheet" href="/base.css">
   <link rel="stylesheet" href="/patterns/patterns.css">
   <script src="/errors.js"></script>
 </head>
 <body>
+  <a class="skip-link" href="#main">Skip to content</a>
   <div class="wrap">
     <header class="site-bar">
       <a class="wordmark" href="/">Port Authority</a>
-      <nav><a href="/guide/">The guide</a><a href="/">Experiments</a><a href="/patterns/">Port patterns</a><a href="/isolated/" aria-current="page">Isolated room</a><a href="/missing/">What is missing</a><a href="/reading/">Further reading</a><a href="/hub/">Your hub</a></nav>
+      <nav aria-label="Primary"><a href="/">Experiments</a><a href="/guide/">The guide</a><a href="/patterns/">Port patterns</a><a href="/comlink/">Comlink today</a><a href="/ai-router/">AI router</a><a href="/lab/">The lab</a><a href="/missing/">What is missing</a><a href="/reading/">Further reading</a><a href="/hub/">Your hub</a></nav>
     </header>
-    <div class="stack" style="padding-block:2.5rem 2rem; --gap:1.2rem">
-      <h1 style="font-size:var(--step-3)">The isolated room</h1>
-      <p>This page is cross-origin isolated, which you need for <code>SharedArrayBuffer</code>. With it, a port can carry memory that both ends see at the same time, and a thread can stop and wait on it.</p>
-      <p class="small muted" id="state"></p>
-    </div>
-    <main>
+    <main id="main">
+      <div class="stack" style="padding-block:2.5rem 2rem; --gap:1.2rem">
+        <p class="small muted"><a href="/guide/#threads">&larr; Back to The guide</a> &middot; <a href="/isolated/lab/">Open the isolated lab</a></p>
+        <h1 style="font-size:var(--step-3)">The isolated room</h1>
+        <p>This page is cross-origin isolated, which browsers require before enabling <code>SharedArrayBuffer</code>. The server sends two headers &mdash; <code>Cross-Origin-Opener-Policy: same-origin</code> (COOP) and <code>Cross-Origin-Embedder-Policy: credentialless</code> (COEP) &mdash; to keep other origins out of this page's process.</p>
+        <p>With isolation enabled, a port can carry shared memory that both ends see at the same time, and a worker thread can stop and wait on it. To test every transferable object under these headers, try <a href="/isolated/lab/">the isolated lab</a>.</p>
+        <p class="small muted" id="state" role="status" aria-live="polite"></p>
+      </div>
       <section class="pattern" id="sync">
         <h2>Block on a port: a synchronous call with no await</h2>
         <div class="demo"></div>
         <div class="text">
-          <p>The worker runs three lines of plain blocking code. Each <code>ask()</code> posts the question down a port along with a small piece of shared memory, then sleeps on that memory. Whoever holds the other end of the port writes the answer into it and wakes the worker. The worker never yields, so it can't receive a message, but the answer is already in its memory when it wakes. The other end can be you, or another worker doing slow asynchronous work, and the blocking code cannot tell.</p>
+          <div class="stack">
+            <p>The worker runs three lines of plain blocking code. Each <code>ask()</code> posts the question down a port along with a small piece of shared memory, then sleeps on that memory.</p>
+            <p>Whoever holds the other end of the port writes the answer into that memory and wakes the worker. Because the worker never yields, it can't receive a regular message, yet the answer is already waiting in memory when it wakes.</p>
+            <p>The other end can be you, or another worker doing slow asynchronous work, and the blocking code cannot tell the difference.</p>
+          </div>
           <pre><span class="c">// in the worker: no async, no await, no callback</span>
 function ask(question) {
   const memory = new SharedArrayBuffer(516);
@@ -48,9 +60,10 @@ Atomics.notify(new Int32Array(memory, 0, 1), 0);</pre>
           <li>Shared memory only crosses to contexts on the same site in the same isolated group. The question can be passed on to another origin over an ordinary port, and the answer written into the memory by whoever passed it on.</li>
           <li>An isolated page cannot hold a reference to a window on a page that is not isolated, so it cannot open your hub's picker and get an answer back. That is why this demo has its own page.</li>
         </ul>
+        <p class="small"><a href="/isolated/lab/">Run the isolated lab &rsaquo;</a> &middot; <a href="/guide/#threads">Read more in The guide &rsaquo;</a></p>
       </section>
     </main>
-    <footer class="small muted" style="padding-block:2rem 4rem">Port Authority is a working name. By <a href="https://paul.kinlan.me">Paul Kinlan</a>.</footer>
+    <footer class="small muted" style="padding-block:2rem 4rem">Port Authority, by <a href="https://paul.kinlan.me">Paul Kinlan</a>.</footer>
   </div>
   <script type="module">
     import { mount } from "/patterns/demos.js";
@@ -104,12 +117,27 @@ Atomics.notify(new Int32Array(memory, 0, 1), 0);</pre>
         };
       };
     }
-    const workerFrom = (...fns) => new Worker(URL.createObjectURL(new Blob([fns.map((fn, i) => i === fns.length - 1 ? `(${fn})()` : String(fn)).join("\n")], { type: "text/javascript" })));
-    const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+    const activeWorkers = new Set();
+    function cleanupWorkers() {
+      for (const entry of activeWorkers) {
+        entry.worker.terminate();
+        URL.revokeObjectURL(entry.url);
+      }
+      activeWorkers.clear();
+    }
+    function workerFrom(...fns) {
+      const url = URL.createObjectURL(new Blob([fns.map((fn, i) => i === fns.length - 1 ? `(${fn})()` : String(fn)).join("\n")], { type: "text/javascript" }));
+      const worker = new Worker(url);
+      activeWorkers.add({ worker, url });
+      return worker;
+    }
+    addEventListener("pagehide", cleanupWorkers);
 
     mount(document.querySelector("#sync .demo"), {
       id: "sync",
       async setup(stage, ui) {
+        cleanupWorkers();
         const logBox = (name, title) => {
           const box = stage.box(name, { kind: "worker", url: "blob:", html: `<div class="here"><h4>${title}</h4><ul class="log"></ul></div>` });
           const ul = box.node.querySelector("ul");
@@ -121,22 +149,35 @@ Atomics.notify(new Int32Array(memory, 0, 1), 0);</pre>
         const form = me.node.querySelector("form"), input = form.querySelector("input"), label = form.querySelector("label"), idle = me.node.querySelector("[data-idle]");
         if (!self.crossOriginIsolated) { worker.say("needs a cross-origin isolated page"); return; }
         let waitingMemory = null;
+        let waitingNumeric = false;
         form.onsubmit = (event) => {
           event.preventDefault();
           if (!waitingMemory) return;
-          write(waitingMemory, input.value || "nobody");
-          waitingMemory = null; form.hidden = true; idle.hidden = false; input.value = "";
+          const trimmed = input.value.trim();
+          write(waitingMemory, trimmed || (waitingNumeric ? "0" : "nobody"));
+          waitingMemory = null; waitingNumeric = false; form.hidden = true; idle.hidden = false; input.value = "";
           stage.pulse("line", "page");
         };
         const run = (target) => {
+          cleanupWorkers();
+          waitingMemory = null; waitingNumeric = false; form.hidden = true; idle.hidden = false;
           const blocked = workerFrom(program);
           const channel = new MessageChannel();
-          blocked.onmessage = ({ data }) => { worker.say(data.log); if (data.done) buttons.forEach((b) => (b.disabled = false)); };
+          blocked.onmessage = ({ data }) => {
+            worker.say(data.log);
+            if (data.done) {
+              cleanupWorkers();
+              buttons.forEach((b) => (b.disabled = false));
+            }
+          };
           buttons.forEach((b) => (b.disabled = true));
           if (target === "you") {
             stage.cable("line", "worker", "page", "red");
             channel.port1.onmessage = ({ data }) => {
               waitingMemory = data.memory;
+              waitingNumeric = /how many|cost/i.test(data.question);
+              input.inputMode = waitingNumeric ? "decimal" : "text";
+              input.placeholder = waitingNumeric ? "e.g. 12" : "Your name";
               label.textContent = data.question; form.hidden = false; idle.hidden = true; input.focus();
               stage.pulse("line", "worker");
               worker.say(`stopped at ask("${data.question}")`);

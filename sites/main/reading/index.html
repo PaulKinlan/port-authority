@@ -5,6 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Further reading on message ports | Port Authority</title>
   <meta name="description" content="185 links on MessageChannel, MessagePort, postMessage, transferable objects and SharedWorker: reference pages, specifications, articles, libraries, talks and research papers, each with a one-line note.">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <meta property="og:title" content="Further reading on message ports | Port Authority">
+  <meta property="og:description" content="185 links on MessageChannel, MessagePort, postMessage, transferable objects and SharedWorker: reference pages, specifications, articles, libraries, talks and research papers, each with a one-line note.">
+  <meta property="og:type" content="website">
+  <meta name="twitter:card" content="summary">
   <link rel="stylesheet" href="/base.css">
   <script src="/errors.js"></script>
   <style>
@@ -14,45 +19,57 @@
     main section > p { margin: 0; max-width: 66ch; }
     .toc { columns: 2 16rem; padding: 0; margin: 0; list-style: none; }
     .toc li { margin-bottom: .4rem; break-inside: avoid; }
+    .filter-bar { display: grid; gap: .45rem; max-width: 34rem; }
+    .filter-bar label { margin-bottom: 0; }
     .links { list-style: none; margin: 0; padding: 0; display: grid; }
     .links li { display: grid; gap: .15rem; padding: .7rem 0; border-top: 1px solid var(--line); max-width: 76ch; }
     .links li:first-child { border-top: 0; }
     .links a { font-weight: 600; overflow-wrap: anywhere; }
     .links .src { font-size: var(--step--1); color: var(--muted); }
     .links .note { max-width: 70ch; }
+    .top-link { margin-top: .4rem; }
+    abbr[title] { text-decoration: underline dotted; text-underline-offset: 0.16em; }
   </style>
 </head>
 <body>
-  <div class="wrap">
+  <a class="skip-link" href="#main">Skip to content</a>
+  <div class="wrap" id="top">
     <header class="site-bar">
       <a class="wordmark" href="/">Port Authority</a>
-      <nav><a href="/">Experiments</a><a href="/guide/">The guide</a><a href="/patterns/">Port patterns</a><a href="/lab/">The lab</a><a href="/missing/">What is missing</a><a href="/reading/" aria-current="page">Further reading</a><a href="/hub/">Your hub</a></nav>
+      <nav aria-label="Primary"><a href="/">Experiments</a><a href="/guide/">The guide</a><a href="/patterns/">Port patterns</a><a href="/comlink/">Comlink today</a><a href="/ai-router/">AI router</a><a href="/lab/">The lab</a><a href="/missing/">What is missing</a><a href="/reading/" aria-current="page">Further reading</a><a href="/hub/">Your hub</a></nav>
     </header>
-    <div class="stack" style="padding-block:2.5rem 1.5rem; --gap:1.1rem">
-      <h1 style="font-size:var(--step-3)">Further reading on message ports</h1>
-      <p>This site builds on a lot of other people's work. Here are 185 places to read more about <code>MessageChannel</code>, <code>MessagePort</code>, <code>postMessage</code>, transferable objects and <code>SharedWorker</code>: the reference pages, the specifications, articles, libraries, talks and research papers. Each link has one line on what it covers.</p>
-      <p>Not much has been written about message ports on their own. Most of the writing and nearly all of the research is about <code>window.postMessage</code> and workers, so those are here too.</p>
-      <p class="small muted">The links were last checked on 2026-11-21. If one is broken, or something good is missing, please <a href="https://github.com/PaulKinlan/port-authority/issues">open an issue</a>.</p>
-      <ul class="toc">
-        <li><a href="#reference">Reference pages</a> <span class="muted small">24</span></li>
-        <li><a href="#specs">Specifications</a> <span class="muted small">13</span></li>
-        <li><a href="#history">How the standards changed</a> <span class="muted small">15</span></li>
-        <li><a href="#browser-teams">Guides from browser teams</a> <span class="muted small">11</span></li>
-        <li><a href="#performance">Performance and timing</a> <span class="muted small">7</span></li>
-        <li><a href="#posts">Posts about ports, frames and shared workers</a> <span class="muted small">13</span></li>
-        <li><a href="#products">How products use messaging</a> <span class="muted small">10</span></li>
-        <li><a href="#libraries">Libraries</a> <span class="muted small">22</span></li>
-        <li><a href="#runtimes">Outside the browser</a> <span class="muted small">4</span></li>
-        <li><a href="#capabilities">Capabilities and RPC</a> <span class="muted small">5</span></li>
-        <li><a href="#security">Security guides and write-ups</a> <span class="muted small">5</span></li>
-        <li><a href="#papers-security">Research papers: security of messaging</a> <span class="muted small">14</span></li>
-        <li><a href="#papers-other">Research papers: timing, workers and concurrency</a> <span class="muted small">5</span></li>
-        <li><a href="#talks">Talks and videos</a> <span class="muted small">4</span></li>
-        <li><a href="#intents">Web Intents, WebMCP and agents</a> <span class="muted small">13</span></li>
-        <li><a href="#paul">My writing</a> <span class="muted small">20</span></li>
-      </ul>
-    </div>
-    <main>
+    <main id="main">
+      <div class="stack" style="padding-block:1.5rem 0; --gap:1.1rem">
+        <h1 style="font-size:var(--step-3)">Further reading on message ports</h1>
+        <p>This site builds on a lot of other people's work. Here are 185 places to read more about <code>MessageChannel</code>, <code>MessagePort</code>, <code>postMessage</code>, transferable objects and <code>SharedWorker</code>: the reference pages, the specifications, articles, libraries, talks and research papers. Each link has one line on what it covers.</p>
+        <p>Not much has been written about message ports on their own. Most of the writing and nearly all of the research is about <code>window.postMessage</code> and workers, so those are here too.</p>
+        <p class="small muted">The links were last checked on 2026-11-21. If one is broken, or something good is missing, please <a href="https://github.com/PaulKinlan/port-authority/issues">open an issue</a>.</p>
+        <nav class="toc-nav" aria-label="Table of contents">
+          <ul class="toc">
+            <li><a href="#reference">Reference pages</a> <span class="muted small">24</span></li>
+            <li><a href="#specs">Specifications</a> <span class="muted small">13</span></li>
+            <li><a href="#history">How the standards changed</a> <span class="muted small">15</span></li>
+            <li><a href="#browser-teams">Guides from browser teams</a> <span class="muted small">11</span></li>
+            <li><a href="#performance">Performance and timing</a> <span class="muted small">7</span></li>
+            <li><a href="#posts">Posts about ports, frames and shared workers</a> <span class="muted small">13</span></li>
+            <li><a href="#products">How products use messaging</a> <span class="muted small">10</span></li>
+            <li><a href="#libraries">Libraries</a> <span class="muted small">22</span></li>
+            <li><a href="#runtimes">Outside the browser</a> <span class="muted small">4</span></li>
+            <li><a href="#capabilities">Capabilities and RPC</a> <span class="muted small">5</span></li>
+            <li><a href="#security">Security guides and write-ups</a> <span class="muted small">5</span></li>
+            <li><a href="#papers-security">Research papers: security of messaging</a> <span class="muted small">14</span></li>
+            <li><a href="#papers-other">Research papers: timing, workers and concurrency</a> <span class="muted small">5</span></li>
+            <li><a href="#talks">Talks and videos</a> <span class="muted small">4</span></li>
+            <li><a href="#intents">Web Intents, WebMCP and agents</a> <span class="muted small">13</span></li>
+            <li><a href="#paul">My writing</a> <span class="muted small">20</span></li>
+          </ul>
+        </nav>
+        <div class="filter-bar">
+          <label for="reading-filter">Filter all 185 links</label>
+          <input id="reading-filter" type="search" placeholder="Search by title, author, topic, or acronym (e.g. Comlink, SharedWorker, RPC)…" autocomplete="off">
+          <p class="small muted" id="filter-status" role="status" aria-live="polite"></p>
+        </div>
+      </div>
       <section id="reference">
         <h2>Reference pages</h2>
         <p>The MDN reference for each API this site uses. Each page has examples and a browser support table.</p>
@@ -178,6 +195,7 @@
             <span class="note">Browser support for SharedWorker.</span>
           </li>
         </ul>
+        <p class="small top-link"><a href="#top">&uarr; Back to top</a></p>
       </section>
       <section id="specs">
         <h2>Specifications</h2>
@@ -249,6 +267,7 @@
             <span class="note">The older W3C snapshot of the same text. It has been superseded by the HTML Standard and is useful for history.</span>
           </li>
         </ul>
+        <p class="small top-link"><a href="#top">&uarr; Back to top</a></p>
       </section>
       <section id="history">
         <h2>How the standards changed</h2>
@@ -330,6 +349,7 @@
             <span class="note">What happens to an extension's open port when its page goes into the back/forward cache.</span>
           </li>
         </ul>
+        <p class="small top-link"><a href="#top">&uarr; Back to top</a></p>
       </section>
       <section id="browser-teams">
         <h2>Guides from browser teams</h2>
@@ -390,6 +410,7 @@
             <span class="note">A small running example that sends a MessageChannel port to a service worker and waits for the reply.</span>
           </li>
         </ul>
+        <p class="small top-link"><a href="#top">&uarr; Back to top</a></p>
       </section>
       <section id="performance">
         <h2>Performance and timing</h2>
@@ -431,6 +452,7 @@
             <span class="note">A survey of how workers are used, the cost of postMessage and the tools around it.</span>
           </li>
         </ul>
+        <p class="small top-link"><a href="#top">&uarr; Back to top</a></p>
       </section>
       <section id="posts">
         <h2>Posts about ports, frames and shared workers</h2>
@@ -502,6 +524,7 @@
             <span class="note">Practical notes on debugging, lifetime and browser differences.</span>
           </li>
         </ul>
+        <p class="small top-link"><a href="#top">&uarr; Back to top</a></p>
       </section>
       <section id="products">
         <h2>How products use messaging</h2>
@@ -558,6 +581,7 @@
             <span class="note">Passing ports between Electron's main process and its windows, with several worked patterns.</span>
           </li>
         </ul>
+        <p class="small top-link"><a href="#top">&uarr; Back to top</a></p>
       </section>
       <section id="libraries">
         <h2>Libraries</h2>
@@ -571,7 +595,7 @@
           <li>
             <a href="https://github.com/cloudflare/capnweb">Cap'n Web</a>
             <span class="src">Cloudflare</span>
-            <span class="note">Object-capability RPC with promise pipelining. It runs over HTTP, WebSocket and MessagePort.</span>
+            <span class="note">Object-capability <abbr title="Remote Procedure Call">RPC</abbr> (Remote Procedure Call) with promise pipelining. It runs over HTTP, WebSocket and MessagePort.</span>
           </li>
           <li>
             <a href="https://github.com/Aaronius/penpal">Penpal</a>
@@ -601,17 +625,17 @@
           <li>
             <a href="https://github.com/kunkunsh/kkrpc">kkrpc</a>
             <span class="src">Huakun Shen</span>
-            <span class="note">Typed two-way RPC over workers, iframes and other transports.</span>
+            <span class="note">Typed two-way <abbr title="Remote Procedure Call">RPC</abbr> over workers, iframes and other transports.</span>
           </li>
           <li>
             <a href="https://github.com/molvqingtai/comctx">Comctx</a>
             <span class="src">molvqingtai</span>
-            <span class="note">RPC across contexts with a transport adapter you supply.</span>
+            <span class="note"><abbr title="Remote Procedure Call">RPC</abbr> across contexts with a transport adapter you supply.</span>
           </li>
           <li>
             <a href="https://github.com/Jack-Works/async-call-rpc">async-call-rpc</a>
             <span class="src">Jack Works</span>
-            <span class="note">JSON-RPC over any channel that can carry a message.</span>
+            <span class="note">JSON-<abbr title="Remote Procedure Call">RPC</abbr> over any channel that can carry a message.</span>
           </li>
           <li>
             <a href="https://github.com/developit/workerize">workerize</a>
@@ -664,7 +688,7 @@
             <span class="note">A duplex Node-style stream over window.postMessage, used between an extension and a page.</span>
           </li>
           <li>
-            <a href="https://github.com/endojs/endo">Endo and CapTP</a>
+            <a href="https://github.com/endojs/endo">Endo and <abbr title="Capability Transport Protocol">CapTP</abbr></a>
             <span class="src">Endo</span>
             <span class="note">Hardened JavaScript and a capability transfer protocol for calling objects in another context or on another machine.</span>
           </li>
@@ -674,6 +698,7 @@
             <span class="note">Model Context Protocol transports for the browser, over postMessage between tabs, iframes and extensions.</span>
           </li>
         </ul>
+        <p class="small top-link"><a href="#top">&uarr; Back to top</a></p>
       </section>
       <section id="runtimes">
         <h2>Outside the browser</h2>
@@ -700,28 +725,29 @@
             <span class="note">Workers and their messages in Bun.</span>
           </li>
         </ul>
+        <p class="small top-link"><a href="#top">&uarr; Back to top</a></p>
       </section>
       <section id="capabilities">
-        <h2>Capabilities and RPC</h2>
+        <h2>Capabilities and <abbr title="Remote Procedure Call">RPC</abbr></h2>
         <p>A port gives its holder the ability to send to one place, and it can be handed on. That is the idea behind object-capability security, which has a long literature.</p>
         <ul class="links">
           <li>
             <a href="http://www.erights.org/talks/thesis/">Robust Composition: Towards a Unified Approach to Access Control and Concurrency Control</a>
             <span class="src">Mark S. Miller, 2006</span>
-            <span class="note">The thesis that sets out object capabilities and promise pipelining. Cap'n Proto, Cap'n Web and CapTP build on it.</span>
+            <span class="note">The thesis that sets out object capabilities and promise pipelining. Cap'n Proto, Cap'n Web and <abbr title="Capability Transport Protocol">CapTP</abbr> (Capability Transport Protocol) build on it.</span>
           </li>
           <li>
-            <a href="https://capnproto.org/rpc.html">Cap'n Proto: RPC Protocol</a>
+            <a href="https://capnproto.org/rpc.html">Cap'n Proto: <abbr title="Remote Procedure Call">RPC</abbr> Protocol</a>
             <span class="src">Kenton Varda</span>
-            <span class="note">A capability-based RPC protocol in which a reference to a remote object can be passed in a call.</span>
+            <span class="note">A capability-based <abbr title="Remote Procedure Call">RPC</abbr> protocol in which a reference to a remote object can be passed in a call.</span>
           </li>
           <li>
-            <a href="https://blog.cloudflare.com/capnweb-javascript-rpc-library/">Cap'n Web: a new RPC system for browsers and web servers</a>
+            <a href="https://blog.cloudflare.com/capnweb-javascript-rpc-library/">Cap'n Web: a new <abbr title="Remote Procedure Call">RPC</abbr> system for browsers and web servers</a>
             <span class="src">Kenton Varda and Steve Faulkner, Cloudflare, 2025</span>
             <span class="note">The same model in plain JavaScript and JSON: pass functions and objects by reference, in both directions.</span>
           </li>
           <li>
-            <a href="https://ocapn.org/">OCapN</a>
+            <a href="https://ocapn.org/"><abbr title="Object Capability Network">OCapN</abbr></a>
             <span class="src">OCapN pre-standardization group</span>
             <span class="note">Work on a shared protocol for object capabilities across a network.</span>
           </li>
@@ -731,6 +757,7 @@
             <span class="note">Documentation for Hardened JavaScript, compartments and the eventual-send API.</span>
           </li>
         </ul>
+        <p class="small top-link"><a href="#top">&uarr; Back to top</a></p>
       </section>
       <section id="security">
         <h2>Security guides and write-ups</h2>
@@ -762,6 +789,7 @@
             <span class="note">How a message sent to any origin, or the fact that one was sent at all, leaks information to another site.</span>
           </li>
         </ul>
+        <p class="small top-link"><a href="#top">&uarr; Back to top</a></p>
       </section>
       <section id="papers-security">
         <h2>Research papers: security of messaging</h2>
@@ -803,7 +831,7 @@
             <span class="note">A study of message receivers on the Alexa top 10,000 sites. Many checked the origin incorrectly or not at all.</span>
           </li>
           <li>
-            <a href="https://www.usenix.org/conference/osdi14/technical-sessions/presentation/stefan">Protecting Users by Confining JavaScript with COWL</a>
+            <a href="https://www.usenix.org/conference/osdi14/technical-sessions/presentation/stefan">Protecting Users by Confining JavaScript with <abbr title="Confinement with Origin Web Labels">COWL</abbr></a>
             <span class="src">Stefan, Yang, Marchenko, Russo, Herman, Karp and Mazières, OSDI, 2014</span>
             <span class="note">Adds labels to browser contexts and to the messages they exchange, so a page can share data with code it does not trust.</span>
           </li>
@@ -835,9 +863,10 @@
           <li>
             <a href="https://cispa.de/en/research/publications/52659-careful-who-you-trust-studying-the-pitfalls-of-cross-origin-communication">Careful Who You Trust: Studying the Pitfalls of Cross-Origin Communication</a>
             <span class="src">Meiser, Laperdrix and Stock, ACM AsiaCCS, 2021</span>
-            <span class="note">Maps which sites trust which others through postMessage and CORS, and how far a flaw in one site reaches.</span>
+            <span class="note">Maps which sites trust which others through postMessage and <abbr title="Cross-Origin Resource Sharing">CORS</abbr> (Cross-Origin Resource Sharing), and how far a flaw in one site reaches.</span>
           </li>
         </ul>
+        <p class="small top-link"><a href="#top">&uarr; Back to top</a></p>
       </section>
       <section id="papers-other">
         <h2>Research papers: timing, workers and concurrency</h2>
@@ -868,6 +897,7 @@
             <span class="note">Spiders.js, an actor framework that uses one model for web workers and for remote machines. PDF.</span>
           </li>
         </ul>
+        <p class="small top-link"><a href="#top">&uarr; Back to top</a></p>
       </section>
       <section id="talks">
         <h2>Talks and videos</h2>
@@ -893,6 +923,7 @@
             <span class="note">A short talk that moves an iframe example from window.postMessage to a port.</span>
           </li>
         </ul>
+        <p class="small top-link"><a href="#top">&uarr; Back to top</a></p>
       </section>
       <section id="intents">
         <h2>Web Intents, WebMCP and agents</h2>
@@ -951,7 +982,7 @@
           <li>
             <a href="https://modelcontextprotocol.io/extensions/apps/overview">MCP Apps</a>
             <span class="src">Model Context Protocol</span>
-            <span class="note">An MCP extension in which a tool's UI runs in an iframe and speaks JSON-RPC to its host over postMessage.</span>
+            <span class="note">An MCP extension in which a tool's UI runs in an iframe and speaks JSON-<abbr title="Remote Procedure Call">RPC</abbr> to its host over postMessage.</span>
           </li>
           <li>
             <a href="https://github.com/modelcontextprotocol/ext-apps">MCP Apps SDK</a>
@@ -964,6 +995,7 @@
             <span class="note">The protocol between an editor or other client and a coding agent, which the hub on this site carries to a web page.</span>
           </li>
         </ul>
+        <p class="small top-link"><a href="#top">&uarr; Back to top</a></p>
       </section>
       <section id="paul">
         <h2>My writing</h2>
@@ -1070,9 +1102,45 @@
             <span class="note">The original JavaScript shim and examples.</span>
           </li>
         </ul>
+        <p class="small top-link"><a href="#top">&uarr; Back to top</a></p>
       </section>
     </main>
-    <footer class="small muted" style="padding-block:2rem 4rem">Port Authority is a working name. By <a href="https://paul.kinlan.me">Paul Kinlan</a>. The list on this page is also available as <a href="/reading/links.json">links.json</a>.</footer>
+    <footer class="small muted" style="padding-block:2rem 4rem">Port Authority, by <a href="https://paul.kinlan.me">Paul Kinlan</a>. The list on this page is also available as <a href="/reading/links.json">links.json</a>.</footer>
   </div>
+  <script type="module">
+    const input = document.getElementById("reading-filter");
+    const status = document.getElementById("filter-status");
+    const sections = [...document.querySelectorAll("main section")];
+    const items = sections.flatMap((section) => {
+      const heading = section.querySelector("h2")?.textContent.toLowerCase() || "";
+      return [...section.querySelectorAll(".links li")].map((li) => ({
+        li,
+        section,
+        haystack: (li.textContent + " " + heading).toLowerCase(),
+      }));
+    });
+    const total = items.length;
+    input.addEventListener("input", () => {
+      const terms = input.value.trim().toLowerCase().split(/\s+/).filter(Boolean);
+      if (!terms.length) {
+        for (const item of items) item.li.hidden = false;
+        for (const section of sections) section.hidden = false;
+        status.textContent = "";
+        return;
+      }
+      const visibleBySection = new Map(sections.map((s) => [s, 0]));
+      let shown = 0;
+      for (const item of items) {
+        const match = terms.every((t) => item.haystack.includes(t));
+        item.li.hidden = !match;
+        if (match) {
+          shown++;
+          visibleBySection.set(item.section, visibleBySection.get(item.section) + 1);
+        }
+      }
+      for (const [section, n] of visibleBySection) section.hidden = n === 0;
+      status.textContent = shown === 0 ? "No links match that search." : `Showing ${shown} of ${total} links.`;
+    });
+  </script>
 </body>
 </html>
