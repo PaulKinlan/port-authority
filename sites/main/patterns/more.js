@@ -318,8 +318,8 @@ onfetch = (event) => event.respondWith(new Promise((resolve) => {
 
       const loadBtn = ui.button("Load the served page", () => {
         served.node.innerHTML = `<iframe title="A page served by this tab" src="/patterns/served/index.html?${Date.now()}"></iframe>`;
-        stage.cable("down", "sw", "served", "teal", "HTTP fetch");
-        setTimeout(() => stage.pulse("down", "served"), 220);
+        stage.cable("down", "served", "sw", "teal", "fetch");
+        setTimeout(() => stage.pulse("down", "sw"), 220);
       }, true);
       ui.button("Connect this tab to the Service Worker", async (btn) => {
         btn.disabled = true;
@@ -349,7 +349,7 @@ more.push(
   {
     id: "stream-intro",
     title: "A forwarded stream stops when the page that passed it on closes. A port keeps working.",
-    blurb: "You can pass a stream on, the same as a port. But a stream that was passed on keeps flowing through every context that touched it. Send one through the introducer, remove the introducer, and the reader stalls with no error and no end. So introduce with a port first, then send the stream down the direct line. Start again between the two to compare.",
+    blurb: "You can pass a stream on, the same as a port. But a stream that was passed on keeps flowing through every context that touched it. Send one through the introducer, remove the introducer, and the reader stalls with no error and no end. So introduce with a port first, then send the stream down the direct line. Start again between the two to compare. The three boxes are frames in this page, and this page gave the source and the reader each a line to the introducer.",
     code: `<span class="c">// fragile: the middle is now part of the pipe for ever</span>
 toMiddle.postMessage({ stream }, [stream]);
 
@@ -461,11 +461,11 @@ direct.postMessage({ stream }, [stream]);`,
   {
     id: "pipeline",
     title: "Back-pressure across three origins",
-    blurb: "This page hands its stream to another origin, which returns a transformed stream, which goes to a third origin to be read. Nothing is buffered without limit: pause the reader and, a few chunks later, the source stops being asked for more.",
+    blurb: "This page hands its stream to a frame on another origin. That frame transforms it and hands the result to a frame on a third origin, down a port it holds to that frame. Nothing is buffered without limit: pause the reader and, a few chunks later, the source stops being asked for more.",
     code: `<span class="c">// the transformer, on its own origin</span>
 port.onmessage = ({ data }) => {
   const out = data.readable.pipeThrough(new TransformStream({ transform: shout }));
-  port.postMessage({ readable: out }, [out]);
+  toReader.postMessage({ readable: out }, [out]);   <span class="c">// a port to the third origin</span>
 };`,
     async setup(stage, ui) {
       const box = stage.box("page", { html: `<div class="here"><div class="box-title">This page, the source</div><ul class="log" role="log" aria-live="polite"><li>idle — not connected yet</li></ul></div>` });
@@ -473,14 +473,15 @@ port.onmessage = ({ data }) => {
       await Promise.all([
         stage.frame("shout", {
           title: "Transformer, origin two", color: "yellow",
+          // Given two ports: one from this page, and one that leads directly to the reader.
           script: () => {
             log("waiting — not connected yet");
-            on("port", (_, [port]) => {
-              log("connected to the source");
+            on("port", (_, [port, next]) => {
+              log("connected to the source and the reader");
               port.onmessage = ({ data }) => {
                 let n = 0;
                 const out = data.readable.pipeThrough(new TransformStream({ transform(chunk, c) { log(`shouted ${++n}`); c.enqueue(String(chunk).toUpperCase() + "!"); } }));
-                try { send(port, "a", { readable: out }, [out]); }
+                try { send(next, "b", { readable: out }, [out]); }
                 catch { log("This browser cannot transfer streams yet."); }
               };
             });
@@ -508,8 +509,8 @@ port.onmessage = ({ data }) => {
           },
         }),
       ]);
-      let toShout = null, toSink = null, paused = false;
-      stage.cleanup(() => { toShout?.port1.close(); toSink?.port1.close(); });
+      let toShout = null, paused = false;
+      stage.cleanup(() => { toShout?.port1.close(); });
       const pauseBtn = ui.button("Pause the reader", (btn) => { paused = !paused; stage.post("sink", { cmd: "pause", paused }); btn.textContent = paused ? "Let the reader continue" : "Pause the reader"; }, true);
       const startBtn = ui.button("Start the pipe", (btn) => {
         let made = 0;
@@ -523,17 +524,16 @@ port.onmessage = ({ data }) => {
       }, true);
       ui.button("Connect the three origins", (btn) => {
         btn.disabled = true;
+        // Two channels. This page keeps one end of the first. Both ends of the
+        // second are given away, so the transformed stream goes from the
+        // transformer to the reader without passing through this page.
         toShout = new MessageChannel();
-        toSink = new MessageChannel();
-        stage.post("shout", { cmd: "port" }, [toShout.port2]);
-        stage.post("sink", { cmd: "port" }, [toSink.port2]);
-        stage.cable("a", "page", "shout", "yellow", "in");
-        stage.cable("b", "shout", "sink", "teal", "out");
-        toShout.port1.onmessage = ({ data }) => {
-          try { toSink.port1.postMessage({ readable: data.readable }, [data.readable]); stage.pulse("b", "shout"); }
-          catch { say("This browser cannot transfer streams yet."); }
-        };
-        say("connected to Transformer and Reader");
+        const between = new MessageChannel();
+        stage.post("shout", { cmd: "port" }, [toShout.port2, between.port1]);
+        stage.post("sink", { cmd: "port" }, [between.port2]);
+        stage.cable("a", "page", "shout", "yellow");
+        stage.cable("b", "shout", "sink", "teal");
+        say("connected to Transformer, and Transformer directly to Reader");
         startBtn.disabled = false;
       }, false, true);
     },
@@ -541,7 +541,7 @@ port.onmessage = ({ data }) => {
   {
     id: "reload",
     title: "Keep a port across a page reload",
-    blurb: "A port cannot be saved. IndexedDB, sessionStorage and history state all refuse it, because a port can be moved but never copied. But you can leave it with a SharedWorker. As this frame unloads it posts its port to the worker, and when it loads again it asks for it back. The worker is created with <code>extendedLifetime</code>, so it outlives the page even when that page was its only client. The feed doesn't notice. Ticks sent during the reload waited in the port, and the count has no gaps.",
+    blurb: "A port cannot be saved. IndexedDB, sessionStorage and history state all refuse it, because a port can be moved but never copied. But you can leave it with a SharedWorker. As this frame unloads it posts its port to the worker, and when it loads again it asks for it back. The worker is created with <code>extendedLifetime</code>, so it outlives the page even when that page was its only client. The feed doesn't notice. Ticks sent during the reload waited in the port, and the count has no gaps. The dark cable is the frame's own connection to the worker. The other one is the port that is kept, which this page made and gave to the feed and the frame.",
     code: `const bank = new SharedWorker("/bank.js", { extendedLifetime: true });
 addEventListener("pagehide", () => bank.port.postMessage({ deposit: key }, [port]));
 
@@ -565,6 +565,8 @@ bank.port.onmessage = ({ ports }) => resume(ports[0]);`,
         return;
       }
       await keeper.whenReady;
+      // The frame's own connection to the shared worker, which it makes again on every load.
+      stage.cable("bank", "keeper", "bank", "ink");
       let refusal = "", reloads = 0;
       const note = (text) => { bankBox.node.querySelector("ul").innerHTML = `<li>${text}</li>${refusal}`; };
       const connectFeed = () => {

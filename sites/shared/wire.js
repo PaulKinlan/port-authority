@@ -1,6 +1,7 @@
-// A patch bay for demos. Each box on the stage is a real browsing context: a
-// sandboxed iframe with its own opaque origin, so every hop you see is a real
-// cross-origin hop. Cables are drawn when a port lands somewhere, and a dot
+// A patch bay for demos. A box made with frame() is a real browsing context: a
+// sandboxed srcdoc iframe with an opaque origin, so a hop to or from it is
+// cross-origin. It is not a site: it has no address and no storage. A demo
+// that says "site" must use box() with the `src` of a page on a real origin. Cables are drawn when a port lands somewhere, and a dot
 // runs along the cable when a frame says it sent a message.
 //
 // The frames tell the stage about traffic over window.postMessage purely so it
@@ -13,15 +14,21 @@ const SVG_NS = "http://www.w3.org/2000/svg";
 // window, an iframe and a worker can be told apart without reading the labels.
 export const KINDS = {
   window: { label: "Window", about: "A top-level page in a tab or window of its own. Its address is in the bar at the top." },
-  iframe: { label: "<iframe>", about: "A page embedded inside another page. Its address is written underneath." },
+  iframe: { label: "<iframe>", about: "A page embedded in this one. Its address is written underneath. One marked sandbox with the address about:srcdoc has no site behind it: this page wrote its HTML, and the sandbox gives it an opaque origin, which matches no other origin. It stands in for code from someone else." },
   worker: { label: "Worker", about: "A background thread that belongs to one page. The script it runs is written underneath." },
   shared: { label: "SharedWorker", about: "One background thread that every page of a site can connect to." },
   service: { label: "Service Worker", about: "A background thread that answers network requests for one part of a site. The browser starts and stops it." },
   worklet: { label: "AudioWorklet", about: "Code that runs on the thread that produces sound." },
   device: { label: "Another device", about: "A browser on a different machine." },
   part: { label: "In this page", about: "Something the page draws itself. It is not a separate page or thread." },
-  cable: { label: "MessageChannel", about: "A cable is one channel. The plug at each end is one of its two ports, and a moving dot is a message." },
+  cable: { label: "MessageChannel", about: "A solid cable is one channel. The plug at each end is one of its two ports, and a moving dot is a message. The line a page has to its own worker, and a tab has to a shared worker, is a pair of ports too." },
+  stream: { label: "Stream", about: "A dashed line marked stream is a ReadableStream or WritableStream that was transferred. Chunks go one way, towards the arrow." },
+  post: { label: "postMessage, no channel", about: "A dashed line marked postMessage is a message sent straight to a window or a service worker. Neither side keeps a port." },
+  fetch: { label: "fetch", about: "A dashed line marked fetch is a network request that a service worker answers." },
+  rtc: { label: "WebRTC data channel", about: "A dashed line marked WebRTC is a direct connection to another device. Each side wraps its end so that it can be used as a MessagePort." },
 };
+// What is written on a line that is not a MessageChannel.
+const LINES = { stream: "stream", post: "postMessage", fetch: "fetch", rtc: "WebRTC" };
 const OCT = "h13l4 4v7l-4 4h-13l-4-4v-7z";
 const GLYPHS = {
   window: `<rect x="1.5" y="1.5" width="21" height="15" rx="3.5"/><path d="M1.5 6.2h21"/><circle cx="4.7" cy="3.9" r=".7" fill="currentColor" stroke="none"/><circle cx="7.3" cy="3.9" r=".7" fill="currentColor" stroke="none"/>`,
@@ -33,6 +40,10 @@ const GLYPHS = {
   device: `<rect x="6.5" y="1" width="11" height="16" rx="2.5"/><path d="M10.5 14.3h3"/>`,
   part: `<rect x="2.5" y="3.5" width="19" height="11" rx="1.5" stroke-width="1"/>`,
   cable: `<path d="M3.5 5q8.5 12 17 0"/><circle cx="3.5" cy="5" r="2.2" fill="currentColor"/><circle cx="20.5" cy="5" r="2.2" fill="currentColor"/>`,
+  stream: `<path d="M2 9h16" stroke-dasharray="4 2.5"/><path d="M17 5.5l5 3.5-5 3.5z" fill="currentColor"/>`,
+  post: `<path d="M2 9h20" stroke-dasharray="4 2.5"/>`,
+  fetch: `<path d="M2 9h16" stroke-dasharray="4 2.5"/><path d="M17 5.5l5 3.5-5 3.5z" fill="currentColor"/>`,
+  rtc: `<path d="M2 9h20" stroke-dasharray="4 2.5"/>`,
 };
 const glyph = (kind) => `<svg class="glyph" viewBox="0 0 24 18" width="24" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="miter" stroke-linecap="round">${GLYPHS[kind]}</svg>`;
 const esc = (text) => String(text).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -114,6 +125,7 @@ export class Stage {
     el.append(this.svg);
     this.boxes = new Map();
     this.cables = new Map();
+    this.seen = new Set(); // every kind of line drawn since the last reset, for the key
     this.listeners = new Set();
     this.cleanups = new Set();
     this.timers = new Set();
@@ -176,7 +188,10 @@ export class Stage {
   // out, it is worked out from the name and the heading. `url` is the address
   // shown for it: a worker's script, or "blob:" for one made from a string.
   // A box that is given an iframe later becomes an iframe, with that address.
-  box(name, { html = "", src = null, title = null, kind = null, url = null, scope = null, wide = false } = {}) {
+  // `as: "window"` is for a frame that stands for a site's own window: it is
+  // drawn as a window with the frame's address in its bar, and the key says
+  // that it is a frame in this page.
+  box(name, { html = "", src = null, title = null, kind = null, url = null, scope = null, wide = false, as = null } = {}) {
     const wrap = document.createElement("div");
     wrap.className = "ctx" + (wide ? " wide" : "");
     wrap.innerHTML = `<div class="ctx-shape"><div class="ctx-in"><div class="ctx-bar"></div><div class="box"></div><div class="ctx-foot"></div></div></div>`;
@@ -192,7 +207,7 @@ export class Stage {
     }
     this.el.append(wrap);
     let ready;
-    const box = { name, node, wrap, kind: kind || (src ? "iframe" : guess(name, html)), url, scope, frame: node.querySelector("iframe"), whenReady: new Promise((r) => (ready = r)), ready };
+    const box = { name, node, wrap, as, kind: kind || (src ? "iframe" : guess(name, html)), url, scope, frame: node.querySelector("iframe"), whenReady: new Promise((r) => (ready = r)), ready };
     this.boxes.set(name, box);
     this.describe(box);
     box.watch = new MutationObserver(() => this.describe(box));
@@ -209,19 +224,19 @@ export class Stage {
       box.frame = frame;
       box.sandboxed = frame.hasAttribute("sandbox");
       box.url = frame.getAttribute("src") ? frame.src : "about:srcdoc";
-      if (box.kind !== "device") box.kind = "iframe";
+      if (box.kind !== "device") box.kind = box.as === "window" ? "window" : "iframe";
     }
     const { kind } = box, bar = box.wrap.querySelector(".ctx-bar"), foot = box.wrap.querySelector(".ctx-foot");
     box.wrap.dataset.kind = kind;
     let label = KINDS[kind].label, where = address(box.url), full = box.url || "";
     if (kind === "window") {
-      full = location.href;
+      full = box.url || location.href;
       bar.innerHTML = `<span class="dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="ctx-url" title="${esc(full)}">${address(box.url || location.origin + location.pathname)}</span>`;
     } else {
       if (kind === "iframe") {
         label = box.sandboxed ? "<iframe sandbox>" : "<iframe>";
         if (!box.url) where = "<i>no page loaded yet</i>";
-        else if (box.url === "about:srcdoc") where += " <i>written by this page, with no origin of its own</i>";
+        else if (box.url === "about:srcdoc") where += box.sandboxed ? " <i>opaque origin. This page wrote its HTML.</i>" : " <i>same origin as this page, which wrote its HTML</i>";
       }
       if (kind === "device") where = frame ? `<i>stand-in, an iframe at</i> ${where}` : `<i>${box.node.dataset.link === "up" ? "connected directly" : "not connected"}</i>`;
       if (kind === "service" && box.scope) where += ` <i>scope</i> ${esc(box.scope)}`;
@@ -234,8 +249,13 @@ export class Stage {
   }
 
   showKey() {
-    const kinds = Object.keys(KINDS).filter((kind) => kind === "cable" || [...this.boxes.values()].some((box) => box.kind === kind));
-    const html = this.boxes.size ? legend(kinds, false) : "";
+    const lines = this.seen.size ? this.seen : new Set(["cable"]);
+    const kinds = Object.keys(KINDS).filter((kind) => lines.has(kind) || [...this.boxes.values()].some((box) => box.kind === kind));
+    // Frames are always inside this page. When the page has no box of its own, the key says so.
+    const all = [...this.boxes.values()];
+    const hidden = all.some((box) => box.kind === "iframe") && !all.some((box) => box.kind === "window");
+    const standIns = all.some((box) => box.as === "window" && box.frame);
+    const html = this.boxes.size ? legend(kinds, false) + (hidden ? `<p class="stage-note">Not drawn: this page, ${address(location.origin + location.pathname)}, which embeds every frame above.</p>` : "") + (standIns ? `<p class="stage-note">Each window above is shown as a frame inside this page, ${address(location.origin + location.pathname)}. It loads the address in its bar.</p>` : "") : "";
     if (this.key.innerHTML !== html) this.key.innerHTML = html;
   }
 
@@ -252,47 +272,79 @@ export class Stage {
     for (const [id, cable] of this.cables) if (cable.a === name || cable.b === name) this.cut(id);
   }
 
-  cable(id, a, b, color = "yellow", opts = {}) {
-    const { label = "", dashed = false } = typeof opts === "string" ? { label: opts } : (opts || {});
+  // Draw a line from box a to box b. `kind` says what the line is, and only
+  // "cable" is a MessageChannel: a solid line with a plug at each end, one for
+  // each port. The others are dashed, say what they are in words, and point:
+  // "stream" (a transferred stream, read at b) and "fetch" (a request that b
+  // answers) have an arrow at b. "post" (messages to a window or a service
+  // worker, with no port kept) and "rtc" (a WebRTC data channel) have none.
+  cable(id, a, b, color = "yellow", kindOrOpts = "cable") {
+    let kind = "cable", customLabel = "", dashed = false;
+    if (typeof kindOrOpts === "string") {
+      if (kindOrOpts === "cable" || kindOrOpts in LINES) kind = kindOrOpts;
+      else customLabel = kindOrOpts;
+    } else if (kindOrOpts && typeof kindOrOpts === "object") {
+      if (kindOrOpts.kind && (kindOrOpts.kind === "cable" || kindOrOpts.kind in LINES)) kind = kindOrOpts.kind;
+      customLabel = kindOrOpts.label || "";
+      dashed = !!kindOrOpts.dashed;
+    }
     this.cut(id);
+    const make = (tag) => document.createElementNS(SVG_NS, tag);
     const stroke = COLORS[color] || color;
-    const path = document.createElementNS(SVG_NS, "path");
+    const path = make("path");
     path.setAttribute("stroke", stroke);
     path.classList.add("cable", "cable-new");
+    path.dataset.kind = kind;
     if (dashed) path.classList.add("cable-dashed");
-    // The plug at each end is one of the channel's two ports.
-    const jacks = [0, 1].map(() => {
-      const jack = document.createElementNS(SVG_NS, "circle");
-      jack.setAttribute("r", 6.5);
-      jack.setAttribute("fill", stroke);
-      jack.classList.add("jack-end");
-      return jack;
-    });
-    let labelGroup = null;
-    if (label) {
-      labelGroup = document.createElementNS(SVG_NS, "g");
+    const parts = [path];
+    let jacks = [], arrow = null, kindLabel = null, labelGroup = null;
+    if (kind === "cable") {
+      // The plug at each end is one of the channel's two ports.
+      jacks = [0, 1].map(() => {
+        const jack = make("circle");
+        jack.setAttribute("r", 6.5);
+        jack.setAttribute("fill", stroke);
+        jack.classList.add("jack-end");
+        return jack;
+      });
+      parts.push(...jacks);
+    } else {
+      if (kind === "stream" || kind === "fetch") {
+        arrow = make("path");
+        arrow.setAttribute("fill", stroke);
+        arrow.classList.add("cable-arrow");
+        parts.push(arrow);
+      }
+      kindLabel = make("text");
+      kindLabel.textContent = customLabel || LINES[kind];
+      kindLabel.classList.add("cable-label");
+      parts.push(kindLabel);
+    }
+    if (kind === "cable" && customLabel) {
+      labelGroup = make("g");
       labelGroup.classList.add("cable-label");
-      const rect = document.createElementNS(SVG_NS, "rect");
+      const rect = make("rect");
       rect.setAttribute("rx", 8);
       rect.setAttribute("ry", 8);
       rect.setAttribute("stroke", stroke);
-      const text = document.createElementNS(SVG_NS, "text");
+      const text = make("text");
       text.setAttribute("text-anchor", "middle");
       text.setAttribute("dominant-baseline", "central");
-      text.textContent = label;
+      text.textContent = customLabel;
       labelGroup.append(rect, text);
+      parts.push(labelGroup);
     }
-    this.svg.append(path, ...jacks);
-    if (labelGroup) this.svg.append(labelGroup);
-    const entry = { a, b, path, color, jacks, label, labelGroup };
-    this.cables.set(id, entry);
+    this.svg.append(...parts);
+    this.cables.set(id, { a, b, path, color, jacks, arrow, kindLabel, label: customLabel, labelGroup, kind, parts });
+    this.seen.add(kind);
     this.redraw();
+    this.showKey();
     this._flashBox(a, "box-active", color, 1000);
     this._flashBox(b, "box-active", color, 1000);
     const clearNew = () => path.classList.remove("cable-new");
     if (reducedMotion()) {
       this._later(clearNew, 1100);
-    } else {
+    } else if (kind === "cable") {
       const len = path.getTotalLength();
       if (len > 0 && typeof path.animate === "function") {
         path.style.strokeDasharray = `${len}`;
@@ -301,15 +353,15 @@ export class Stage {
       } else {
         this._later(clearNew, 700);
       }
+    } else {
+      for (const part of parts) if (typeof part.animate === "function") part.animate({ opacity: [0, 1] }, { duration: 400 });
+      this._later(clearNew, 600);
     }
   }
 
   cut(id) {
     const cable = this.cables.get(id);
-    if (!cable) return;
-    cable.path.remove();
-    for (const jack of cable.jacks || []) jack.remove();
-    cable.labelGroup?.remove();
+    for (const part of cable?.parts || []) part.remove();
     this.cables.delete(id);
     this.pulseMeta.delete(id);
   }
@@ -429,13 +481,33 @@ export class Stage {
       }
 
       cable.path.setAttribute("d", d);
-      cable.jacks[0].setAttribute("cx", p1[0]);
-      cable.jacks[0].setAttribute("cy", p1[1]);
-      cable.jacks[1].setAttribute("cx", p2[0]);
-      cable.jacks[1].setAttribute("cy", p2[1]);
+      if (cable.jacks.length === 2) {
+        cable.jacks[0].setAttribute("cx", p1[0]);
+        cable.jacks[0].setAttribute("cy", p1[1]);
+        cable.jacks[1].setAttribute("cx", p2[0]);
+        cable.jacks[1].setAttribute("cy", p2[1]);
+      }
+
+      const len = cable.path.getTotalLength();
+      if (cable.arrow && len > 20) {
+        // An arrowhead at b, turned to follow the end of the line.
+        const tip = cable.path.getPointAtLength(len), back = cable.path.getPointAtLength(len - 12);
+        const turn = Math.atan2(tip.y - back.y, tip.x - back.x) * 180 / Math.PI;
+        cable.arrow.setAttribute("d", "M0,0L-15,-8L-15,8z");
+        cable.arrow.setAttribute("transform", `translate(${tip.x},${tip.y}) rotate(${turn})`);
+      }
+      if (cable.kindLabel) {
+        // Two lines of one kind between the same boxes share one word.
+        const mid = len > 0 ? cable.path.getPointAtLength(len / 2) : { x: (p1[0] + p2[0]) / 2, y: (p1[1] + p2[1]) / 2 };
+        const duplicate = slot > 0 && [...this.cables.values()].some((other) => other !== cable && other.kind === cable.kind && [other.a, other.b].sort().join("\0") === key);
+        cable.kindLabel.textContent = duplicate ? "" : (cable.label || LINES[cable.kind]);
+        cable.kindLabel.setAttribute("x", mid.x + (stacked ? 12 : 0));
+        cable.kindLabel.setAttribute("y", mid.y - (stacked ? 0 : 12));
+        cable.kindLabel.style.textAnchor = stacked ? "start" : "middle";
+        maxCableY = Math.max(maxCableY, mid.y + 10);
+      }
 
       if (cable.labelGroup) {
-        const len = cable.path.getTotalLength();
         const mid = len > 0 ? cable.path.getPointAtLength(len / 2) : { x: (p1[0] + p2[0]) / 2, y: (p1[1] + p2[1]) / 2 };
         const text = cable.labelGroup.querySelector("text");
         const rect = cable.labelGroup.querySelector("rect");
@@ -522,6 +594,7 @@ export class Stage {
     for (const box of this.boxes.values()) { clearTimeout(box._flashTimer); box.watch.disconnect(); box.wrap.remove(); }
     this.boxes.clear();
     this.el.style.paddingBottom = "";
+    this.seen.clear();
     this.showKey();
     this.listeners.clear();
   }

@@ -1,4 +1,5 @@
 import { Stage } from "/wire.js";
+import { sites } from "/_sites.js";
 
 const pageBox = (stage, title = "This page") => {
   const box = stage.box("page", { html: `<div class="here"><div class="box-title">${title}</div><ul class="log" role="log" aria-live="polite"></ul></div>` });
@@ -43,8 +44,8 @@ port1.postMessage("ping");`,
   },
   {
     id: "introduce",
-    title: "Connect two frames to each other, then remove yourself",
-    blurb: "A port can be passed on by whoever holds it. So a third party that knows two sites can make a channel, give each of them an end, and step away. Remove the introducer here and the other two do not notice. This is how <a href=\"/hub/\">the hub</a> works.",
+    title: "Connect two sites to each other, then remove yourself",
+    blurb: "A port can be passed on by whoever holds it. So a third party that knows two sites can make a channel, give each of them an end, and step away. The three windows are three different sites, and each address is in its bar. So that you can see all three at once, each is shown as a frame inside this page. Between real windows the introducer gets its lines to Site A and Site B because it opened them or they opened it. Close the introducer and the other two do not notice. This is how <a href=\"/hub/\">the hub</a> works.",
     code: `<span class="c">// in the introducer, which holds a port to each side</span>
 const { port1, port2 } = new MessageChannel();
 toLeft.postMessage({ meet: "right" }, [port1]);
@@ -55,7 +56,7 @@ toRight.postMessage({ meet: "left" }, [port2]);
   {
     id: "reply",
     title: "Send a reply port with each request",
-    blurb: "Instead of matching replies to requests with ids, make a new channel for each request and send one end along with it. The answer comes back on a port that only this request ever had. Answers can't get mixed up, and nobody else can answer in your place.",
+    blurb: "Instead of matching replies to requests with ids, make a new channel for each request and send one end along with it. The answer comes back on a port that only this request ever had. Answers can't get mixed up, and nobody else can answer in your place. The three boxes are frames in this page. This page gave each client its line to the service before the first press.",
     code: `function ask(service, question) {
   const { port1, port2 } = new MessageChannel();
   service.postMessage(question, [port2]);
@@ -117,7 +118,7 @@ toRight.postMessage({ meet: "left" }, [port2]);
   {
     id: "attenuate",
     title: "Give a frame limited access, then revoke it",
-    blurb: "Holding a port is the permission to use it. The owner here doesn't hand out its real port. It makes a new channel, keeps one end, and only answers <code>read</code> on it. To revoke, it closes its end. It needs no account, token or list of who is allowed.",
+    blurb: "Holding a port is the permission to use it. The owner here doesn't hand out its real port. It makes a new channel, keeps one end, and only answers <code>read</code> on it. To revoke, it closes its end. It needs no account, token or list of who is allowed. The two boxes are frames in this page and have no line to each other at the start, so the owner hands the new port to this page, which passes it to the guest.",
     code: `function readOnly(counter) {
   const { port1, port2 } = new MessageChannel();
   port1.onmessage = (e) => port1.postMessage(e.data === "read" ? counter.value : "denied");
@@ -284,50 +285,31 @@ port.onmessage = async ({ data }) => { for await (const chunk of data.stream) us
   },
 ];
 
+// Three real sites. The pattern is about windows: two sites and something
+// like a picker window that knows both. Here each window is a frame that
+// loads /actor.html from a different origin, so all three can be seen at
+// once, and it is drawn as a window with that address in its bar. The ports
+// cross between sites that share no storage and no code beyond that one page.
+// What each part does is in /actor.js.
 export async function introduce(stage, ui) {
-  const side = () => function () {
-    let n = 0;
-    log("waiting — no lines yet");
-    on("port", (_, [port]) => {
-      log("connected to the introducer");
-      port.onmessage = (e) => {
-        const direct = e.ports[0];
-        log(`introduced to ${e.data.meet}`);
-        tell("met");
-        direct.onmessage = (m) => { log(`${e.data.meet} says ${m.data}`); };
-        on("talk", () => { send(direct, "direct", `hello ${++n}`); log(`said hello ${n}`); });
-      };
-    });
-    on("talk", () => log("I do not know anyone yet"));
+  const part = (name, site, role, title, color) => {
+    const box = stage.box(name, { as: "window", title, src: `${sites[site]}/actor.html?role=${role}&title=${encodeURIComponent(title)}&color=${encodeURIComponent(color)}` });
+    return box.whenReady;
   };
   await Promise.all([
-    stage.frame("left", { title: "Site A", color: "red", script: side() }),
-    stage.frame("intro", {
-      title: "Introducer", color: "yellow",
-      script: () => {
-        const lines = {};
-        log("waiting for sites to connect");
-        on("port", (data, [port]) => {
-          lines[data.side] = port;
-          log(`connected to ${data.side === "left" ? "Site A" : "Site B"}`);
-        });
-        on("introduce", () => {
-          const { port1, port2 } = new MessageChannel();
-          send(lines.left, "i-left", { meet: "Site B" }, [port1]);
-          send(lines.right, "i-right", { meet: "Site A" }, [port2]);
-          log("made a channel, gave away both ends");
-        });
-      },
-    }),
-    stage.frame("right", { title: "Site B", color: "teal", script: side() }),
+    part("left", "florist", "side", "Site A", "#e0364c"),
+    part("intro", "library", "introducer", "Introducer", "#f5b700"),
+    part("right", "planner", "side", "Site B", "#0e9f8e"),
   ]);
 
   let connected = 0, met = 0;
   const talkA = ui.button("Site A says hello", () => stage.post("left", { cmd: "talk" }), true);
   const talkB = ui.button("Site B says hello", () => stage.post("right", { cmd: "talk" }), true);
-  const removeBtn = ui.button("Remove the introducer", (btn) => { stage.remove("intro"); btn.disabled = true; }, true);
+  const removeBtn = ui.button("Close the introducer", (btn) => { stage.remove("intro"); btn.disabled = true; }, true);
   const introBtn = ui.button("Introduce them", (btn) => { stage.post("intro", { cmd: "introduce" }); btn.disabled = true; }, true);
 
+  // This page embeds all three, so each Connect button gives one site a line to
+  // the introducer and keeps neither end of either channel.
   const wire = (name) => (btn) => {
     btn.disabled = true;
     const channel = new MessageChannel();
@@ -338,7 +320,6 @@ export async function introduce(stage, ui) {
   };
   const connB = ui.button("Connect Site B to the introducer", wire("right"), true);
   ui.button("Connect Site A to the introducer", (btn) => { wire("left")(btn); connB.disabled = false; }, false, true);
-
   stage.on((name, data) => {
     if (data.wire === "met" && ++met === 2) {
       stage.cable("direct", "left", "right", "yellow", "direct");
@@ -360,7 +341,7 @@ export const TOURS = {
     ["Introduce them", "The introducer makes a new channel and sends one end to Site A and one end to Site B. The yellow direct line appears underneath."],
     ["Site A says hello", "Site A talks directly to Site B on the yellow cable. Nothing passes through the introducer."],
     ["Site B says hello", "Site B answers directly on the same yellow cable."],
-    ["Remove the introducer", "The introducer is destroyed and its dark cables vanish. The yellow direct line stays."],
+    ["Close the introducer", "The introducer's window is closed and its dark cables vanish. The yellow direct line stays."],
     ["Site A says hello", "Site A still reaches Site B. The line never belonged to the introducer."],
   ] },
   reply: { steps: [

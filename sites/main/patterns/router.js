@@ -20,13 +20,15 @@ const routerBox = (stage, title, what, extra = "") => {
 
 // The windows around the router, and the buttons that make them speak.
 const windowBoxes = (stage, via) => Object.fromEntries(NAMES.map((name) => [name, stage.box(name, { src: `/patterns/route.html?name=${name}&via=${via}&manual=1`, title: LABELS[name] })]));
-async function windows(stage, ui, boxes, extraButtons = []) {
+// `line` is what joins a window to the router: a port to a shared worker, or
+// plain postMessage to a service worker, which keeps no port.
+async function windows(stage, ui, boxes, extraButtons = [], line = "cable") {
   let joined = 0;
   const actionButtons = [];
   const enableAll = () => { for (const b of [...actionButtons, ...extraButtons]) b.disabled = false; };
   stage.on((name, data) => {
     if (data.wire === "joined") {
-      stage.cable("c-" + name, name, "router", COLORS[name]);
+      stage.cable("c-" + name, name, "router", COLORS[name], line);
       if (++joined >= NAMES.length) enableAll();
     }
     if (data.wire === "sent") stage.pulse("c-" + name, name);
@@ -134,7 +136,7 @@ onmessage = async (event) => {
     registration.active.postMessage({ forget: true });   // start from an empty table each time
     registration.active.postMessage({ watch: true });
     const forgetBtn = ui.button("Make the Service Worker forget", () => registration.active.postMessage({ forget: true }), true);
-    await windows(stage, ui, boxes, [forgetBtn]);
+    await windows(stage, ui, boxes, [forgetBtn], "post");
     ui.link("Open a fourth window for real", "/patterns/route.html?name=florist&via=sw");
   },
 };

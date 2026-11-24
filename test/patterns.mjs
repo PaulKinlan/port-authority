@@ -15,12 +15,15 @@ const wait = (ms) => page.waitForTimeout(ms);
 
 await page.goto(root + "/");
 await page.waitForSelector("#hero-demo .controls button");
+// The text says three sites, so the three boxes must be pages on three different hosts.
+const heroFeet = await page.locator("#hero-demo .ctx-bar").allInnerTexts();
+check("hero: the three boxes are drawn as windows on three different sites, and the key says they are frames", (await page.locator("#hero-demo .ctx[data-kind=window]").count()) === 3 && /shown as a frame inside this page/.test(await page.locator("#hero-demo .stage-note").innerText()) && new Set(heroFeet.map((foot) => foot.trim().split("/")[0])).size === 3 && heroFeet.every((foot) => !/srcdoc/.test(foot)), heroFeet.join(" | "));
 await click("#hero-demo", "Connect Site A to the introducer"); await wait(200);
 await click("#hero-demo", "Connect Site B to the introducer"); await wait(200);
 await click("#hero-demo", "Introduce them"); await wait(700);
 await click("#hero-demo", "Site A says hello"); await wait(300);
 check("hero: B hears A directly", /Site A says hello 1/.test(await frameText("#hero-demo", "right")));
-await click("#hero-demo", "Remove the introducer"); await wait(300);
+await click("#hero-demo", "Close the introducer"); await wait(300);
 await click("#hero-demo", "Site B says hello"); await wait(300);
 check("hero: still talking after the introducer is gone", /Site B says hello 1/.test(await frameText("#hero-demo", "left")));
 if (process.argv[2]) await page.screenshot({ path: process.argv[2] + "/home.png", fullPage: true });
@@ -34,11 +37,11 @@ check("hello: pong comes back", /heard pong 1/.test(await page.locator('#hello .
 const kind = (sel, name) => page.locator(`${sel} .ctx:has(.box[data-name="${name}"])`).getAttribute("data-kind");
 const drawn = (sel, name) => page.locator(`${sel} .ctx:has(.box[data-name="${name}"])`).evaluate((el) => [...el.querySelectorAll(".ctx-bar, .ctx-foot")].map((part) => part.textContent).join(" | "));
 check("shapes: this page is a window with its address in the bar", (await kind("#hello", "page")) === "window" && /\/patterns\//.test(await drawn("#hello", "page")), await drawn("#hello", "page"));
-check("shapes: a sandboxed frame is an iframe with about:srcdoc underneath", (await kind("#hello", "frame")) === "iframe" && /<iframe sandbox>.*about:srcdoc/.test(await drawn("#hello", "frame")));
+check("shapes: a sandboxed frame is an iframe with about:srcdoc underneath, and says its origin is opaque", (await kind("#hello", "frame")) === "iframe" && /<iframe sandbox>.*about:srcdoc.*opaque origin/.test(await drawn("#hello", "frame")));
 check("shapes: a real page in a frame shows its URL", /<iframe>[^]*\/patterns\/peer\.html\?name=/.test(await page.locator("#exchange .ctx").first().evaluate((el) => el.querySelector(".ctx-bar").textContent + el.querySelector(".ctx-foot").textContent)));
 check("shapes: the shared worker shows its script", (await kind("#exchange", "worker")) === "shared" && /SharedWorker.*\/patterns\/exchange\.js/.test(await drawn("#exchange", "worker")));
 check("shapes: the key under a diagram lists what is in it", /Window.*<iframe>.*MessageChannel/s.test(await page.locator("#hello .stage-legend").innerText()));
-check("shapes: the page has the full key", (await page.locator("#key .stage-legend > li").count()) === 9);
+check("shapes: the page has the full key", (await page.locator("#key .stage-legend > li").count()) === 13);
 await click("#reply", "Connect Client one"); await click("#reply", "Connect Client two"); await wait(200);
 await click("#reply", "Client one asks"); await click("#reply", "Client two asks"); await wait(2200);
 check("reply: each client gets its own answer", /answer to #1: 7 \(for one\)/.test(await frameText("#reply", "one")) && /\(for two\)/.test(await frameText("#reply", "two")));

@@ -58,9 +58,9 @@ const fwd = steps.locator("#hero-demo .fwd"), prev = steps.locator("#hero-demo .
 await steps.waitForTimeout(2500);
 check("steps: the homepage demo waits, and says to press Next", /7 steps.*Press Next/s.test(await cap()) && /Next: Connect Site A to the introducer/.test(await fwd.innerText()) && (await prev.isDisabled()), (await cap()).slice(0, 70));
 await fwd.click(); await steps.waitForTimeout(1200);
-check("steps: Next does step one (connect Site A) and names step two", /1 of 7.*Connect Site A/s.test(await cap()) && /Next: Connect Site B to the introducer/.test(await fwd.innerText()) && /connected to the introducer/.test(await hero("left")), (await cap()).slice(0, 70));
+check("steps: Next does step one (connect Site A) and names step two", /1 of 7.*Connect Site A/s.test(await cap()) && /Next: Connect Site B to the introducer/.test(await fwd.innerText()) && /holding a line to the introducer|connected to the introducer/.test(await hero("left")), (await cap()).slice(0, 70));
 await fwd.click(); await steps.waitForTimeout(1200);
-check("steps: Next does step two (connect Site B) and names step three", /2 of 7.*Connect Site B/s.test(await cap()) && /Next: Introduce them/.test(await fwd.innerText()) && /connected to the introducer/.test(await hero("right")), (await cap()).slice(0, 70));
+check("steps: Next does step two (connect Site B) and names step three", /2 of 7.*Connect Site B/s.test(await cap()) && /Next: Introduce them/.test(await fwd.innerText()) && /holding a line to the introducer|connected to the introducer/.test(await hero("right")), (await cap()).slice(0, 70));
 await fwd.click(); await steps.waitForTimeout(1500);
 check("steps: Next does step three (introduce them)", /3 of 7.*Introduce them\./s.test(await cap()) && /Next: Site A says hello/.test(await fwd.innerText()) && /introduced to Site A/.test(await hero("right")), (await cap()).slice(0, 70));
 await fwd.click(); await steps.waitForTimeout(1500);

@@ -19,6 +19,35 @@ const store = () => new Promise((resolve, reject) => {
 const done = (request) => new Promise((resolve, reject) => { request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error); });
 
 const ROLES = {
+  // One of two sites that do not know each other. It is given a port to the
+  // introducer, and later a second port arrives down that one.
+  side() {
+    let n = 0;
+    on("port", (_, [port]) => {
+      log("holding a line to the introducer");
+      port.onmessage = (e) => {
+        const direct = e.ports[0];
+        log(`introduced to ${e.data.meet}`);
+        tell("met");
+        direct.onmessage = (m) => { log(`${e.data.meet} says ${m.data}`); };
+        on("talk", () => { send(direct, "direct", `hello ${++n}`); log(`said hello ${n}`); });
+      };
+    });
+    on("talk", () => log("I do not know anyone yet"));
+  },
+
+  // Holds a port to each of the two sides. Makes a channel and gives each side one end.
+  introducer() {
+    const lines = {};
+    on("port", (data, [port]) => { lines[data.side] = port; });
+    on("introduce", () => {
+      const { port1, port2 } = new MessageChannel();
+      send(lines.left, "i-left", { meet: "Site B" }, [port1]);
+      send(lines.right, "i-right", { meet: "Site A" }, [port2]);
+      log("made a channel, gave away both ends");
+    });
+  },
+
   // Is handed a CryptoKey itself, not a port to one.
   async keeper() {
     const slot = "key-" + params.get("run");

@@ -51,7 +51,7 @@ export const built = [
   {
     pattern: "canvas", use: [0], id: "built-chart",
     title: "A chart drawn by another origin, inside your layout",
-    blurb: "The chart maker is a site on another origin. This page gives it a port and sends it numbers. The chart maker draws the bars on a canvas of its own and sends back each finished frame as an <code>ImageBitmap</code>, which this page shows in a canvas it owns. The chart maker never sees the page, and this page never loads its code.",
+    blurb: "The chart maker is a sandboxed frame with an opaque origin. It stands in for a charting service from another site. This page gives it a port and sends it numbers. The chart maker draws the bars on a canvas of its own and sends back each finished frame as an <code>ImageBitmap</code>, which this page shows in a canvas it owns. The chart maker never sees the page, and its code never runs in this page.",
     code: `const show = canvas.getContext("bitmaprenderer");
 chartMaker.onmessage = ({ data }) => show.transferFromImageBitmap(data.frame);
 chartMaker.postMessage({ size: [460, 230], numbers });
@@ -252,7 +252,7 @@ slots.forEach((s) => s.error(new Error("bidding has closed")));`,
           for (const who of ["one", "two"]) {
             const slot = new WritableStream({ start(controller) { slots.push(controller); }, write(amount) { bids.push({ who, amount }); owner.say(`bidder ${who} bid ${amount}`); } });
             stage.post(who, { cmd: "slot", slot }, [slot]);
-            stage.cable(who, who, "page", who === "one" ? "red" : "teal");
+            stage.cable(who, who, "page", who === "one" ? "red" : "teal", "stream");
           }
           owner.say("gave out two slots, kept what they lead to");
           btn.disabled = true; b1.disabled = b2.disabled = close.disabled = false;
@@ -350,7 +350,7 @@ for await (const word of answer) page.append(word + " ");`,
             if (i >= text.length) { clearInterval(timer); feed.close(); stop.disabled = true; btn.disabled = false; return me.say("finished the answer"); }
             feed.enqueue(text[i++]);
           }, 110);
-          stage.cable("answer", "page", "viewer", "yellow");
+          stage.cable("answer", "page", "viewer", "yellow", "stream");
           me.say("handed over a stream, now writing into it");
           btn.disabled = true; stop.disabled = false;
         } catch {
@@ -459,7 +459,7 @@ approveButton.onclick = () => port.postMessage({ answer: "approve" });`,
               waiting = false; pay.disabled = false; stage.pulse("air", "far");
               me.say(data.answer === "approve" ? "approved on the other device. Paid 20." : "denied on the other device. Nothing paid.");
             };
-            stage.cable("air", "page", "far", "teal");
+            stage.cable("air", "page", "far", "teal", "rtc");
             me.say("connected directly to the other device");
             standIn.disabled = true; pay.disabled = false;
           },
@@ -511,7 +511,7 @@ writer.write("hello");`,
         try {
           writer = line.writable.getWriter();
           stage.post("logger", { cmd: "tap", readable: line.readable }, [line.readable]);
-          stage.cable("tap", "page", "logger", "teal");
+          stage.cable("tap", "page", "logger", "teal", "stream");
           me.say("gave away the readable, kept the writable");
           btn.disabled = true; say.disabled = speak.disabled = false;
         } catch {
@@ -655,6 +655,7 @@ navigator.locks.request(lock, () => leave(port));   <span class="c">// runs when
     async setup(stage, ui) {
       const names = ["tab-a", "tab-b", "tab-c"];
       const boxes = names.map((name, i) => stage.box(name, { src: "/patterns/crew.html", title: `Tab ${i + 1}` }));
+      stage.box("worker", { kind: "shared", url: "/patterns/crew-worker.js", wide: true, html: `<div class="here"><div class="box-title">SharedWorker</div><p class="small muted" style="margin:0">Holds a port to each tab, and names the leader.</p></div>` });
       if (!("SharedWorker" in self)) {
         ui.unsupported("This browser does not support SharedWorker.");
         return;
@@ -662,6 +663,7 @@ navigator.locks.request(lock, () => leave(port));   <span class="c">// runs when
       let leader = null;
       stage.on((name, data) => { if (data.wire === "crew" && data.lead) leader = name; });
       await Promise.all(boxes.map((box) => box.whenReady));
+      for (const name of names) stage.cable("c-" + name, name, "worker", "ink");
       ui.button("Close the leader", (btn) => {
         if (!leader || !stage.boxes.get(leader)?.frame?.isConnected) return;
         stage.remove(leader); leader = null;
@@ -701,7 +703,7 @@ port.onmessage = ({ data }) => {
             ctx.fillStyle = "#fff"; ctx.font = "600 17px system-ui"; ctx.textAlign = "center"; ctx.fillText(caption, w / 2, h - 13);
             ctx.textAlign = "right"; ctx.font = "700 12px system-ui"; ctx.fillStyle = "rgba(255,255,255,.8)"; ctx.fillText("PORT AUTHORITY", w - 10, 18);
             const out = new VideoFrame(canvas, { timestamp });
-            send(port, "back", { frame: out }, [out]);
+            send(port, "there", { frame: out }, [out]);
             if (++done % 30 === 0) log(`captioned ${done} frames, kept none`);
           };
         }),
@@ -736,7 +738,6 @@ port.onmessage = ({ data }) => {
       channel.port1.onmessage = ({ data }) => { octx.drawImage(data.frame, 0, 0); data.frame.close(); waiting = false; };
       stage.post("plugin", { cmd: "port" }, [channel.port2]);
       stage.cable("there", "page", "plugin", "yellow");
-      stage.cable("back", "plugin", "out", "yellow");
       const captions = ["Roses arrive on Thursday", "Peonies: three left", "Tulips are in season"];
       let c = 0;
       const change = ui.button("Change the caption", () => channel.port1.postMessage({ caption: captions[c++ % captions.length] }), true);
@@ -828,8 +829,8 @@ lines.pipeThrough(seal).pipeTo(storage);`,
       stage.on((name, data) => {
         if (name !== "cipher" || data.wire !== "pipes") return;
         pipes = { sealIn: data.seal.writable.getWriter(), sealOut: data.seal.readable.getReader(), openIn: data.open.writable.getWriter(), openOut: data.open.readable.getReader() };
-        stage.cable("seal", "page", "cipher", "yellow");
-        stage.cable("open", "cipher", "out", "teal");
+        stage.cable("seal", "page", "cipher", "yellow", "stream");
+        stage.cable("open", "cipher", "out", "teal", "stream");
         me.say("holding both ends of two pipes");
         go.disabled = false;
       });
@@ -882,7 +883,7 @@ for await (const chunk of file) { sum = checksum(sum, chunk); postMessage({ read
         } }, { highWaterMark: 1 });
         try {
           worker.postMessage({ file }, [file]);
-          stage.cable("file", "page", "worker", "teal");
+          stage.cable("file", "page", "worker", "teal", "stream");
           wbox.say("given a stream, reading");
         } catch {
           wbox.say("This browser cannot transfer streams yet.");
@@ -1145,12 +1146,15 @@ onconnect = ({ ports: [port] }) => {
     tour: { steps: [["Tab one: add an item", "Tab one tells the worker. The worker tells every tab."], ["Tab one: add an item", "A second item, in both tabs."], ["Tab two: tick the first item", "Tab two ticks it, and it is ticked in tab one."]] },
     async setup(stage, ui) {
       const one = stage.box("tab-one", { src: "/patterns/sync.html", title: "Shopping list, tab one" });
+      stage.box("worker", { kind: "shared", url: "/patterns/sync-worker.js", html: `<div class="here"><div class="box-title">SharedWorker</div><p class="small muted" style="margin:0">Keeps the list, and holds a port to each tab.</p></div>` });
       const two = stage.box("tab-two", { src: "/patterns/sync.html", title: "Shopping list, tab two" });
       if (!("SharedWorker" in self)) {
         ui.unsupported("This browser does not support SharedWorker.");
         return;
       }
       await Promise.all([one.whenReady, two.whenReady]);
+      stage.cable("c-one", "tab-one", "worker", "red"); stage.cable("c-two", "tab-two", "worker", "teal");
+      stage.on((name, data) => { if (data.wire === "sync") stage.pulse(name === "tab-one" ? "c-one" : "c-two", "worker"); });
       stage.post("tab-one", { cmd: "clear" });
       ui.button("Tab one: add an item", () => stage.post("tab-one", { cmd: "add" }), false, true);
       ui.button("Tab two: tick the first item", () => stage.post("tab-two", { cmd: "tick" }));
@@ -1261,7 +1265,7 @@ sieve.byteLength;                                          <span class="c">// 0:
     pattern: "pipeline", use: [0], id: "built-stages",
     also: { roundtrip: [2] },   // the same demo also runs on that pattern's page
     title: "Three parties each supply one stage, and none of them sees the others",
-    blurb: "A zipped order needs unzipping, turning from bytes into text, and its card number hiding before it is shown. Each of those is a stream stage supplied by a different origin. This page asks each for a stage, joins the three end to end and sends the file through. Each party sees only what flows through its own stage, and none of them needs to know the others exist.",
+    blurb: "A zipped order needs unzipping, turning from bytes into text, and its card number hiding before it is shown. Each of those is a stream stage supplied by a different origin. This page asks each for a stage, joins the three end to end and sends the file through. This page holds both ends of every stage, so the data comes back here between one stage and the next. Each party sees only what flows through its own stage, and none of them needs to know the others exist.",
     code: `<span class="c">// each party</span>
 const stage = new TransformStream({ transform(chunk, out) { out.enqueue(work(chunk)); } });
 parent.postMessage({ readable: stage.readable, writable: stage.writable }, "*", [stage.readable, stage.writable]);
@@ -1284,14 +1288,15 @@ zippedFile.pipeThrough(unzip).pipeThrough(decode).pipeThrough(redact).pipeTo(scr
       await stage.frame("unzip", { title: "Unzip, origin one", color: "red", script });
       await stage.frame("decode", { title: "Bytes to text, origin two", color: "yellow", script });
       await stage.frame("redact", { title: "Hide card numbers, origin three", color: "teal", script });
-      const out = logBox(stage, "page", "This page joins them, and shows the result");
+      const out = logBox(stage, "page", "This page joins them, and shows the result", "", { wide: true });
       const order = "Order 1182\nTwo dozen tulips, one roll of brown paper\nCard 4929 1234 5678 9012\nDeliver Thursday before noon\n";
       let stages = {};
       stage.on((name, data, ports) => {
         if (data.wire !== "stage") return;
         stages[data.kind] = { readable: data.readable, writable: data.writable };
         if (Object.keys(stages).length < 3) return;
-        stage.cable("unzip", "unzip", "decode", "red"); stage.cable("decode", "decode", "redact", "yellow"); stage.cable("redact", "redact", "page", "teal");
+        // Each stage is two streams, and this page holds both: one to write into and one to read from.
+        for (const [kind, color] of [["unzip", "red"], ["decode", "yellow"], ["redact", "teal"]]) { stage.cable(kind + "-in", "page", kind, color, "stream"); stage.cable(kind, kind, "page", color, "stream"); }
         out.say("holding three stages from three origins");
         pour.disabled = false;
       });
@@ -1378,11 +1383,11 @@ out.postMessage({ pixels }, [pixels.buffer]);`,
   {
     pattern: "halves", use: [2], id: "built-roles",
     title: "One feed, with a writing role and a reading role",
-    blurb: "A greenhouse sensor should be able to report and never read. A dashboard should be able to read and never report. This page makes one stream and gives the writing end to the sensor and the reading end to the dashboard. Nobody has to check the roles. The sensor holds an object with no way to read, and the dashboard holds one with no way to write.",
+    blurb: "A greenhouse sensor should be able to report and never read. A dashboard should be able to read and never report. This page makes one stream and gives the writing end to the sensor and the reading end to the dashboard. Nobody has to check the roles. The sensor holds an object with no way to read, and the dashboard holds one with no way to write. The stream was made in this page and still runs through it, so readings stop if this page closes.",
     code: `const { readable, writable } = new TransformStream();
 sensor.postMessage({ feed: writable }, "*", [writable]);       <span class="c">// can write, cannot read</span>
 dashboard.postMessage({ feed: readable }, "*", [readable]);    <span class="c">// can read, cannot write</span>`,
-    tour: { steps: [["Give out the two ends", "The sensor gets the writing end and the dashboard the reading end. This page keeps neither."], ["Sensor: report a reading", "A reading goes from the sensor to the dashboard."], ["Sensor: try to read the feed", "The sensor's end has nothing to read with."], ["Dashboard: try to write a reading", "The dashboard's end has nothing to write with."]] },
+    tour: { steps: [["Give out the two ends", "The sensor gets the writing end and the dashboard the reading end. This page keeps neither end, but the stream still runs through it."], ["Sensor: report a reading", "A reading goes from the sensor, through the stream in this page, to the dashboard."], ["Sensor: try to read the feed", "The sensor's end has nothing to read with."], ["Dashboard: try to write a reading", "The dashboard's end has nothing to write with."]] },
     async setup(stage, ui) {
       await stage.frame("sensor", {
         title: "Greenhouse sensor", color: "red",
@@ -1414,7 +1419,8 @@ dashboard.postMessage({ feed: readable }, "*", [readable]);    <span class="c">/
           const { readable, writable } = new TransformStream();
           stage.post("sensor", { cmd: "feed", feed: writable }, [writable]);
           stage.post("dashboard", { cmd: "feed", feed: readable }, [readable]);
-          stage.cable("feed", "sensor", "dashboard", "teal");
+          stage.cable("feed", "sensor", "page", "teal", "stream");
+          stage.cable("feed-out", "page", "dashboard", "teal", "stream");
           me.say("gave away both ends. I can neither read nor write it now.");
           btn.disabled = true; report.disabled = read.disabled = write.disabled = false;
         } catch {
@@ -1651,6 +1657,8 @@ addEventListener("pagehide", () => bank.port.postMessage({ deposit: "orders" }, 
         ui.unsupported("This browser does not support SharedWorker.");
         return;
       }
+      // Each page's own connection to the shared worker, made again on every load.
+      stage.cable("bank", "site", "bank", "ink");
       let moves = 0, page = "Shop", grants = 0;
       stage.on((name, data) => {
         if (name !== "site") return;
@@ -1695,7 +1703,7 @@ port.onmessage = async ({ data, ports: [reply] }) => {
           return { body: file, headers: { "content-type": types[name.split(".").pop()] || "application/octet-stream", "cache-control": "no-store" } };
         } catch { me.say(`no file called ${name}`); return { status: 404, body: "no such file", headers: { "content-type": "text/plain" } }; }
       });
-      const show = () => { served.node.innerHTML = `<iframe title="A site served from this tab's files" src="/patterns/served/files/index.html?${Date.now()}"></iframe>`; stage.cable("down", "sw", "served", "teal"); };
+      const show = () => { served.node.innerHTML = `<iframe title="A site served from this tab's files" src="/patterns/served/files/index.html?${Date.now()}"></iframe>`; stage.cable("down", "served", "sw", "teal", "fetch"); };
       const load = ui.button("Load the site from them", show, true);
       const restyle = ui.button("Rewrite the stylesheet and reload", async () => { dark = !dark; await write("style.css", css()); me.say("overwrote style.css"); show(); }, true);
       ui.button("Write three files to the private file system", async (btn) => {
@@ -1743,7 +1751,7 @@ port.onmessage = ({ data, ports: [reply] }) =>
       ui.button("Add a note in this tab", () => { notes.push(more[(notes.length - 1) % more.length]); me.node.querySelector("[data-n]").textContent = notes.length; me.say(`added "${notes.at(-1)}"`); });
       ui.button("Open a reader", (btn) => {
         served.node.innerHTML = `<iframe title="A reader that fetches from this tab" src="/patterns/served/notes/?${Date.now()}"></iframe>`;
-        stage.cable("down", "sw", "served", "teal");
+        stage.cable("down", "served", "sw", "teal", "fetch");
         btn.disabled = true; again.disabled = false;
       }, false, true);
       ui.link("Open a reader in a new tab", "/patterns/served/notes/");
@@ -1780,7 +1788,7 @@ recorder.postMessage({ orders: forRecorder }, "*", [forRecorder]);`,
         const [forKitchen, forRecorder] = orders.tee();
         stage.post("kitchen", { cmd: "orders", orders: forKitchen }, [forKitchen]);
         stage.post("recorder", { cmd: "orders", orders: forRecorder }, [forRecorder]);
-        stage.cable("kitchen", "page", "kitchen", "red"); stage.cable("recorder", "page", "recorder", "yellow");
+        stage.cable("kitchen", "page", "kitchen", "red", "stream"); stage.cable("recorder", "page", "recorder", "yellow", "stream");
         me.say("split the stream and gave away both branches");
         btn.disabled = true; order.disabled = report.disabled = false;
       }, false, true);
@@ -1838,7 +1846,7 @@ port.onmessage = ({ data }) =>
               port.postMessage({ tool: data.call, result });
             };
             offer();
-            stage.cable("air", "page", "far", "teal");
+            stage.cable("air", "page", "far", "teal", "rtc");
             me.say("connected directly, and sent the list of tools");
             standIn.disabled = true;
             if (other.frame) for (const b of calls) b.disabled = false;
@@ -1851,7 +1859,7 @@ port.onmessage = ({ data }) =>
   {
     pattern: "mounted", use: [1], id: "built-plugins",
     title: "Plug-ins that each add a page, with its own picture, to a host app",
-    blurb: "The host app is a real page on this site. Two plug-ins from other origins each want to add a page to it. Installing a plug-in means giving the service worker a port to it, and a path. From then on, requests under that path are answered by the plug-in: its page, and the picture that page asks for. The plug-in's server is never involved, and nothing was uploaded. The same caution applies as for any mounted site: a plug-in's page runs as this origin.",
+    blurb: "The host app is a real page on this site. Two plug-ins each want to add a page to it. Each plug-in here is a sandboxed frame with an opaque origin, standing in for a frame from the plug-in maker's site. Installing a plug-in means giving the service worker a port to it, and a path. From then on, requests under that path are answered by the plug-in: its page, and the picture that page asks for. No server is asked for the plug-in's page, and nothing was uploaded. The same caution applies as for any mounted site: a plug-in's page runs as this origin.",
     code: `<span class="c">// installing a plug-in: a path, and a port to whoever will answer for it</span>
 const { port1, port2 } = new MessageChannel();
 pluginFrame.postMessage({ cmd: "serve" }, "*", [port1]);
@@ -1883,7 +1891,7 @@ serviceWorker.postMessage({ serve: true, prefix: "/app/calendar/" }, [port2]);`,
         return { body: `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width"><style>body{font:14px system-ui;margin:.7rem;color-scheme:light dark}h1{font-size:1.05rem;margin:0 0 .3rem}ul{margin:0;padding-left:1.1rem}</style><h1>Host app</h1><p>Installed plug-ins:</p><ul>${installed.map((n) => `<li><a href="${n.toLowerCase()}/">${n}</a></li>`).join("") || "<li>none yet</li>"}</ul>`, headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } };
       });
       const registration = await navigator.serviceWorker.getRegistration("/patterns/served/");
-      const go = (path) => { view.node.innerHTML = `<iframe title="The host app" src="/patterns/served/app/${path}?${Date.now()}"></iframe>`; stage.cable("down", "sw", "served", "teal"); };
+      const go = (path) => { view.node.innerHTML = `<iframe title="The host app" src="/patterns/served/app/${path}?${Date.now()}"></iframe>`; stage.cable("down", "served", "sw", "teal", "fetch"); };
       const install = (name, open) => (btn) => {
         const { port1, port2 } = new MessageChannel();
         stage.post(name, { cmd: "serve" }, [port1]);
@@ -1903,7 +1911,7 @@ serviceWorker.postMessage({ serve: true, prefix: "/app/calendar/" }, [port2]);`,
   {
     pattern: "mounted", use: [2], id: "built-preview",
     title: "Preview a page whose files are kept by a storage provider on another origin",
-    blurb: "A person's draft lives with a storage provider, on the provider's origin. This editor wants to show it as a real page, with real relative links, and without copying the files here. So the provider is given a path. The preview on the right is a real navigation, and each file it asks for is fetched from the provider over a port as it is needed. Save a new version at the provider and reload: the preview has it, and the editor never held a file.",
+    blurb: "A person's draft lives with a storage provider. The provider here is a sandboxed frame with an opaque origin, standing in for a frame from the provider's site. This editor wants to show it as a real page, with real relative links, and without copying the files here. So the provider is given a path. The preview on the right is a real navigation, and each file it asks for is fetched from the provider over a port as it is needed. Save a new version at the provider and reload: the preview has it, and the editor never held a file.",
     code: `<span class="c">// the storage provider, answering one request</span>
 port.onmessage = ({ data, ports: [reply] }) => {
   const file = files.get(nameFrom(data.url));
@@ -1940,7 +1948,7 @@ port.onmessage = ({ data, ports: [reply] }) => {
       const mount = () => { const { port1, port2 } = new MessageChannel(); stage.post("provider", { cmd: "serve" }, [port1]); registration.active.postMessage({ serve: true, prefix }, [port2]); };
       const again = (event) => { if (!sw.node.isConnected) return navigator.serviceWorker.removeEventListener("message", again); if (event.data === "need-port" && mounted) mount(); };
       navigator.serviceWorker.addEventListener("message", again);
-      const show = () => { view.node.innerHTML = `<iframe title="A preview served by the storage provider" src="${prefix}index.html?${Date.now()}"></iframe>`; stage.cable("down", "sw", "served", "teal"); me.say("asked for the preview. I hold none of its files."); };
+      const show = () => { view.node.innerHTML = `<iframe title="A preview served by the storage provider" src="${prefix}index.html?${Date.now()}"></iframe>`; stage.cable("down", "served", "sw", "teal", "fetch"); me.say("asked for the preview. I hold none of its files."); };
       const open = ui.button("Open the preview", (btn) => { show(); btn.disabled = true; save.disabled = false; }, true);
       const save = ui.button("Provider: save a new version", () => { stage.post("provider", { cmd: "save" }); reload.disabled = false; }, true);
       const reload = ui.button("Reload the preview", show, true);

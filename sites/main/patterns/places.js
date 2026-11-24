@@ -161,8 +161,8 @@ port.onmessage = ({ data }) => show(data.count);`,
             // This page keeps nothing, and the two talk without it.
             stage.post("tool", { cmd: "port" }, [port]);
             if (!farBox.frame) { farBox.node.dataset.link = "up"; farBox.node.innerHTML = `<div class="here"><div class="box-title">Another device</div><p class="small">Connected. It is a real device, so its screen is not shown here.</p></div>`; }
-            stage.cable("air", "far", "page", "teal", "WebRTC");
-            stage.cable("port", "page", "tool", "yellow", "port");
+            stage.cable("air", "far", "page", "teal", "rtc");
+            stage.cable("port", "page", "tool", "yellow");
             me.say("gave the far port to the counter");
             standIn.disabled = true; hang.disabled = false;
             if (farBox.frame) add.disabled = colour.disabled = false;
@@ -221,7 +221,7 @@ return new Response(answer.body, answer);`,
       };
       navigator.serviceWorker.addEventListener("message", onMessage);
       stage.cleanup(() => navigator.serviceWorker.removeEventListener("message", onMessage));
-      const load = (name, file) => { stage.cable("down", "view", "sw", "ink"); return embed(view, `/patterns/mounted/${name}/${file}?${Date.now()}`, `A page on this origin, served by the ${name}`); };
+      const load = (name, file) => { stage.cable("down", "view", "sw", "ink", "fetch"); return embed(view, `/patterns/mounted/${name}/${file}?${Date.now()}`, `A page on this origin, served by the ${name}`); };
       const mount = async (name) => {
         const m = mounts[name];
         try {

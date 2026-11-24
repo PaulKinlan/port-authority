@@ -138,7 +138,7 @@ port.onmessage = ({ data }) => {
               const timestamp = frame.timestamp;
               frame.close();
               const out = new VideoFrame(canvas, { timestamp });
-              send(port, "back", { frame: out }, [out]);
+              send(port, "there", { frame: out }, [out]);
               if (++done % 30 === 0) log(`filtered ${done} frames, kept none`);
             };
           });
@@ -166,7 +166,6 @@ port.onmessage = ({ data }) => {
       const loop = (t) => { if (!alive || !source.isConnected) return; paint(t); if (running && !waiting && port) sendFrame(t); rafId = requestAnimationFrame(loop); };
       rafId = requestAnimationFrame(loop);
       stage.cleanup(() => { alive = false; running = false; cancelAnimationFrame(rafId); port?.close(); });
-
       // One frame in flight at a time: the next leaves when the last comes back.
       const sendFrame = (t) => {
         try {
@@ -195,8 +194,7 @@ port.onmessage = ({ data }) => {
           note.textContent = `${++shown} frames back from the filter${closedHere ? ". Each one left this page empty-handed." : "."}`;
         };
         stage.post("filter", { cmd: "port" }, [channel.port2]);
-        stage.cable("there", "page", "filter", "yellow", "frames in");
-        stage.cable("back", "filter", "out", "yellow", "frames out");
+        stage.cable("there", "page", "filter", "yellow");
         note.textContent = "Connected. Press Start the video to begin sending frames.";
         startBtn.disabled = false;
       }, false, true);
