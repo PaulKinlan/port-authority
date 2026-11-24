@@ -102,6 +102,7 @@ check("registry access is remembered after a reload, with no popup", !sawPopup &
 
 // Revoking in the hub ends it.
 const hub = await ctx.newPage();
+hub.on("dialog", (d) => d.accept());
 await hub.goto(base("hub") + "/hub/");
 await hub.waitForSelector('button[data-act="revoke"]');
 check("the dashboard shows what the server knows", (await hub.locator(".service").count()) === 2 && (await hub.locator('button[data-act="revoke"]').count()) === 2);

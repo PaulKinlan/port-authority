@@ -12,14 +12,6 @@
 .tag.active { border-color: var(--teal); color: var(--teal); }
 .tag.off { color: var(--muted); }
 form.fields { display: grid; gap: 0.8rem; max-width: 34rem; }
-input[type="password"], input[type="url"], select {
-  font: inherit; color: inherit; background: var(--panel);
-  border: 2px solid color-mix(in srgb, var(--ink) 45%, var(--panel));
-  border-radius: 10px; padding: 0.65em 0.8em; width: 100%;
-}
-input[type="password"]:focus-visible, input[type="url"]:focus-visible, select:focus-visible {
-  outline-offset: 0; border-color: var(--ink);
-}
 .note { border-left: 6px solid var(--accent); padding: 0.2rem 0 0.2rem 1rem; }
 .error { color: var(--red); font-weight: 600; }
 .actions { display: flex; gap: 0.6rem; flex-wrap: wrap; align-items: center; }
