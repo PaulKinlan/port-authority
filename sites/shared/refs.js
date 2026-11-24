@@ -10,6 +10,8 @@
 // To add a feature, add a row to `refs` and run `node scripts/check-refs.mjs`,
 // which checks that every address answers and every spec anchor exists.
 
+import { highlightAll } from "./highlight.js";
+
 const MDN = "https://developer.mozilla.org/en-US/docs/";
 const API = MDN + "Web/API/";
 const JS = MDN + "Web/JavaScript/Reference/Global_Objects/";
@@ -184,6 +186,7 @@ function run(root) {
   };
 
   function sweep() {
+    highlightAll(root);
     const walker = doc.createTreeWalker(root, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT, {
       acceptNode(node) {
         if (node.nodeType === Node.TEXT_NODE) return NodeFilter.FILTER_ACCEPT;
