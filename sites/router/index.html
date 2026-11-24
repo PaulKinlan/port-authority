@@ -38,7 +38,7 @@
 
       <section class="panel stack">
         <h2>Your accounts</h2>
-        <p class="small muted">Keys stay in this browser's storage for this address and are sent only to the provider they belong to. These pages are served with a Content-Security-Policy that stops them connecting to any address except the router and the supported providers (Anthropic, OpenAI, OpenRouter, Google Gemini, and local Ollama).</p>
+        <p class="small muted">Keys stay in this browser's storage for this address and are sent only to the provider they belong to. The browser enforces that. Each call is made by a page that is allowed to connect to one provider and to nothing else.</p>
         <ul class="rows" id="accounts"></ul>
         <details id="add">
           <summary class="button quiet">Add an account</summary>
@@ -90,7 +90,8 @@
         <ol>
           <li>The prompt goes down the site's port to a worker inside the frame.</li>
           <li>The worker asks the router's server whether your permission still stands. The server counts the request and returns the unlock key, or refuses.</li>
-          <li>The worker decrypts your API key in memory and calls the provider straight from your browser. The answer comes back down the port a few words at a time.</li>
+          <li>The worker hands the prompt, the encrypted key and the unlock key to one more hidden page inside the frame. That page is served with a rule that lets it connect to the provider you chose and to nothing else, not even the router.</li>
+          <li>That page decrypts your API key in memory and calls the provider straight from your browser. The answer comes back down the port a few words at a time.</li>
         </ol>
         <h3>When you press Stop</h3>
         <p>The server deletes the unlock key. The encrypted copy of your API key that was left with that site can no longer be opened, and the frame deletes it the next time it checks.</p>
@@ -104,7 +105,8 @@
         <h3>What you are trusting</h3>
         <ul>
           <li>You are trusting the router's code. The frame and the window are pages from this address, and they handle your API key. A site is kept away from the key by the browser's rule that a page cannot read a frame from another origin.</li>
-          <li>The router's pages can run only the router's own scripts, and can connect only to the router and to Anthropic, OpenAI, OpenRouter, Google Gemini and an Ollama on your own computer. A changed or injected script could not send your key anywhere else.</li>
+          <li>The router's pages can run only the router's own scripts. The page that holds your key in the clear can connect only to the provider you chose for that site. Every other router page can connect only to the router's own server. If you chose Anthropic, no router page can reach OpenAI, or any other address. The rule is a <code>Content-Security-Policy</code> header, and your browser enforces it, not the router's code.</li>
+          <li>That rule does not cover the router's own server. The router's code sends it no prompts and no keys, and you are trusting the code for that.</li>
           <li>Limits are counted in requests and days, not money. A site with 20 requests can still send 20 long prompts.</li>
         </ul>
         <p class="small muted">There is a longer version with a diagram, the code a site writes and <a id="limits-link" href="#">what does not work yet</a> in <a id="explainer-link" href="#">the full explanation on Port Authority</a>.</p>

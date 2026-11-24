@@ -1,6 +1,7 @@
 // The picker window: the person chooses which account a site may use.
 
 import { choices, server, seal, random, me } from "/store.js";
+import { PROVIDERS } from "/providers.js";
 const main = document.getElementById("main");
 const esc = (text) => String(text).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 
@@ -59,6 +60,7 @@ if (!found) {
         <legend class="small muted">Choose an account and model</legend>
         ${list.map((c, i) => `<label><input type="radio" name="choice" value="${esc(c.key)}" ${i === selectedIndex ? "checked" : ""}><span><strong>${esc(c.label)} · ${esc(c.model)}</strong><span class="muted small">${esc(c.note || c.providerName)}</span></span></label>`).join("")}
       </fieldset>
+      <p class="note small" id="lock" aria-live="polite"></p>
       ${real ? "" : `<p class="small muted">You have not added an account with a key yet. <a href="/" target="_blank" rel="noopener">Add one in your router</a>, then come back to this window.</p>`}
       <div class="limits">
         <div><label for="requests">Stop after</label><select id="requests"><option value="5">5 requests</option><option value="20" selected>20 requests</option><option value="100">100 requests</option><option value="1000">1,000 requests</option></select></div>
@@ -67,6 +69,17 @@ if (!found) {
       <p class="error" id="error" role="alert" hidden></p>
       <div class="actions"><button class="accent" id="yes">Allow</button><button class="quiet" id="no">Don't allow</button></div>
       <p class="small muted">You can see what this site has used, and stop it, at <a href="/" target="_blank" rel="noopener">your router</a>.</p>`;
+    // Say where the prompts can go with the choice that is ticked.
+    const lock = () => {
+      const ticked = document.querySelector("input[name=choice]:checked");
+      const picked = list.find((c) => c.key === (ticked && ticked.value)) || list[0];
+      const address = PROVIDERS[picked.provider] && PROVIDERS[picked.provider].baseUrl;
+      document.getElementById("lock").textContent = address
+        ? `With this choice the router sends this site's prompts to ${new URL(address).host}. Your browser lets the router connect there and to the router's own server, and nowhere else.`
+        : "With this choice your prompts are not sent anywhere.";
+    };
+    document.getElementById("choices").addEventListener("change", lock);
+    lock();
     document.getElementById("no").onclick = cancel;
     document.getElementById("yes").onclick = async () => {
       if (busy) return;

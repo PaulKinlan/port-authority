@@ -38,7 +38,7 @@ await home.click("#form button");
 await home.waitForSelector("#accounts li[data-id]");
 check("an account is saved at the router", /Work key/.test(await home.locator("#accounts").innerText()));
 await home.click("#accounts [data-test]");
-await home.waitForFunction(() => /It answered/.test(document.querySelector("#accounts").textContent));
+await home.locator("#accounts", { hasText: "It answered" }).waitFor();   // not waitForFunction: the router pages forbid eval
 check("the router's home page can test the key", /Dear Ada/.test(await home.locator("#accounts").innerText()));
 
 // Everything the florist page receives from anywhere is recorded, to look for the key afterwards.
@@ -69,6 +69,10 @@ check("refusing leaves the site with no model", /No model yet/.test(await floris
 popup = await popupFrom(florist, () => florist.click("#choose"));
 await popup.waitForSelector("#yes");
 await popup.selectOption("#requests", "5");
+check("the router window says where the prompts can go", /prompts to api\.anthropic\.com\./.test(await popup.locator("#lock").innerText()), await popup.locator("#lock").innerText());
+await popup.locator("#choices label", { hasText: "Practice" }).click();
+check("the router window says the practice model sends nothing", /not sent anywhere/.test(await popup.locator("#lock").innerText()));
+await popup.locator("#choices label", { hasText: "Work key · claude-sonnet-5-5" }).click();
 await Promise.all([popup.waitForEvent("close"), popup.click("#yes")]);
 await florist.waitForSelector("#write:not([disabled])");
 check("after allowing, the site is told the model's name", /Using Work key · claude-sonnet-5-5, 5 requests left/.test(await florist.locator("#state").innerText()), await florist.locator("#state").innerText());
@@ -77,7 +81,7 @@ await florist.click("#write");
 await florist.waitForFunction(() => /pieces/.test(document.querySelector("#log").textContent));
 check("the answer streams into the site", (await florist.locator("#card").innerText()) === "Dear Ada, well done on passing.");
 check("the provider was called with the person's key", seen.at(-1).key === KEY && seen.at(-1).body.model === "claude-sonnet-5-5" && seen.at(-1).body.stream === true);
-check("the call was made by the router frame, not the site", seen.at(-1).from.startsWith(base("router") + "/frame.html"), seen.at(-1).from);
+check("the call was made by the router's page for that one provider, not by the site", seen.at(-1).from === base("router") + "/call.html?provider=anthropic", seen.at(-1).from);
 check("the site saw how many requests are left", /4 requests left/.test(await florist.locator("#state").innerText()));
 
 // The site cannot get at the key: not in any message, not in its storage, not by reaching into the frame.
@@ -96,12 +100,26 @@ if (process.env.DEBUG) console.log(kept);
 const stored = JSON.parse(kept)["router.grant:" + base("florist")] || "";
 check("the frame's stored copy of the key is encrypted", !stored.includes(KEY) && /sealed/.test(stored));
 
-// The router's pages may connect only to the router and the listed providers.
-const csp = await home.evaluate(async () => (await fetch("/frame.html")).headers.get("content-security-policy") || "");
-check("the router frame is served with a content security policy", /default-src 'none'/.test(csp) && /connect-src 'self' https:\/\/api\.anthropic\.com/.test(csp) && !/unsafe/.test(csp), csp.slice(0, 60));
-const elsewhere = await frame.evaluate(() => fetch("https://example.com/", { mode: "no-cors" }).then(() => "allowed", () => "blocked"));
-check("the router frame cannot connect to an address that is not on the list", elsewhere === "blocked");
-check("the provider call was made from a worker inside the frame", florist.workers().some((w) => w.url().endsWith("/frame-worker.js")));
+// The router's pages may connect only to the router. The one page that calls
+// a provider may connect only to the provider named in its address.
+const header = (path) => home.evaluate(async (p) => (await fetch(p)).headers.get("content-security-policy") || "", path);
+const connect = (csp) => (csp.split("; ").find((part) => part.startsWith("connect-src ")) || "").slice(12);
+const csp = await header("/frame.html");
+check("the router frame is served with a content security policy", /default-src 'none'/.test(csp) && !/unsafe/.test(csp), csp.slice(0, 60));
+check("the router frame may connect only to the router", connect(csp) === "'self'", connect(csp));
+check("the page that calls Anthropic may connect only to Anthropic", connect(await header("/call.html?provider=anthropic")) === "https://api.anthropic.com", connect(await header("/call.html?provider=anthropic")));
+check("the page that calls OpenAI may connect only to OpenAI", connect(await header("/call.html?provider=openai")) === "https://api.openai.com");
+check("a call page for an unknown provider may connect to nothing", connect(await header("/call.html?provider=example.com")) === "'none'" && connect(await header("/call.html")) === "'none'");
+const tryFetch = (where, address) => where.evaluate((a) => fetch(a, { mode: "no-cors" }).then(() => "allowed", () => "blocked"), address);
+const before = seen.length;
+check("the router frame cannot connect to another address", (await tryFetch(frame, "https://example.com/")) === "blocked");
+check("the router frame cannot connect to the provider itself", (await tryFetch(frame, "https://api.anthropic.com/v1/messages")) === "blocked" && seen.length === before);
+const callPage = florist.frames().find((f) => f.url().includes("/call.html"));
+check("the page that calls the provider is inside the router frame", !!callPage && callPage.parentFrame() === frame && callPage.url() === base("router") + "/call.html?provider=anthropic", callPage && callPage.url());
+check("the page that calls the provider cannot connect to another provider", (await tryFetch(callPage, "https://api.openai.com/v1/models")) === "blocked");
+check("the page that calls the provider cannot connect to another address", (await tryFetch(callPage, "https://example.com/")) === "blocked");
+check("the page that calls the provider cannot connect to the router's server", (await tryFetch(callPage, "/_sites.js")) === "blocked");
+check("the site's requests go through a worker inside the frame", florist.workers().some((w) => w.url().endsWith("/frame-worker.js")));
 
 // The site lends a port to an iframe from a third site, limited to 2 requests.
 await florist.click("#lend");
@@ -169,13 +187,13 @@ await main.close();
 // The router's home page shows both sites and what they used.
 await home.bringToFront();
 await home.evaluate(() => dispatchEvent(new Event("focus")));
-await home.waitForFunction(() => document.querySelectorAll("#grants li[data-id]").length >= 3);
+await home.locator("#grants li[data-id]").nth(2).waitFor();
 const grants = await home.locator("#grants").innerText();
 check("the router lists both sites with their usage", /florist/.test(grants) && /3 of 5 requests used/.test(grants) && /63 tokens in, 27 out/.test(grants) && /library/.test(grants) && /7 of 20 requests used/.test(grants), grants.replace(/\n/g, " | "));
 
 // Stop the florist. Its next request is refused, and its stored copy of the key cannot be opened.
 await home.locator("#grants li", { hasText: "florist" }).locator("[data-revoke]").click();
-await home.waitForFunction(() => /Stopped/.test(document.querySelector("#grants").textContent));
+await home.locator("#grants", { hasText: "Stopped" }).waitFor();
 const calls = seen.length;
 await florist.bringToFront();
 await florist.click("#write");

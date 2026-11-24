@@ -2,6 +2,8 @@
 
 import { sites } from "/_sites.js";
 import { PROVIDERS, generate } from "/providers.js";
+import { openCaller } from "/caller.js";
+import { askOver } from "/line.js";
 import { accounts, saveAccount, removeAccount, server, random } from "/store.js";
 const $ = (id) => document.getElementById(id);
 const esc = (text) => String(text).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
@@ -82,7 +84,15 @@ $("accounts").onclick = async (event) => {
     out.textContent = "Asking " + account.models[0] + " to say hello...";
     try {
       let text = "";
-      for await (const piece of generate({ ...account, model: account.models[0] }, { messages: [{ role: "user", content: "Say hello in five words or fewer." }], maxTokens: 30 })) { text += piece; out.textContent = "It answered: " + text; }
+      const model = account.models[0];
+      const ask = { messages: [{ role: "user", content: "Say hello in five words or fewer." }], maxTokens: 30 };
+      // This page cannot reach a provider. The call is made by the page that may
+      // connect to this account's provider and to nowhere else.
+      const opened = PROVIDERS[account.provider].kind ? await openCaller(account.provider) : null;
+      try {
+        const pieces = opened ? askOver(opened.port, { account: { provider: account.provider, model, key: account.key }, ask }) : generate({ ...account, model }, ask);
+        for await (const piece of pieces) { text += piece; out.textContent = "It answered: " + text; }
+      } finally { if (opened) opened.close(); }
     } catch (error) {
       out.innerHTML = `<span class="error">${esc(error.message)}</span>`;
     } finally {

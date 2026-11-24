@@ -23,12 +23,29 @@ const TYPES = {
   png: "image/png", ico: "image/x-icon", md: "text/markdown; charset=utf-8",
 };
 
-// Keep this list the same as PROVIDERS in sites/router/providers.js.
-const ROUTER_CONNECT = ["https://api.anthropic.com", "https://api.openai.com", "https://openrouter.ai", "https://generativelanguage.googleapis.com", "http://localhost:11434"];
-const ROUTER_CSP = [
-  "default-src 'none'", "script-src 'self'", "worker-src 'self'", "style-src 'self' https://fonts.googleapis.com", "font-src https://fonts.gstatic.com",
-  "img-src 'self' data:", "connect-src 'self' " + ROUTER_CONNECT.join(" "), "base-uri 'none'", "form-action 'none'",
-].join("; ");
+// The address of each model provider. Keep this the same as PROVIDERS in
+// sites/router/providers.js.
+const ROUTER_PROVIDERS = {
+  anthropic: "https://api.anthropic.com", openai: "https://api.openai.com", openrouter: "https://openrouter.ai",
+  gemini: "https://generativelanguage.googleapis.com", ollama: "http://localhost:11434",
+};
+// The Content-Security-Policy for a router page. Every page may connect to the
+// router's own server and to nothing else. The one exception is /call.html,
+// the page that calls a model provider: it may connect to the single provider
+// named in its address, and not even to the router. So a prompt and an API key
+// can only leave for the provider the person chose.
+// /frame.html is put inside other sites, and /call.html inside /frame.html, so
+// those two cannot say which pages may frame them. The rest cannot be framed.
+function routerCsp(path, search) {
+  const call = path === "/call.html";
+  const provider = call ? new URLSearchParams(search).get("provider") : null;
+  const connect = !call ? "'self'" : Object.hasOwn(ROUTER_PROVIDERS, provider) ? ROUTER_PROVIDERS[provider] : "'none'";
+  return [
+    "default-src 'none'", "script-src 'self'", "worker-src 'self'", "frame-src 'self'", "style-src 'self' https://fonts.googleapis.com", "font-src https://fonts.gstatic.com",
+    "img-src 'self' data:", "connect-src " + connect, "base-uri 'none'", "form-action 'none'",
+    ...(call || path === "/frame.html" ? [] : ["frame-ancestors 'none'"]),
+  ].join("; ");
+}
 
 function label(host) { return host.split(":")[0].split(".")[0]; }
 // The AI router can have a domain of its own (ROUTER_HOST). Its name says
@@ -62,7 +79,7 @@ async function readAsset(env, key) {
   return res.ok ? res.body : null;
 }
 
-async function serve(env, site, pathname) {
+async function serve(env, site, pathname, search = "") {
   let path = decodeURIComponent(pathname);
   if (path.includes("..")) return null;
   if (path.endsWith("/")) path += "index.html";
@@ -98,7 +115,7 @@ async function serve(env, site, pathname) {
       // The router's pages handle API keys. They may run only their own
       // scripts and may connect only to the router and the listed providers.
       if (site === "router") {
-        headers["content-security-policy"] = ROUTER_CSP + (path === "/frame.html" ? "" : "; frame-ancestors 'none'");
+        headers["content-security-policy"] = routerCsp(path, search);
         headers["referrer-policy"] = "no-referrer";
       }
       return new Response(body, { headers });
@@ -200,7 +217,7 @@ export default {
     if (site === "main" && /^\/patterns\/[a-z0-9-]+$/.test(url.pathname) && url.pathname !== "/patterns/served") {
       return Response.redirect(url.origin + url.pathname + "/" + url.search, 301);
     }
-    return (await serve(env, site, url.pathname)) || new Response("Not found", { status: 404, headers: { "content-type": TYPES.txt } });
+    return (await serve(env, site, url.pathname, url.search)) || new Response("Not found", { status: 404, headers: { "content-type": TYPES.txt } });
   },
 };
 

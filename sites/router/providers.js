@@ -2,9 +2,10 @@
 // text. This file runs in pages served from the router's own address: the
 // router frame inside a site, and the router's home page when it tests a key.
 
-// The router's pages are served with a Content-Security-Policy that lets them
-// connect to these addresses and nowhere else, so this list is fixed. Adding a
-// provider means adding it here and to ROUTER_CONNECT in src/worker.js.
+// A provider is only ever called from /call.html, which is served with a
+// Content-Security-Policy that lets it connect to the one provider named in
+// its address. So this list is fixed. Adding a provider means adding it here
+// and to ROUTER_PROVIDERS in src/worker.js.
 //
 // The model names are only what the form offers when an account is added, and
 // the first one is what Test uses. They go out of date. Last checked against
@@ -23,7 +24,11 @@ export const PROVIDERS = {
 // this device. A model that still has to download is not offered.
 export async function hasBuiltin() {
   if (typeof self.LanguageModel === "undefined") return false;
-  try { return (await self.LanguageModel.availability()) === "available"; } catch { return false; }
+  // A browser can have the API and take a long time to say whether the model
+  // is there, or never say. The picker window waits on this before it shows
+  // anything, so the question gets a second and a half and then counts as no.
+  const late = new Promise((resolve) => setTimeout(() => resolve("late"), 1500));
+  try { return (await Promise.race([self.LanguageModel.availability(), late])) === "available"; } catch { return false; }
 }
 
 // Read a server-sent event stream and yield each event's data as parsed JSON.

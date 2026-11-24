@@ -1,24 +1,48 @@
 // The router frame. A site puts this page in a hidden iframe.
 //
-// The frame does three small jobs and then stays out of the way:
+// The frame does four small jobs and then stays out of the way:
 //   1. It learns from the browser which site it is inside.
 //   2. It keeps that site's grant in storage, and takes a new grant from the
 //      picker window when the person chooses one.
 //   3. It starts a worker and passes the site's port straight on to it.
+//   4. It opens the one page that may call the provider the person chose, and
+//      gives the worker a port to it.
 //
 // After that, prompts go from the site's page to the worker over the port.
-// The worker is the only place the API key is ever unlocked.
+// This frame and its worker can connect to the router's own server and to
+// nothing else. The call to the provider is made by /call.html, which the
+// browser lets connect to that one provider only. The API key is unlocked
+// there and nowhere else. See call.js.
 
-import { generate } from "/providers.js";
+import { generate, PROVIDERS } from "/providers.js";
+import { openCaller } from "/caller.js";
 
 let site = null;    // the origin of the page this frame is inside
 let KEY = null;     // the grant is stored under that origin, so each site has its own
 let grant = null;
+let caller = null;  // { provider, close }: the page that may call this grant's provider
 const worker = new Worker("/frame-worker.js", { type: "module" });
+
+// Open the page for the grant's provider, and close the one for the provider
+// before it. The built-in model and the practice model make no network call,
+// so they get no such page.
+async function lock(next) {
+  const provider = next && PROVIDERS[next.provider] && PROVIDERS[next.provider].kind ? next.provider : null;
+  if ((caller ? caller.provider : null) === provider) return;
+  if (caller) { caller.close(); caller = null; worker.postMessage({ t: "caller", provider: null }); }
+  if (!provider) return;
+  const mine = caller = { provider, close() {} };
+  try {
+    const opened = await openCaller(provider);
+    if (caller !== mine) return opened.close();   // the person chose again while it was loading
+    mine.close = opened.close;
+    worker.postMessage({ t: "caller", provider }, [opened.port]);
+  } catch { if (caller === mine) caller = null; }
+}
 
 worker.onmessage = (event) => {
   // The worker found out the grant is no longer good, or the site asked to forget it.
-  if (event.data.t === "forget") { grant = null; try { localStorage.removeItem(KEY); } catch { /* third-party storage blocked */ } }
+  if (event.data.t === "forget") { grant = null; lock(null); try { localStorage.removeItem(KEY); } catch { /* third-party storage blocked */ } }
 };
 
 // A worker cannot use the browser's built-in model, so the frame lends it a
@@ -47,6 +71,7 @@ addEventListener("message", (event) => {
     try { grant = JSON.parse(localStorage.getItem(KEY)); } catch { /* none */ }
     if (grant && grant.site !== site) grant = null;
     worker.postMessage({ t: "init", site, grant }, [event.ports[0], local.port2]);
+    lock(grant);
     return;
   }
 
@@ -61,6 +86,7 @@ addEventListener("message", (event) => {
         grant = data.grant;
         try { localStorage.setItem(KEY, JSON.stringify(grant)); } catch { /* third-party storage blocked */ }
         worker.postMessage({ t: "grant", grant, info: data.info });
+        lock(grant);
         line.postMessage({ t: "stored" });
       }
       line.close();

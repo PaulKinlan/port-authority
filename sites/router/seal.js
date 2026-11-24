@@ -1,4 +1,4 @@
-// Used by the picker window (seal) and by the worker inside the router frame (unseal).
+// Used by the picker window (seal) and by the page that calls the provider (unseal).
 
 // Encrypt the API key so that the copy kept inside a site can only be read
 // with the unlock key the server hands out while the grant is good.

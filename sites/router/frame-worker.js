@@ -1,9 +1,12 @@
 // The worker inside the router frame. It holds the ports that sites, their
-// workers and their frames send prompts on, and it makes the calls to the model
-// provider. Nothing can reach it except through a port it was given.
+// workers and their frames send prompts on. For each prompt it asks the
+// router's server whether the grant is still good, and then hands the request
+// to the page that may call the provider (call.js). This worker can connect to
+// the router's server and to nothing else, so it cannot reach a provider
+// itself. Nothing can reach it except through a port it was given.
 
-import { generate } from "/providers.js";
-import { unseal } from "/seal.js";
+import { generate, PROVIDERS } from "/providers.js";
+import { askOver } from "/line.js";
 
 let grant = null;         // this site's grant, kept in storage by the frame
 let info = null;          // what the server last said about the grant
@@ -24,30 +27,31 @@ function state() {
 }
 const announce = () => { for (const port of ports) port.postMessage(state()); };
 
-// The built-in model lives in the frame's page. Ask it over the port the frame lent.
-async function* viaFrame(message, signal) {
-  const line = new MessageChannel();
-  const queue = [];
-  let wake = null, finished = false, failure = null;
-  line.port1.onmessage = (event) => {
-    const m = event.data;
-    if (m.t === "text") queue.push(m.text);
-    else if (m.t === "done") finished = true;
-    else if (m.t === "error") { finished = true; failure = Object.assign(new Error(m.message), { code: m.code }); }
-    wake?.(); wake = null;
-  };
-  signal.addEventListener("abort", () => line.port1.postMessage({ t: "cancel" }), { once: true });
-  builtin.postMessage({ system: message.system, messages: message.messages, maxTokens: message.maxTokens }, [line.port2]);
-  for (;;) {
-    while (queue.length) yield queue.shift();
-    if (failure) throw failure;
-    if (finished) return { tokensIn: 0, tokensOut: 0 };
-    await new Promise((resolve) => { wake = resolve; });
-  }
+// The page that may call this grant's provider. The frame opens it and sends a
+// port to it. A request that gets here first waits a few seconds for the port.
+let caller = null;        // { provider, port }
+let waiting = [];
+function callerFor(provider) {
+  if (caller && caller.provider === provider) return Promise.resolve(caller.port);
+  return new Promise((resolve, reject) => {
+    const entry = { provider, resolve };
+    entry.timer = setTimeout(() => {
+      waiting = waiting.filter((w) => w !== entry);
+      reject(Object.assign(new Error("The router could not open the page that calls the provider."), { code: "provider" }));
+    }, 8000);
+    waiting.push(entry);
+  });
+}
+function setCaller(provider, port) {
+  caller = provider ? { provider, port } : null;
+  if (!caller) return;
+  for (const entry of waiting.filter((w) => w.provider === provider)) { clearTimeout(entry.timer); entry.resolve(port); }
+  waiting = waiting.filter((w) => w.provider !== provider);
 }
 
-// One request: ask the server, unlock the key in memory, call the provider,
-// and post each piece of text to the reply port.
+// One request: ask the server, hand the request to the page that calls the
+// provider, and post each piece of text to the reply port. The API key stays
+// encrypted here: the encrypted copy and the unlock key are passed on together.
 async function run(message, reply, budget) {
   const stop = new AbortController();
   reply.onmessage = (event) => { if (event.data && event.data.t === "cancel") stop.abort(new DOMException("cancelled", "AbortError")); };
@@ -68,9 +72,11 @@ async function run(message, reply, budget) {
   info = allowed.grant;
   let usage = null;
   try {
-    const pieces = grant.provider === "builtin"
-      ? viaFrame(message, stop.signal)
-      : generate({ provider: grant.provider, model: grant.model, key: grant.sealed ? await unseal(allowed.wrap, grant.sealed) : "" }, message, stop.signal);
+    const request = { system: message.system, messages: message.messages, maxTokens: message.maxTokens };
+    const pieces = grant.provider === "builtin" ? askOver(builtin, request, stop.signal)
+      : PROVIDERS[grant.provider] && PROVIDERS[grant.provider].kind
+        ? askOver(await callerFor(grant.provider), { account: { provider: grant.provider, model: grant.model, wrap: allowed.wrap, sealed: grant.sealed }, ask: request }, stop.signal)
+        : generate({ provider: grant.provider, model: grant.model }, message, stop.signal);   // the practice model: no network call
     for (;;) {
       const { value, done } = await pieces.next();
       if (done) { usage = value; break; }
@@ -115,6 +121,8 @@ onmessage = async (event) => {
     }
     serve(event.ports[0]);    // the site's own port
     ready();
+  } else if (message.t === "caller") {
+    setCaller(message.provider, event.ports[0]);
   } else if (message.t === "grant") {
     await started;
     grant = message.grant;
