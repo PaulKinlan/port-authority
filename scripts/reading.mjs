@@ -65,6 +65,7 @@ const html = `<!doctype html>
   <meta property="og:type" content="website">
   <meta name="twitter:card" content="summary">
   <link rel="stylesheet" href="/base.css">
+  <script src="/nav.js"></script>
   <script src="/errors.js"></script>
   <style>
     main { display: grid; grid-template-columns: minmax(0, 1fr); gap: clamp(2rem, 5vw, 3.2rem); padding-block: 1rem 4rem; }
