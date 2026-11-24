@@ -4,112 +4,160 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Write a card, Stem and Petal</title>
+  <meta name="description" content="A pretend florist that uses your AI router over a MessagePort to write a bouquet card message without seeing your API key.">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <meta property="og:title" content="Write a card, Stem and Petal">
+  <meta property="og:description" content="A pretend florist that uses your AI router over a MessagePort to write a bouquet card message without seeing your API key.">
+  <meta property="og:type" content="website">
+  <meta name="twitter:card" content="summary">
   <link rel="stylesheet" href="/base.css">
   <link rel="stylesheet" href="/site.css">
-  <style>:root { --accent: #e0364c; --on-accent: #fff; } .widget { width: 100%; height: 19rem; border: 2px dashed var(--ink); border-radius: 10px; } .card { font: var(--step-1)/1.45 Georgia, serif; min-height: 7rem; white-space: pre-wrap; }</style>
+  <style>:root { --accent: #c81e38; --on-accent: #fff; } .widget { width: 100%; height: 19rem; border: 2px dashed var(--ink); border-radius: 10px; } .card { font: var(--step-1)/1.45 Georgia, serif; min-height: 7rem; white-space: pre-wrap; }</style>
 </head>
 <body>
+  <a class="skip-link" href="#main">Skip to content</a>
   <div class="wrap">
-    <header class="site-head">
-      <a class="wordmark" href="/">Stem and Petal</a>
-      <h1>Write the card that goes with the flowers.</h1>
-      <p class="demo-note">This pretend florist has no AI account of its own and no server that calls one. It asks your AI router for a model. You choose which of your accounts it uses, and it never sees your key.</p>
-      <div class="status">
-        <button id="choose" class="accent" disabled>Choose a model</button>
-        <span id="state"><span class="jack"></span>No model yet</span>
-        <button id="forget" class="tiny quiet" hidden>Forget it on this site</button>
-      </div>
+    <header class="demo-bar">
+      <span class="origin-pill" id="origin-pill"></span>
+      <nav aria-label="Demo sites">
+        <a data-site="main" href="#">Port Authority</a>
+        <a data-site="main" data-path="/ai-router/" href="#">AI router</a>
+        <a data-site="router" href="#">Your router</a>
+        <a data-site="library" data-path="/digest/" href="#">Library shelf notes</a>
+        <a href="/">Florist tools</a>
+      </nav>
     </header>
-    <main class="cols">
-      <section class="panel stack">
-        <h2>The card</h2>
-        <form class="fields" id="form">
-          <div><label for="to">Who is it for</label><input type="text" id="to" value="Ada" required></div>
-          <div><label for="why">What is the occasion</label><input type="text" id="why" value="She passed her driving test on the fourth try" required></div>
-          <div><label for="tone">Tone</label><select id="tone"><option>warm</option><option>funny</option><option>formal</option></select></div>
-          <div class="status"><button id="write" disabled>Write it</button><button type="button" id="stop" class="quiet" hidden>Stop</button></div>
-        </form>
-      </section>
-      <section class="panel stack">
-        <h2>What came back</h2>
-        <p class="card" id="card"><span class="muted">Nothing yet.</span></p>
-        <p class="small muted" id="meta"></p>
-      </section>
-      <section class="panel stack">
-        <h2>A widget from another site</h2>
-        <p class="small muted">The box below is an iframe from the planner's address. It cannot ask the router for anything. This page can lend it a port that stops after 2 requests.</p>
-        <div class="status"><button id="lend" disabled>Lend the widget a port for 2 requests</button></div>
-        <iframe id="widget" title="Gift tag widget from the planner" class="widget"></iframe>
-        <p class="small muted">iframe: <code id="widget-url"></code></p>
-      </section>
-      <section class="panel stack">
-        <h2>What this page did</h2>
-        <ul class="log" id="log"><li class="muted">Nothing yet.</li></ul>
-      </section>
+    <main id="main">
+      <div class="site-head">
+        <a class="wordmark" href="/">Stem and Petal</a>
+        <h1>Write the card that goes with the flowers.</h1>
+        <p class="demo-note">This pretend florist has no AI account of its own and no server that calls one. It asks your AI router for a model. You choose which of your accounts it uses (or pick the built-in <strong>Practice model</strong> with no API key required), and it never sees your key.</p>
+        <div class="status">
+          <button id="choose" class="accent" disabled>Choose a model</button>
+          <span id="state"><span class="jack"></span>No model yet</span>
+          <button id="forget" class="tiny quiet" hidden>Forget it on this site</button>
+        </div>
+        <p id="choose-error" class="small error" role="alert" hidden></p>
+      </div>
+      <div class="cols">
+        <section class="panel stack">
+          <h2>The card</h2>
+          <form class="fields" id="form">
+            <div><label for="to">Who is it for</label><input type="text" id="to" value="Ada" required></div>
+            <div><label for="why">What is the occasion</label><input type="text" id="why" value="She passed her driving test on the fourth try" required></div>
+            <div><label for="tone">Tone</label><select id="tone"><option>warm</option><option>funny</option><option>formal</option></select></div>
+            <div class="status"><button id="write" disabled>Write it</button><button type="button" id="stop" class="quiet" hidden>Stop</button></div>
+          </form>
+        </section>
+        <section class="panel stack">
+          <h2>What came back</h2>
+          <p class="card" id="card" aria-live="polite"><span class="muted">Nothing yet.</span></p>
+          <p class="small muted" id="meta" aria-live="polite"></p>
+        </section>
+        <section class="panel stack">
+          <h2>A widget from another site</h2>
+          <p class="small muted">The box below is an iframe from the planner's address. It cannot ask the router for anything. This page can lend it a port that stops after 2 requests.</p>
+          <div class="status"><button id="lend" disabled>Lend the widget a port for 2 requests</button></div>
+          <iframe id="widget" title="Gift tag widget from the planner" class="widget"></iframe>
+          <p class="small muted">iframe: <code id="widget-url"></code></p>
+        </section>
+        <section class="panel stack">
+          <h2>What this page did</h2>
+          <ul class="log" id="log"><li class="muted">Nothing yet.</li></ul>
+        </section>
+      </div>
     </main>
   </div>
   <script type="module">
-    import { sites } from "/_sites.js";
-    const router = sites.router || sites.florist.replace("florist", "router");   // older deployments do not list the router
-    const { connect } = await import(`${router}/router.js`);
+    import { sites as listed } from "/_sites.js";
+    const sites = { ...listed, router: listed.router || listed.florist.replace("florist", "router") };   // older deployments do not list the router
     const $ = (id) => document.getElementById(id);
     const log = (text) => { const li = document.createElement("li"); li.textContent = text; if ($("log").querySelector(".muted")) $("log").innerHTML = ""; $("log").prepend(li); };
 
-    const ai = await connect();
-    log("Added a hidden frame from " + new URL(ai.router).host + " and passed it a port.");
-    const show = () => {
-      $("state").innerHTML = ai.ready ? `<span class="jack on"></span>Using ${ai.model.account} · ${ai.model.name}${ai.left === null ? "" : `, ${ai.left} requests left`}` : `<span class="jack"></span>No model yet`;
-      $("choose").textContent = ai.ready ? "Choose a different model" : "Choose a model";
-      $("choose").disabled = false;
-      $("write").disabled = !ai.ready;
-      $("forget").hidden = !ai.ready;
-      $("lend").disabled = !ai.ready;
-    };
+    $("origin-pill").textContent = location.host;
+    for (const a of document.querySelectorAll("a[data-site]")) {
+      a.href = sites[a.dataset.site] + (a.dataset.path || "/");
+    }
     $("widget").src = sites.planner + "/tag/";
     $("widget-url").textContent = sites.planner.replace(/^https?:\/\//, "") + "/tag/";
-    $("lend").onclick = async () => {
-      const port = await ai.lend({ requests: 2 });
-      $("widget").contentWindow.postMessage({ t: "ai-port" }, sites.planner, [port]);
-      log("Asked the router for a port limited to 2 requests and posted it to the planner's iframe.");
-    };
-    ai.onchange(show);
-    show();
-    if (ai.ready) log("The frame already had a grant for this site. No window was needed.");
 
-    $("choose").onclick = async () => {
-      log("Opened the router window.");
-      const ok = await ai.choose();
-      log(ok ? "The router window gave the frame a grant. This page was told the model's name and nothing else." : "The router window closed without a grant.");
-    };
-    $("forget").onclick = () => { ai.forget(); log("Told the frame to forget this site's grant."); };
-
-    let running = null;
-    $("stop").onclick = () => running?.cancel();
-    $("form").onsubmit = async (event) => {
-      event.preventDefault();
-      $("write").disabled = true; $("stop").hidden = false;
-      $("card").textContent = ""; $("meta").textContent = "";
-      log("Posted a prompt to the frame, with a new port for the answer.");
-      running = ai.prompt({
-        system: "You write short messages for the card that goes with a bouquet of flowers. Reply with the message only, three sentences at most.",
-        messages: [{ role: "user", content: `Write a ${$("tone").value} card message for ${$("to").value}. The occasion: ${$("why").value}.` }],
-        maxTokens: 200,
-      });
-      try {
-        let pieces = 0;
-        for await (const piece of running) { $("card").textContent += piece; pieces++; }
-        log(`The answer arrived on that port in ${pieces} pieces.`);
-        const usage = running.usage;
-        if (usage && usage.tokensOut) $("meta").textContent = `${usage.tokensIn} tokens in, ${usage.tokensOut} out.`;
-      } catch (error) {
-        $("meta").innerHTML = "";
-        const p = document.createElement("span"); p.className = "error"; p.style.color = "var(--red)"; p.textContent = error.message; $("meta").append(p);
-        log("The frame refused or failed: " + error.code);
-      }
-      running = null;
-      $("stop").hidden = true;
+    try {
+      const { connect } = await import(`${sites.router}/router.js`);
+      const ai = await connect();
+      log("Added a hidden frame from " + new URL(ai.router).host + " and passed it a port.");
+      let running = null;
+      const show = () => {
+        const dot = document.createElement("span");
+        dot.className = ai.ready ? "jack on" : "jack";
+        const label = ai.ready
+          ? `Using ${ai.model.account} · ${ai.model.name}${ai.left === null ? "" : `, ${ai.left} requests left`}`
+          : "No model yet";
+        $("state").replaceChildren(dot, document.createTextNode(label));
+        $("choose").textContent = ai.ready ? "Choose a different model" : "Choose a model";
+        $("choose").disabled = false;
+        $("write").disabled = !ai.ready || !!running;
+        $("forget").hidden = !ai.ready;
+        $("lend").disabled = !ai.ready;
+      };
+      $("lend").onclick = async () => {
+        const port = await ai.lend({ requests: 2 });
+        $("widget").contentWindow.postMessage({ t: "ai-port" }, sites.planner, [port]);
+        log("Asked the router for a port limited to 2 requests and posted it to the planner's iframe.");
+      };
+      ai.onchange(show);
       show();
-    };
+      if (ai.ready) log("The frame already had a grant for this site. No window was needed.");
+
+      $("choose").onclick = async () => {
+        $("choose-error").hidden = true;
+        $("choose-error").textContent = "";
+        try {
+          const ok = await ai.choose();
+          log("Opened the router window.");
+          log(ok ? "The router window gave the frame a grant. This page was told the model's name and nothing else." : "The router window closed without a grant.");
+        } catch (error) {
+          $("choose-error").textContent = error.message;
+          $("choose-error").hidden = false;
+          log(error.message);
+        }
+      };
+      $("forget").onclick = () => { ai.forget(); log("Told the frame to forget this site's grant."); };
+
+      $("stop").onclick = () => running?.cancel();
+      $("form").onsubmit = async (event) => {
+        event.preventDefault();
+        $("write").disabled = true; $("stop").hidden = false;
+        $("card").textContent = ""; $("meta").textContent = "";
+        log("Posted a prompt to the frame, with a new port for the answer.");
+        running = ai.prompt({
+          system: "You write short messages for the card that goes with a bouquet of flowers. Reply with the message only, three sentences at most.",
+          messages: [{ role: "user", content: `Write a ${$("tone").value} card message for ${$("to").value}. The occasion: ${$("why").value}.` }],
+          maxTokens: 200,
+        });
+        try {
+          let pieces = 0;
+          for await (const piece of running) { $("card").textContent += piece; pieces++; }
+          log(`The answer arrived on that port in ${pieces} pieces.`);
+          const usage = running.usage;
+          if (usage && usage.tokensOut) $("meta").textContent = `${usage.tokensIn} tokens in, ${usage.tokensOut} out.`;
+        } catch (error) {
+          $("meta").innerHTML = "";
+          const p = document.createElement("span");
+          p.className = "error";
+          p.setAttribute("role", "alert");
+          p.textContent = error.message;
+          $("meta").append(p);
+          log("The frame refused or failed: " + (error.code || "error"));
+        }
+        running = null;
+        $("stop").hidden = true;
+        show();
+      };
+    } catch (error) {
+      $("choose-error").textContent = "Could not connect to the AI router: " + error.message;
+      $("choose-error").hidden = false;
+      log("Could not connect to the AI router: " + error.message);
+    }
   </script>
 </body>
 </html>

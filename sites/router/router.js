@@ -97,11 +97,13 @@ export async function connect() {
 
   // Open the router window so the person can pick an account and a model.
   // Browsers only allow a window to open during a click. Resolves true when
-  // this site has a model afterwards.
-  api.choose = () => new Promise((resolve) => {
+  // this site has a model afterwards, false if the person closed it without
+  // choosing, and rejects with code "popup-blocked" if the browser blocked the
+  // window.
+  api.choose = () => new Promise((resolve, reject) => {
     const w = 460, h = 640;
     const picker = window.open(ROUTER + "/pick.html", "ai-router-picker", `popup,width=${w},height=${h},left=${Math.max(0, screenX + (outerWidth - w) / 2)},top=${Math.max(0, screenY + (outerHeight - h) / 2)}`);
-    if (!picker) return resolve(false);
+    if (!picker) return reject(Object.assign(new Error("Your browser blocked the router window. Allow popups for this site and click again."), { code: "popup-blocked" }));
     const before = api.model ? JSON.stringify(api.model) + api.expires : "";
     const off = api.onchange(() => { if (api.ready && JSON.stringify(api.model) + api.expires !== before) { off(); clearInterval(timer); resolve(true); } });
     const timer = setInterval(() => { if (picker.closed) { clearInterval(timer); setTimeout(() => { off(); resolve(api.ready && JSON.stringify(api.model) + api.expires !== before); }, 300); } }, 300);

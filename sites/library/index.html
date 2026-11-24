@@ -4,30 +4,58 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Harbour Street Library, a demo library</title>
+  <meta name="description" content="A pretend public library on its own origin that offers book search and reservation tools to your Port Authority hub.">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <meta property="og:title" content="Harbour Street Library, a demo library">
+  <meta property="og:description" content="A pretend public library on its own origin that offers book search and reservation tools to your Port Authority hub.">
+  <meta property="og:type" content="website">
+  <meta name="twitter:card" content="summary">
   <link rel="stylesheet" href="/base.css">
   <link rel="stylesheet" href="/site.css">
-  <style>:root { --accent: #0e9f8e; --on-accent: #fff; }</style>
+  <style>:root { --accent: #087366; --on-accent: #fff; }</style>
 </head>
 <body>
+  <a class="skip-link" href="#main">Skip to content</a>
   <div class="wrap">
-    <header class="site-head">
-      <a class="wordmark" href="/">Harbour Street Library</a>
-      <h1>Find a book. Have it kept for you.</h1>
-      <p class="demo-note">This is a pretend library on its own origin. It declares two tools. Add it to your hub once. After that your hub remembers its tools, and other sites, or your agent, can use them when you say so.</p>
-      <div class="status">
-        <button id="connect" class="accent" disabled>Add my tools to your hub</button>
-        <span id="state"><span class="jack"></span>Not connected</span>
-      </div>
+    <header class="demo-bar">
+      <span class="origin-pill" id="origin-pill"></span>
+      <nav aria-label="Demo sites">
+        <a data-site="main" href="#">Port Authority</a>
+        <a data-site="main" data-path="/hub/" href="#">Your hub</a>
+        <a data-site="planner" href="#">Weekend Planner</a>
+        <a data-site="florist" href="#">Florist</a>
+        <a href="/digest/">Shelf notes (AI router)</a>
+      </nav>
     </header>
-    <main class="cols">
-      <section class="panel stack"><h2>On the shelves</h2><ul class="items" id="books"></ul></section>
-      <section class="panel stack"><h2>Kept at the desk</h2><ul class="items" id="held"><li class="muted">Nothing reserved yet.</li></ul></section>
-      <section class="panel stack"><h2>Who called</h2><ul class="log" id="log"><li class="muted">No calls yet.</li></ul></section>
+    <main id="main">
+      <div class="site-head">
+        <a class="wordmark" href="/">Harbour Street Library</a>
+        <h1>Find a book. Have it kept for you.</h1>
+        <p class="demo-note">This is a pretend library on its own origin. It declares two tools. Add it to your hub once. After that your hub remembers its tools, and other sites, or your agent, can use them when you say so.</p>
+        <div class="status">
+          <button id="connect" class="accent" disabled>Add my tools to your hub</button>
+          <span id="state"><span class="jack"></span>Not connected</span>
+        </div>
+        <p id="connect-error" class="small error" role="alert" hidden></p>
+        <p id="next-steps" class="next-steps small" hidden>Connected! Now try calling this from <a data-site="planner" href="#" target="_blank" rel="noopener">Weekend Planner</a> or inspect it in <a data-site="main" data-path="/hub/" href="#" target="_blank" rel="noopener">Your hub</a>.</p>
+      </div>
+      <div class="cols">
+        <section class="panel stack"><h2>On the shelves</h2><ul class="items" id="books"></ul></section>
+        <section class="panel stack"><h2>Kept at the desk</h2><ul class="items" id="held" aria-live="polite"><li class="muted">Nothing reserved yet.</li></ul></section>
+        <section class="panel stack"><h2>Who called</h2><ul class="log" id="log" aria-live="polite"><li class="muted">No calls yet.</li></ul></section>
+      </div>
     </main>
   </div>
   <script type="module">
     import { sites } from "/_sites.js";
-    const { serve } = await import(`${sites.main}/hub.js`);
+    const $ = (id) => document.getElementById(id);
+    const escapeHtml = (t) => String(t).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+    const hostOf = (o) => { try { return new URL(o).host; } catch { return o === "agent" ? "your agent" : String(o); } };
+
+    $("origin-pill").textContent = location.host;
+    for (const a of document.querySelectorAll("a[data-site]")) {
+      a.href = sites[a.dataset.site] + (a.dataset.path || "/");
+    }
 
     const books = [
       { title: "Raising Chickens for Beginners", author: "M. Hale", subject: "chickens poultry hens garden" },
@@ -37,9 +65,6 @@
       { title: "Switchboard: A History of the Telephone Exchange", author: "J. Amato", subject: "telephone operators cables history" },
     ];
     const held = [];
-    const $ = (id) => document.getElementById(id);
-    const escapeHtml = (t) => String(t).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
-    const hostOf = (o) => { try { return new URL(o).host; } catch { return o === "agent" ? "your agent" : String(o); } };
     $("books").innerHTML = books.map((b) => `<li><span><strong>${b.title}</strong><br><span class="muted small">${b.author}</span></span></li>`).join("");
     const search = (query) => {
       const words = String(query || "").toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length > 2);
@@ -47,42 +72,62 @@
         .filter((x) => x.n).sort((a, z) => z.n - a.n).map(({ b }) => ({ title: b.title, author: b.author }));
     };
 
-    const service = serve({
-      name: "Harbour Street Library",
-      description: "A public library. Finds books and reserves them.",
-      tools: [
-        {
-          name: "find_book",
-          description: "Find a book in the library catalogue by subject or title.",
-          inputSchema: { type: "object", properties: { query: { type: "string", description: "What the book is about" } }, required: ["query"] },
-          execute: ({ query }) => ({ matches: search(query) }),
-        },
-        {
-          name: "reserve_book",
-          description: "Reserve a library book so it is kept at the desk for collection.",
-          inputSchema: { type: "object", properties: { title: { type: "string", description: "Title of the book, or what it is about" } }, required: ["title"] },
-          execute: ({ title }, { peer }) => {
-            const match = books.find((b) => b.title.toLowerCase() === String(title).toLowerCase()) || books.find((b) => b.title === search(title)[0]?.title);
-            if (!match) throw new Error(`No book matching "${title}"`);
-            held.unshift({ title: match.title, by: peer });
-            $("held").innerHTML = held.map((h, i) => `<li class="${i ? "" : "flash"}"><span><strong>${h.title}</strong><br><span class="muted small">reserved by ${escapeHtml(hostOf(h.by))}</span></span></li>`).join("");
-            return { reserved: match.title, collectFrom: "Front desk, Harbour Street" };
+    try {
+      const { serve } = await import(`${sites.main}/hub.js`);
+      const service = serve({
+        name: "Harbour Street Library",
+        description: "A public library. Finds books and reserves them.",
+        tools: [
+          {
+            name: "find_book",
+            description: "Find a book in the library catalogue by subject or title.",
+            inputSchema: { type: "object", properties: { query: { type: "string", description: "What the book is about" } }, required: ["query"] },
+            execute: ({ query }) => ({ matches: search(query) }),
           },
-        },
-      ],
-    });
+          {
+            name: "reserve_book",
+            description: "Reserve a library book so it is kept at the desk for collection.",
+            inputSchema: { type: "object", properties: { title: { type: "string", description: "Title of the book, or what it is about" } }, required: ["title"] },
+            execute: ({ title }, { peer }) => {
+              const match = books.find((b) => b.title.toLowerCase() === String(title).toLowerCase()) || books.find((b) => b.title === search(title)[0]?.title);
+              if (!match) throw new Error(`No book matching "${title}"`);
+              held.unshift({ title: match.title, by: peer });
+              $("held").innerHTML = held.map((h, i) => `<li class="${i ? "" : "flash"}"><span><strong>${h.title}</strong><br><span class="muted small">reserved by ${escapeHtml(hostOf(h.by))}</span></span></li>`).join("");
+              return { reserved: match.title, collectFrom: "Front desk, Harbour Street" };
+            },
+          },
+        ],
+      });
 
-    service.onchange((s, detail) => {
-      $("state").innerHTML = `<span class="jack ${s.connected ? "on" : ""}"></span>${s.connected ? "Connected to your hub" : "Not connected"}`;
-      $("connect").hidden = s.connected;
-      const line = detail?.tool ? `<span class="who">${escapeHtml(hostOf(detail.peer))}</span> called ${detail.tool}(${escapeHtml(JSON.stringify(detail.args))})`
-        : detail?.channel ? `<span class="who">${escapeHtml(hostOf(detail.peer))}</span> was handed a direct line to ${detail.channel}`
-        : detail?.revoked ? "A line was revoked by the hub"
-        : detail?.forgotten ? "Your hub forgot this site. Add it again to bring it back." : null;
-      if (line) { $("log").querySelector(".muted")?.remove(); $("log").insertAdjacentHTML("afterbegin", `<li>${line}</li>`); }
-    });
-    $("connect").onclick = () => service.connect().catch((err) => { $("state").textContent = err.message; });
-    $("connect").disabled = false;
+      service.onchange((s, detail) => {
+        $("state").innerHTML = `<span class="jack ${s.connected ? "on" : ""}"></span>${s.connected ? "Connected to your hub" : "Not connected"}`;
+        $("connect").hidden = s.connected;
+        $("next-steps").hidden = !s.connected;
+        if (s.connected) { $("connect-error").hidden = true; $("connect-error").textContent = ""; }
+        const line = detail?.tool ? `<span class="who">${escapeHtml(hostOf(detail.peer))}</span> called ${detail.tool}(${escapeHtml(JSON.stringify(detail.args))})`
+          : detail?.channel ? `<span class="who">${escapeHtml(hostOf(detail.peer))}</span> was handed a direct line to ${detail.channel}`
+          : detail?.revoked ? "A line was revoked by the hub"
+          : detail?.forgotten ? "Your hub forgot this site. Add it again to bring it back." : null;
+        if (line) { $("log").querySelector(".muted")?.remove(); $("log").insertAdjacentHTML("afterbegin", `<li>${line}</li>`); }
+      });
+      $("connect").onclick = async () => {
+        $("connect-error").hidden = true;
+        $("connect-error").textContent = "";
+        $("connect").disabled = true;
+        try {
+          await service.connect();
+        } catch (err) {
+          $("connect-error").textContent = err.message;
+          $("connect-error").hidden = false;
+        } finally {
+          $("connect").disabled = false;
+        }
+      };
+      $("connect").disabled = false;
+    } catch (err) {
+      $("connect-error").textContent = "Could not load Port Authority hub script: " + err.message;
+      $("connect-error").hidden = false;
+    }
   </script>
 </body>
 </html>

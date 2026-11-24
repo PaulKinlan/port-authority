@@ -4,39 +4,66 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Gift tag widget, from the planner</title>
+  <meta name="description" content="A cross-origin gift tag iframe widget from Weekend Planner that only runs AI prompts when a parent page lends it a MessagePort.">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <meta property="og:title" content="Gift tag widget, from the planner">
+  <meta property="og:description" content="A cross-origin gift tag iframe widget from Weekend Planner that only runs AI prompts when a parent page lends it a MessagePort.">
+  <meta property="og:type" content="website">
+  <meta name="twitter:card" content="summary">
   <link rel="stylesheet" href="/base.css">
-  <style>:root { --accent: #f5b700; } body { padding: .9rem; background: var(--panel); } p { margin-top: .6rem; } #tag { font: 700 var(--step-0)/1.3 var(--display); min-height: 1.4em; }</style>
+  <style>
+    :root { --accent: #f5b700; }
+    body { padding: .9rem; background: var(--panel); }
+    h1 { font-size: var(--step-1); font-stretch: 100%; letter-spacing: -0.01em; line-height: 1.15; }
+    p { margin-top: .6rem; }
+    #tag { font: 700 var(--step-0)/1.3 var(--display); min-height: 1.4em; }
+    .standalone { margin-top: 1rem; padding-top: 0.8rem; border-top: 1px solid var(--line); }
+  </style>
 </head>
 <body>
-  <strong>Gift tag</strong>
-  <p class="small muted" id="state">This widget has no way to reach a model. It is waiting for the page around it to lend it a port.</p>
-  <p><button id="go" class="tiny" disabled>Suggest a tag</button></p>
-  <p id="tag"></p>
+  <main id="main">
+    <h1>Gift tag</h1>
+    <p class="small muted" id="state" aria-live="polite">This widget has no way to reach a model. It is waiting for the page around it to lend it a port.</p>
+    <p><button id="go" class="tiny" disabled>Suggest a tag</button></p>
+    <p id="tag" aria-live="polite"></p>
+    <p class="small muted standalone" id="standalone" hidden>This page is meant to run embedded inside the florist's card writer. Try it inside <a id="florist-card" href="#">Stem and Petal's card writer</a> or read how it works on <a id="pa-router" href="#">Port Authority</a>.</p>
+  </main>
   <script type="module">
     import { sites } from "/_sites.js";
     const router = sites.router || sites.florist.replace("florist", "router");   // older deployments do not list the router
-    const { fromPort } = await import(`${router}/router.js`);
     const $ = (id) => document.getElementById(id);
-    let ai = null, asked = 0;
-    // The page around this widget posts it a port. The widget did not open the
-    // router window and has no grant of its own.
-    addEventListener("message", (event) => {
-      if (event.source !== parent || !event.data || event.data.t !== "ai-port" || !event.ports[0]) return;
-      ai = fromPort(event.ports[0]);
-      asked = 0;
-      $("state").textContent = `The page at ${new URL(event.origin).host} lent this widget a port.`;
-      $("go").disabled = false;
-    });
-    parent.postMessage({ t: "tag-ready" }, "*");
-    $("go").onclick = async () => {
-      $("go").disabled = true;
-      $("tag").textContent = "";
-      try {
-        for await (const piece of ai.prompt({ system: "You write gift tags. Reply with at most six words.", messages: [{ role: "user", content: "Suggest a gift tag for a bouquet of flowers." }], maxTokens: 30 })) $("tag").textContent += piece;
-        $("state").textContent = `Request ${++asked} answered.`;
-      } catch (error) { $("state").textContent = `Request ${++asked} was refused: ${error.message}`; }
-      $("go").disabled = false;
-    };
+
+    if (window.self === window.top) {
+      $("florist-card").href = sites.florist + "/card/";
+      $("pa-router").href = sites.main + "/ai-router/";
+      $("standalone").hidden = false;
+    }
+
+    try {
+      const { fromPort } = await import(`${router}/router.js`);
+      let ai = null, asked = 0;
+      // The page around this widget posts it a port. The widget did not open the
+      // router window and has no grant of its own.
+      addEventListener("message", (event) => {
+        if (event.source !== parent || !event.data || event.data.t !== "ai-port" || !event.ports[0]) return;
+        ai = fromPort(event.ports[0]);
+        asked = 0;
+        $("state").textContent = `The page at ${new URL(event.origin).host} lent this widget a port.`;
+        $("go").disabled = false;
+      });
+      parent.postMessage({ t: "tag-ready" }, "*");
+      $("go").onclick = async () => {
+        $("go").disabled = true;
+        $("tag").textContent = "";
+        try {
+          for await (const piece of ai.prompt({ system: "You write gift tags. Reply with at most six words.", messages: [{ role: "user", content: "Suggest a gift tag for a bouquet of flowers." }], maxTokens: 30 })) $("tag").textContent += piece;
+          $("state").textContent = `Request ${++asked} answered.`;
+        } catch (error) { $("state").textContent = `Request ${++asked} was refused: ${error.message}`; }
+        $("go").disabled = false;
+      };
+    } catch (error) {
+      $("state").textContent = "Could not load AI router helper: " + error.message;
+    }
   </script>
 </body>
 </html>

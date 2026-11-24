@@ -4,95 +4,189 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Shelf notes, Harbour Street Library</title>
+  <meta name="description" content="A pretend library that asks your AI router for a model, hands a MessagePort to a worker, and lends a 3-request port.">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <meta property="og:title" content="Shelf notes, Harbour Street Library">
+  <meta property="og:description" content="A pretend library that asks your AI router for a model, hands a MessagePort to a worker, and lends a 3-request port.">
+  <meta property="og:type" content="website">
+  <meta name="twitter:card" content="summary">
   <link rel="stylesheet" href="/base.css">
   <link rel="stylesheet" href="/site.css">
-  <style>:root { --accent: #0e9f8e; --on-accent: #fff; } .items li { display: block; } .items p { margin-top: .3rem; white-space: pre-wrap; }</style>
+  <style>:root { --accent: #087366; --on-accent: #fff; } .items li { display: block; } .items p { margin-top: .3rem; white-space: pre-wrap; }</style>
 </head>
 <body>
+  <a class="skip-link" href="#main">Skip to content</a>
   <div class="wrap">
-    <header class="site-head">
-      <a class="wordmark" href="/">Harbour Street Library</a>
-      <h1>A note for each book on the shelf.</h1>
-      <p class="demo-note">This pretend library asks your AI router for a model, then gives its port away. A worker gets a port and writes the notes off the main thread. A second port is lent with a limit of 3 requests, so you can see it stop.</p>
-      <div class="status">
-        <button id="choose" class="accent" disabled>Choose a model</button>
-        <span id="state"><span class="jack"></span>No model yet</span>
-      </div>
+    <header class="demo-bar">
+      <span class="origin-pill" id="origin-pill"></span>
+      <nav aria-label="Demo sites">
+        <a data-site="main" href="#">Port Authority</a>
+        <a data-site="main" data-path="/ai-router/" href="#">AI router</a>
+        <a data-site="router" href="#">Your router</a>
+        <a data-site="florist" data-path="/card/" href="#">Florist card</a>
+        <a href="/">Library tools</a>
+      </nav>
     </header>
-    <main class="cols">
-      <section class="panel stack">
-        <h2>Written by a worker</h2>
-        <p class="small muted">The page asks the router frame for another port and posts it to a worker. The worker sends one prompt per book. The page takes no part after that.</p>
-        <button id="run" disabled>Write a note for each book</button>
-        <ul class="items" id="notes"></ul>
-      </section>
-      <section class="panel stack">
-        <h2>A port lent for 3 requests</h2>
-        <p class="small muted">The page asks the frame for a port that stops after 3 requests. Whoever holds it can ask 3 questions and no more, whatever is left on the grant itself.</p>
-        <div class="status"><button id="lend" disabled>Lend a new port</button><button id="ask" disabled>Ask with it</button></div>
-        <ul class="log" id="lent"><li class="muted">No port lent yet.</li></ul>
-      </section>
-      <section class="panel stack">
-        <h2>What this page did</h2>
-        <ul class="log" id="log"><li class="muted">Nothing yet.</li></ul>
-      </section>
+    <main id="main">
+      <div class="site-head">
+        <a class="wordmark" href="/">Harbour Street Library</a>
+        <h1>A note for each book on the shelf.</h1>
+        <p class="demo-note">This pretend library asks your AI router for a model (you can pick the built-in <strong>Practice model</strong> with no API key required), then gives its port away. A worker gets a port and writes the notes off the main thread. A second port is lent with a limit of 3 requests, so you can see it stop.</p>
+        <div class="status">
+          <button id="choose" class="accent" disabled>Choose a model</button>
+          <span id="state"><span class="jack"></span>No model yet</span>
+          <button id="forget" class="tiny quiet" hidden>Forget it on this site</button>
+        </div>
+        <p id="choose-error" class="small error" role="alert" hidden></p>
+      </div>
+      <div class="cols">
+        <section class="panel stack">
+          <h2>Written by a worker</h2>
+          <p class="small muted">The page asks the router frame for another port and posts it to a worker. The worker sends one prompt per book. The page takes no part after that.</p>
+          <div class="status">
+            <button id="run" disabled>Write a note for each book</button>
+            <button type="button" id="stop" class="quiet" hidden>Stop</button>
+          </div>
+          <ul class="items" id="notes" aria-live="polite"></ul>
+        </section>
+        <section class="panel stack">
+          <h2>A port lent for 3 requests</h2>
+          <p class="small muted">The page asks the frame for a port that stops after 3 requests. Whoever holds it can ask 3 questions and no more, whatever is left on the grant itself.</p>
+          <div class="status"><button id="lend" disabled>Lend a new port</button><button id="ask" disabled>Ask with it</button></div>
+          <ul class="log" id="lent" aria-live="polite"><li class="muted">No port lent yet.</li></ul>
+        </section>
+        <section class="panel stack">
+          <h2>What this page did</h2>
+          <ul class="log" id="log"><li class="muted">Nothing yet.</li></ul>
+        </section>
+      </div>
     </main>
   </div>
   <script type="module">
     import { sites as listed } from "/_sites.js";
     const sites = { ...listed, router: listed.router || listed.florist.replace("florist", "router") };   // older deployments do not list the router
-    const { connect, fromPort } = await import(`${sites.router}/router.js`);
     const $ = (id) => document.getElementById(id);
     const add = (list, text) => { const li = document.createElement("li"); li.textContent = text; if ($(list).querySelector(".muted")) $(list).innerHTML = ""; $(list).prepend(li); return li; };
     const log = (text) => add("log", text);
     const books = ["Raising Chickens for Beginners", "The Kitchen Garden Year", "A Field Guide to Wildflowers", "Harbours of the North Sea"];
 
-    const ai = await connect();
-    const show = () => {
-      $("state").innerHTML = ai.ready ? `<span class="jack on"></span>Using ${ai.model.account} · ${ai.model.name}${ai.left === null ? "" : `, ${ai.left} requests left`}` : `<span class="jack"></span>No model yet`;
-      $("choose").textContent = ai.ready ? "Choose a different model" : "Choose a model";
-      $("choose").disabled = false;
-      $("run").disabled = $("lend").disabled = !ai.ready;
-    };
-    ai.onchange(show);
-    show();
-    $("choose").onclick = async () => { log("Opened the router window."); log((await ai.choose()) ? "The frame has a grant for this site." : "The router window closed without a grant."); };
+    $("origin-pill").textContent = location.host;
+    for (const a of document.querySelectorAll("a[data-site]")) {
+      a.href = sites[a.dataset.site] + (a.dataset.path || "/");
+    }
 
-    // ---- the worker
-    $("run").onclick = async () => {
-      $("run").disabled = true;
-      $("notes").innerHTML = books.map((b, i) => `<li><strong>${b}</strong><p id="note-${i}" class="muted">Waiting.</p></li>`).join("");
-      const port = await ai.lend();
-      log("Asked the frame for a second port and posted it to a worker.");
-      const worker = new Worker("/digest/worker.js", { type: "module" });
-      worker.onmessage = (event) => {
-        const { i, text, error, done } = event.data;
-        if (done) { log("The worker finished and was closed."); worker.terminate(); show(); return; }
-        const p = $("note-" + i);
-        p.className = error ? "" : "";
-        p.textContent = error ? "Stopped: " + error : text;
+    try {
+      const { connect, fromPort } = await import(`${sites.router}/router.js`);
+      const ai = await connect();
+      let activeWorker = null;
+      let lent = null, asked = 0, asking = false;
+
+      const show = () => {
+        const dot = document.createElement("span");
+        dot.className = ai.ready ? "jack on" : "jack";
+        const label = ai.ready
+          ? `Using ${ai.model.account} · ${ai.model.name}${ai.left === null ? "" : `, ${ai.left} requests left`}`
+          : "No model yet";
+        $("state").replaceChildren(dot, document.createTextNode(label));
+        $("choose").textContent = ai.ready ? "Choose a different model" : "Choose a model";
+        $("choose").disabled = false;
+        $("run").disabled = !ai.ready || !!activeWorker;
+        $("lend").disabled = !ai.ready;
+        $("ask").disabled = !ai.ready || !lent || asking;
+        $("forget").hidden = !ai.ready;
       };
-      worker.postMessage({ router: sites.router, books }, [port]);
-    };
-
-    // ---- the lent port
-    let lent = null, asked = 0;
-    $("lend").onclick = async () => {
-      lent = fromPort(await ai.lend({ requests: 3 }));
-      asked = 0;
-      add("lent", "A new port, good for 3 requests.");
-      log("Asked the frame for a port limited to 3 requests.");
-      $("ask").disabled = false;
-    };
-    $("ask").onclick = async () => {
-      const n = ++asked;
-      const row = add("lent", `Request ${n}: sent.`);
-      try {
-        const text = await lent.prompt({ messages: [{ role: "user", content: "Name one good book about the sea, in one sentence." }], maxTokens: 80 }).text();
-        row.textContent = `Request ${n}: ${text}`;
-      } catch (error) { row.textContent = `Request ${n} was refused: ${error.message}`; }
+      ai.onchange(show);
       show();
-    };
+      if (ai.ready) log("The frame already had a grant for this site. No window was needed.");
+
+      $("choose").onclick = async () => {
+        $("choose-error").hidden = true;
+        $("choose-error").textContent = "";
+        try {
+          const ok = await ai.choose();
+          log("Opened the router window.");
+          log(ok ? "The frame has a grant for this site." : "The router window closed without a grant.");
+        } catch (error) {
+          $("choose-error").textContent = error.message;
+          $("choose-error").hidden = false;
+          log(error.message);
+        }
+      };
+
+      $("forget").onclick = () => {
+        if (activeWorker) {
+          activeWorker.terminate();
+          activeWorker = null;
+          $("stop").hidden = true;
+        }
+        lent = null;
+        ai.forget();
+        log("Told the frame to forget this site's grant.");
+        show();
+      };
+
+      // ---- the worker
+      $("stop").onclick = () => {
+        if (!activeWorker) return;
+        activeWorker.terminate();
+        activeWorker = null;
+        $("stop").hidden = true;
+        log("Stopped the worker.");
+        show();
+      };
+      $("run").onclick = async () => {
+        $("run").disabled = true;
+        $("stop").hidden = false;
+        $("notes").innerHTML = books.map((b, i) => `<li><strong>${b}</strong><p id="note-${i}" class="muted">Waiting.</p></li>`).join("");
+        const port = await ai.lend();
+        log("Asked the frame for a second port and posted it to a worker.");
+        const worker = activeWorker = new Worker("/digest/worker.js", { type: "module" });
+        worker.onmessage = (event) => {
+          const { i, text, error, done } = event.data;
+          if (done) {
+            log("The worker finished and was closed.");
+            worker.terminate();
+            if (activeWorker === worker) activeWorker = null;
+            $("stop").hidden = true;
+            show();
+            return;
+          }
+          const p = $("note-" + i);
+          p.className = error ? "error" : "";
+          p.textContent = error ? "Stopped: " + error : text;
+        };
+        worker.postMessage({ router: sites.router, books }, [port]);
+      };
+
+      // ---- the lent port
+      $("lend").onclick = async () => {
+        lent = fromPort(await ai.lend({ requests: 3 }));
+        asked = 0;
+        add("lent", "A new port, good for 3 requests.");
+        log("Asked the frame for a port limited to 3 requests.");
+        show();
+      };
+      $("ask").onclick = async () => {
+        if (!lent || asking) return;
+        asking = true;
+        $("ask").disabled = true;
+        const n = ++asked;
+        const row = add("lent", `Request ${n}: sent.`);
+        try {
+          const text = await lent.prompt({ messages: [{ role: "user", content: "Name one good book about the sea, in one sentence." }], maxTokens: 80 }).text();
+          row.textContent = `Request ${n}: ${text}`;
+        } catch (error) {
+          row.className = "error";
+          row.textContent = `Request ${n} was refused: ${error.message}`;
+        }
+        asking = false;
+        show();
+      };
+    } catch (error) {
+      $("choose-error").textContent = "Could not connect to the AI router: " + error.message;
+      $("choose-error").hidden = false;
+      log("Could not connect to the AI router: " + error.message);
+    }
   </script>
 </body>
 </html>

@@ -4,22 +4,32 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Your hub | Port Authority</title>
+  <meta name="description" content="Manage the sites that offer tools to your Port Authority hub, see who you have granted access to, and revoke or forget them at any time.">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <meta property="og:title" content="Your hub | Port Authority">
+  <meta property="og:description" content="Manage the sites that offer tools to your Port Authority hub, see who you have granted access to, and revoke or forget them at any time.">
+  <meta property="og:type" content="website">
+  <meta name="twitter:card" content="summary">
   <link rel="stylesheet" href="/base.css">
   <link rel="stylesheet" href="/hub/hub.css">
   <script src="/errors.js"></script>
 </head>
 <body>
+  <a class="skip-link" href="#main">Skip to content</a>
   <div class="wrap">
     <header class="site-bar">
       <a class="wordmark" href="/">Port Authority</a>
-      <nav><a href="/guide/">The guide</a><a href="/">About</a><a href="/patterns/">Port patterns</a><a href="/missing/">What is missing</a><a href="/reading/">Further reading</a><a href="/hub/" aria-current="page">Your hub</a></nav>
+      <nav aria-label="Primary"><a href="/">Experiments</a><a href="/guide/">The guide</a><a href="/patterns/">Port patterns</a><a href="/comlink/">Comlink today</a><a href="/ai-router/">AI router</a><a href="/lab/">The lab</a><a href="/missing/">What is missing</a><a href="/reading/">Further reading</a><a href="/hub/" aria-current="page">Your hub</a></nav>
     </header>
-    <div class="stack" style="--gap:.8rem; padding-top:2rem">
-      <h1 style="font-size:var(--step-3)">Your hub</h1>
-      <p>These are the sites that offer you tools and the sites you have let use them. You don't need to keep this page open. Your hub is on a server and remembers which sites offer which tools. Calls between two sites happen on your machine and don't pass through it.</p>
-      <p class="small muted">Choosing and connecting an agent has <a href="/hub/agent/">a page of its own</a>.</p>
-    </div>
-    <main class="dash" id="dash"></main>
+    <main id="main">
+      <div class="stack" style="--gap:.8rem; padding-top:2rem">
+        <h1 style="font-size:var(--step-3)">Your hub</h1>
+        <p>These are the sites that offer you tools and the sites you have let use them. You don't need to keep this page open. Your hub is on a server and remembers which sites offer which tools. Direct calls between two sites happen on your machine and don't pass through it.</p>
+        <p class="small muted">Choosing and connecting an agent has <a href="/hub/agent/">a page of its own</a>.</p>
+      </div>
+      <div class="dash" id="dash"></div>
+    </main>
+    <footer class="small muted" style="padding-block:2rem 4rem">Port Authority, by <a href="https://paul.kinlan.me">Paul Kinlan</a>.</footer>
   </div>
   <script type="module">
     import { switchboard, mountDashboard } from "/hub/ui.js";

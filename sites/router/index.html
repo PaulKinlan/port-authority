@@ -3,30 +3,49 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Your AI router</title>
+  <title>Your AI router | Port Authority</title>
+  <meta name="description" content="Manage your AI model accounts and control which sites may send prompts through your Port Authority AI router without ever sharing your API keys.">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <meta property="og:title" content="Your AI router | Port Authority">
+  <meta property="og:description" content="Manage your AI model accounts and control which sites may send prompts through your Port Authority AI router without ever sharing your API keys.">
+  <meta property="og:type" content="website">
+  <meta name="twitter:card" content="summary">
   <link rel="stylesheet" href="/base.css">
   <link rel="stylesheet" href="/router.css">
 </head>
 <body>
+  <a class="skip-link" href="#main">Skip to content</a>
   <div class="wrap">
-    <header class="head">
+    <header class="site-bar">
       <a class="wordmark" href="/">AI router</a>
-      <h1>Your accounts, and the sites that may use them.</h1>
-      <p class="note">Add an API key here once. When a site asks for an AI model, a window from this address opens and you choose which account it may use. The site gets a way to send prompts. It never gets the key. This is an experiment from <a id="main-link" href="#">Port Authority</a>.</p>
+      <nav aria-label="Related pages">
+        <a id="main-link" href="#">About AI router</a>
+        <a id="pa-link" href="#">Port Authority</a>
+      </nav>
     </header>
-    <main class="grid">
+    <main id="main" class="grid">
+      <div class="head">
+        <h1>Your accounts, and the sites that may use them.</h1>
+        <p class="note">Add an API key here once. When a site asks for an AI model, a window from this address opens and you choose which account it may use. The site gets a way to send prompts. It never gets the key. This is an experiment from <a id="main-link-inline" href="#">Port Authority</a>.</p>
+      </div>
+
+      <aside class="notice stack" aria-label="Before you add an API key">
+        <p class="small"><strong>Try it without a key first:</strong> You can pick the built-in <strong>Practice model</strong> on any demo site below without adding an API key.</p>
+        <p class="small muted"><strong>Experimental &amp; local storage note:</strong> API keys added here are stored in plaintext in this browser's <code>localStorage</code> for this origin (never sent to the router's server). This is an experiment—if you test with a real provider key, use a low-limit or easily revocable key.</p>
+      </aside>
+
       <section class="panel stack">
         <h2>Your accounts</h2>
-        <p class="small muted">Keys are kept in this browser, in the storage for this address. They are not sent to the router's server. They are sent only to the provider they belong to. These pages are served with a rule that stops them connecting to any address except the router and the providers in the list below.</p>
+        <p class="small muted">Keys stay in this browser's storage for this address and are sent only to the provider they belong to. These pages are served with a Content-Security-Policy that stops them connecting to any address except the router and the supported providers (Anthropic, OpenAI, OpenRouter, Google Gemini, and local Ollama).</p>
         <ul class="rows" id="accounts"></ul>
         <details id="add">
           <summary class="button quiet">Add an account</summary>
-          <form class="fields" id="form">
+          <form class="fields" id="form" novalidate>
             <div><label for="provider">Provider</label><select id="provider"></select><p class="small muted" id="provider-note"></p></div>
             <div><label for="label">Name for this account</label><input type="text" id="label" required maxlength="40" placeholder="Work key"></div>
             <div id="key-row"><label for="key">API key</label><input type="password" id="key" autocomplete="off"></div>
             <div><label for="models">Models, separated by commas</label><input type="text" id="models" required></div>
-            <div class="actions"><button class="accent">Save</button><span class="small muted" id="form-state"></span></div>
+            <div class="actions"><button class="accent">Save</button><span class="small muted" id="form-state" role="status" aria-live="polite"></span></div>
           </form>
         </details>
       </section>
@@ -34,6 +53,7 @@
       <section class="panel stack">
         <h2>Sites you have allowed</h2>
         <p class="small muted">This list is kept on the router's server so that it can be checked on every request. Stopping a site takes effect on its next request.</p>
+        <p class="small error" id="grants-error" role="alert" hidden></p>
         <ul class="rows" id="grants"><li class="muted">Loading.</li></ul>
       </section>
 

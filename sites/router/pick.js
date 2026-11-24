@@ -26,48 +26,90 @@ async function findFrame() {
 
 const found = await findFrame();
 if (!found) {
-  main.innerHTML = `<h1>This window is opened by a site</h1><p>A site that wants to use an AI model opens this window so that you can choose one. Nothing opened it this time.</p><p><a class="button" href="/">Go to your router</a></p>`;
+  document.title = "Open from a site | AI router";
+  main.innerHTML = `<h1 tabindex="-1">This window is opened by a site</h1><p>A site that wants to use an AI model opens this window so that you can choose one. Nothing opened it this time.</p><p><a class="button" href="/">Go to your router</a></p>`;
+  main.querySelector("h1").focus();
 } else {
   const { line, site, current } = found;
+  let busy = false;
+  const cancel = () => {
+    if (busy) return;
+    try { line.close(); } catch {}
+    close();
+  };
+  addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && !busy) {
+      event.preventDefault();
+      cancel();
+    }
+  });
+
   const draw = async () => {
     const list = await choices();
     const real = list.some((c) => c.secretKey);
+    const currentIndex = current ? list.findIndex((c) => c.label === current.label && c.model === current.model) : -1;
+    const selectedIndex = currentIndex >= 0 ? currentIndex : 0;
+    document.title = `Choose a model | AI router`;
     main.innerHTML = `
       <p class="origin">${esc(site)}</p>
-      <h1>This site wants to use an AI model</h1>
+      <h1 tabindex="-1">This site wants to use an AI model</h1>
       <p>Choose which of your accounts it may use. The site can send prompts and read the answers. It cannot see your API key.</p>
       ${current ? `<p class="note small">It uses ${esc(current.label)} · ${esc(current.model)} now. Choosing again replaces that.</p>` : ""}
       <fieldset class="choices" id="choices">
-        ${list.map((c, i) => `<label><input type="radio" name="choice" value="${esc(c.key)}" ${i === 0 ? "checked" : ""}><span><strong>${esc(c.label)} · ${esc(c.model)}</strong><span class="muted small">${esc(c.note || c.providerName)}</span></span></label>`).join("")}
+        <legend class="small muted">Choose an account and model</legend>
+        ${list.map((c, i) => `<label><input type="radio" name="choice" value="${esc(c.key)}" ${i === selectedIndex ? "checked" : ""}><span><strong>${esc(c.label)} · ${esc(c.model)}</strong><span class="muted small">${esc(c.note || c.providerName)}</span></span></label>`).join("")}
       </fieldset>
-      ${real ? "" : `<p class="small muted">You have not added an account with a key yet. <a href="/" target="_blank">Add one in your router</a>, then come back to this window.</p>`}
+      ${real ? "" : `<p class="small muted">You have not added an account with a key yet. <a href="/" target="_blank" rel="noopener">Add one in your router</a>, then come back to this window.</p>`}
       <div class="limits">
         <div><label for="requests">Stop after</label><select id="requests"><option value="5">5 requests</option><option value="20" selected>20 requests</option><option value="100">100 requests</option><option value="1000">1,000 requests</option></select></div>
         <div><label for="days">Or after</label><select id="days"><option value="1">1 day</option><option value="7" selected>7 days</option><option value="30">30 days</option></select></div>
       </div>
-      <p class="error" id="error" hidden></p>
+      <p class="error" id="error" role="alert" hidden></p>
       <div class="actions"><button class="accent" id="yes">Allow</button><button class="quiet" id="no">Don't allow</button></div>
-      <p class="small muted">You can see what this site has used, and stop it, at <a href="/" target="_blank">your router</a>.</p>`;
-    document.getElementById("no").onclick = () => { line.close(); close(); };
+      <p class="small muted">You can see what this site has used, and stop it, at <a href="/" target="_blank" rel="noopener">your router</a>.</p>`;
+    document.getElementById("no").onclick = cancel;
     document.getElementById("yes").onclick = async () => {
+      if (busy) return;
       const yes = document.getElementById("yes");
+      const box = document.getElementById("error");
+      busy = true;
       yes.disabled = true;
-      const choice = list.find((c) => c.key === document.querySelector("input[name=choice]:checked").value);
+      yes.textContent = "Allowing...";
+      box.hidden = true;
+      box.textContent = "";
+      const selected = document.querySelector("input[name=choice]:checked");
+      const choice = list.find((c) => c.key === selected?.value) || list[0];
       const secret = random(24);
       try {
         const made = await server("grant", { site, secret, label: choice.label, provider: choice.provider, model: choice.model, requests: document.getElementById("requests").value, days: document.getElementById("days").value });
-        if (!made.ok) throw new Error(made.why);
+        if (!made.ok) throw new Error(made.why || "The router server refused the grant.");
         const sealed = choice.secretKey ? await seal(made.wrap, choice.secretKey) : null;
-        line.onmessage = (event) => { if (event.data && event.data.t === "stored") close(); };
-        line.postMessage({ t: "grant", info: made.grant, grant: { person: me().id, id: made.id, secret, site, provider: choice.provider, providerName: choice.providerName, model: choice.model, label: choice.label, sealed } });
+        const confirmed = await new Promise((resolve) => {
+          let settled = false;
+          const finish = (ok) => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timer);
+            clearInterval(watch);
+            resolve(ok);
+          };
+          const timer = setTimeout(() => finish(false), 5000);
+          const watch = setInterval(() => { if (!opener || opener.closed) finish(false); }, 300);
+          line.onmessage = (event) => { if (event.data && event.data.t === "stored") finish(true); };
+          line.postMessage({ t: "grant", info: made.grant, grant: { person: me().id, id: made.id, secret, site, provider: choice.provider, providerName: choice.providerName, model: choice.model, label: choice.label, sealed } });
+        });
+        if (confirmed) return close();
+        throw new Error("The opening site closed or did not confirm the grant. You can close this window or try again.");
       } catch (error) {
-        const box = document.getElementById("error");
-        box.hidden = false; box.textContent = "That did not work: " + error.message;
+        busy = false;
+        box.hidden = false;
+        box.textContent = "That did not work: " + error.message;
         yes.disabled = false;
+        yes.textContent = "Allow";
       }
     };
   };
   draw();
   // An account added in another tab shows up here without a reload.
-  addEventListener("storage", draw);
+  addEventListener("storage", () => { if (!busy) draw(); });
 }

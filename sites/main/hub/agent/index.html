@@ -4,26 +4,37 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Your agent | Your hub | Port Authority</title>
+  <meta name="description" content="Choose which agent sites reach when you let them talk to your agent through Port Authority: the built-in demo agent or your own local ACP agent.">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <meta property="og:title" content="Your agent | Your hub | Port Authority">
+  <meta property="og:description" content="Choose which agent sites reach when you let them talk to your agent through Port Authority: the built-in demo agent or your own local ACP agent.">
+  <meta property="og:type" content="website">
+  <meta name="twitter:card" content="summary">
   <link rel="stylesheet" href="/base.css">
   <link rel="stylesheet" href="/hub/hub.css">
   <script src="/errors.js"></script>
 </head>
 <body>
+  <a class="skip-link" href="#main">Skip to content</a>
   <div class="wrap">
     <header class="site-bar">
       <a class="wordmark" href="/">Port Authority</a>
-      <nav><a href="/guide/">The guide</a><a href="/">About</a><a href="/patterns/">Port patterns</a><a href="/missing/">What is missing</a><a href="/reading/">Further reading</a><a href="/hub/" aria-current="page">Your hub</a></nav>
+      <nav aria-label="Primary"><a href="/">Experiments</a><a href="/guide/">The guide</a><a href="/patterns/">Port patterns</a><a href="/comlink/">Comlink today</a><a href="/ai-router/">AI router</a><a href="/lab/">The lab</a><a href="/missing/">What is missing</a><a href="/reading/">Further reading</a><a href="/hub/" aria-current="page">Your hub</a></nav>
     </header>
-    <div class="stack" style="--gap:.8rem; padding-top:2rem">
-      <h1 style="font-size:var(--step-3)">Your agent</h1>
-      <p>A site can ask to talk to your agent. If you say yes, it gets a port, and what it says down that port reaches one agent: the one you choose here. That can be the built-in demo agent, which has no model and only matches words to tools, or your own agent running on your machine, reached through a small bridge you start yourself.</p>
-      <p class="small muted">This is separate from <a href="/hub/">the sites that offer you tools</a>. An agent you connect here can call those tools.</p>
-    </div>
-    <main class="dash" id="dash"></main>
+    <main id="main">
+      <div class="stack" style="--gap:.8rem; padding-top:2rem">
+        <h1 style="font-size:var(--step-3)">Your agent</h1>
+        <p>A site can ask to talk to your agent. If you say yes, it gets a port, and what it says down that port reaches one agent: the one you choose here. That can be the built-in demo agent, which has no model and only matches words to tools, or your own agent running on your machine, reached through a small bridge you start yourself.</p>
+        <p class="small muted">This is separate from <a href="/hub/">the sites that offer you tools</a>. An agent you connect here can call those tools.</p>
+      </div>
+      <div class="dash" id="dash"></div>
+    </main>
+    <footer class="small muted" style="padding-block:2rem 4rem">Port Authority, by <a href="https://paul.kinlan.me">Paul Kinlan</a>.</footer>
   </div>
   <script type="module">
     import { switchboard, mountDashboard } from "/hub/ui.js";
     mountDashboard(document.getElementById("dash"), switchboard(), "agent");
   </script>
+  <script type="module" src="/refs.js"></script>
 </body>
 </html>

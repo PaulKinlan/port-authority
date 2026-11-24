@@ -78,7 +78,7 @@ export function rpc(port) {
 function askHub(kind, payload = {}) {
   return new Promise((resolve, reject) => {
     const win = window.open(`${HUB}/hub/popup.html#${kind}`, `pa_${kind}`, "popup,width=460,height=660");
-    if (!win) return reject(new Error("The hub window was blocked. Call this from a click handler."));
+    if (!win) return reject(new Error("Your browser blocked the hub window. Allow popups for this site and click again."));
     let done = false;
     const finish = (fn, value) => {
       if (done) return;

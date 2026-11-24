@@ -36,7 +36,12 @@ export async function choices() {
 export async function server(action, body = {}) {
   const who = me();
   const response = await fetch(`/r/${who.id}/${action}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ owner: who.owner, ...body }) });
-  return response.json();
+  const text = await response.text();
+  let data = null;
+  try { data = text ? JSON.parse(text) : null; } catch {}
+  if (!response.ok) throw new Error(data?.why || data?.error || `The router server returned ${response.status}.`);
+  if (!data || typeof data !== "object") throw new Error("The router server returned an unexpected response.");
+  return data;
 }
 
 export { seal } from "/seal.js";

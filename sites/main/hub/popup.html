@@ -3,21 +3,30 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Port Authority</title>
+  <title>Connecting | Port Authority</title>
+  <meta name="description" content="Review and approve tool or agent requests in your Port Authority hub.">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <meta property="og:title" content="Your hub | Port Authority">
+  <meta property="og:description" content="Review and approve tool or agent requests in your Port Authority hub.">
+  <meta property="og:type" content="website">
+  <meta name="twitter:card" content="summary">
   <link rel="stylesheet" href="/base.css">
   <link rel="stylesheet" href="/hub/hub.css">
 </head>
 <body>
-  <main id="app" class="ask"><p class="muted">Connecting to your hub.</p></main>
+  <main id="app" class="ask"><p class="muted" role="status">Connecting to your hub...</p></main>
   <script type="module">
-    import { switchboard, mountDashboard, host } from "/hub/ui.js";
+    import { switchboard, host } from "/hub/ui.js";
 
     const app = document.getElementById("app");
     const opener = window.opener;
     if (!opener) location.replace("/hub/");
 
+    let siteUrls = null;
+    import("/_sites.js").then(({ sites }) => { siteUrls = sites; }).catch(() => {});
+
     const sb = switchboard();
-    let request = null, client = null, answered = false;
+    let request = null, client = null, answered = false, busy = false;
     const esc = (t) => String(t ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
     const remembered = (key) => { try { return JSON.parse(localStorage.getItem(key) || "[]"); } catch { return []; } };
     const remember = (key, value) => localStorage.setItem(key, JSON.stringify([...new Set([...remembered(key), value])]));
@@ -29,12 +38,24 @@
       if (event.source !== opener) return;
       if (data.pa === "request" && !request) {
         request = data; client = event.origin;
-        sb.until(() => true).then(start);
+        waitAndStart();
       } else if (data.pa === "ack") {
         settle();
       }
     });
     opener?.postMessage({ pa: "ready" }, "*");
+
+    addEventListener("keydown", (event) => {
+      if (event.key !== "Escape" || answered || busy || !request) return;
+      event.preventDefault();
+      respond(false, { reason: request.kind === "pick" ? "Nothing was chosen." : "You said no." });
+    });
+
+    function waitAndStart() {
+      document.title = "Connecting | Port Authority";
+      app.innerHTML = `<p class="muted" role="status">Connecting to your hub...</p>`;
+      sb.until(() => true).then(start);
+    }
 
     function respond(ok, extra = {}, transfer = []) {
       if (answered) return;
@@ -56,33 +77,71 @@
       return { hub: { id: sb.id, token: minted.token } };
     }
 
-    function consent({ title, body, yes, onYes }) {
+    function consent({ pageTitle, title, body, yes, working = "Working...", onYes }) {
+      document.title = `${pageTitle || "Allow access"} | Port Authority`;
       app.innerHTML = `
-        <h1>${title}</h1>
-        <p class="who">${esc(client)}</p>
+        <h1 tabindex="-1">${title}</h1>
+        <p class="who" title="${esc(client)}">${esc(host(client))}</p>
         <p>${body}</p>
+        <p class="error small" id="consent-error" role="alert" hidden></p>
         <div class="actions"><button class="accent" id="yes">${yes}</button><button class="quiet" id="no">Not now</button></div>`;
-      app.querySelector("#no").onclick = () => respond(false, { reason: "You said no." });
-      app.querySelector("#yes").onclick = onYes;
-      app.querySelector("#yes").focus();
+      const yesBtn = app.querySelector("#yes");
+      const noBtn = app.querySelector("#no");
+      const errBox = app.querySelector("#consent-error");
+      noBtn.onclick = () => respond(false, { reason: "You said no." });
+      yesBtn.onclick = async () => {
+        if (busy || answered) return;
+        busy = true;
+        yesBtn.disabled = true;
+        yesBtn.textContent = working;
+        errBox.hidden = true;
+        errBox.textContent = "";
+        try {
+          await onYes();
+        } catch (err) {
+          busy = false;
+          yesBtn.disabled = false;
+          yesBtn.textContent = yes;
+          errBox.textContent = err?.message || "Something went wrong. Try again.";
+          errBox.hidden = false;
+        }
+      };
+      // Focus the heading rather than the primary grant button so pressing
+      // Space or Enter cannot accidentally approve access.
+      app.querySelector("h1").focus();
     }
 
     function start() {
+      if (!sb.state) {
+        document.title = "Could not connect | Port Authority";
+        app.innerHTML = `
+          <h1 tabindex="-1">Could not reach your hub</h1>
+          <p>Connecting to your hub timed out. Check your connection and try again.</p>
+          <div class="actions"><button class="accent" id="retry">Retry</button><button class="quiet" id="no">Cancel</button></div>`;
+        app.querySelector("#retry").onclick = () => waitAndStart();
+        app.querySelector("#no").onclick = () => respond(false, { reason: "Could not reach your hub." });
+        app.querySelector("h1").focus();
+        return;
+      }
       const kind = request.kind;
       if (kind === "connect") return startConnect();
       if (kind === "pick") return startPick();
       if (kind === "registry") return consent({
+        pageTitle: "Allow access",
         title: "Let this site use every tool in your hub?",
         body: "It will be able to see and call the tools of every site you have open, through your hub. You can revoke it from the hub.",
         yes: "Allow every tool",
+        working: "Allowing...",
         onYes: async () => { const g = await sb.ask({ t: "grant-registry", client }); respond(true, { grantId: g.grantId, ...(await credentials()) }); },
       });
       if (kind === "agent") return consent({
+        pageTitle: "Allow access",
         title: "Let this site talk to your agent?",
         body: sb.state.agent.mode === "relay"
           ? "It will be able to send prompts to the agent running on your machine. It cannot choose the folder the agent works in."
           : "You are using the built-in demo agent, which can only call the tools in your hub.",
         yes: "Connect my agent",
+        working: "Connecting...",
         onYes: async () => { const g = await sb.ask({ t: "grant-agent", client }); respond(true, { grantId: g.grantId, ...(await credentials()) }); },
       });
       respond(false, { reason: "Unknown request." });
@@ -91,14 +150,19 @@
     function startConnect() {
       const go = async () => {
         remember("pa-services", client);
-        app.innerHTML = `<p class="muted">Adding ${esc(host(client))}.</p>`;
+        app.innerHTML = `<p class="muted" role="status">Adding ${esc(host(client))}...</p>`;
         respond(true, await credentials());
       };
-      if (remembered("pa-services").includes(client) && sb.state.services.some((s) => s.origin === client)) return go();
+      if (remembered("pa-services").includes(client) && sb.state.services.some((s) => s.origin === client)) {
+        go().catch((err) => respond(false, { reason: err?.message || "Could not add this site." }));
+        return;
+      }
       consent({
+        pageTitle: "Add a site",
         title: `Add ${esc(request.name || "this site")} to your hub?`,
         body: `${esc(request.description || "It wants to offer tools.")} Your hub will remember its tools, and other sites reach them only when you pick it.`,
         yes: "Add to my hub",
+        working: "Adding...",
         onYes: go,
       });
     }
@@ -107,29 +171,69 @@
     const tokens = (text) => new Set(String(text).toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length > 1 && !STOP.has(w)).map((w) => w.replace(/(ing|s)$/, "")));
 
     function startPick() {
+      document.title = "Choose a tool | Port Authority";
       const want = tokens(request.intent || "");
+      let lastSig = null;
+      let firstRender = true;
       const render = (state) => {
-        if (answered) return;
+        if (answered || busy) return;
         const rows = state.services.flatMap((s) => s.tools.map((tool) => {
           const have = tokens(`${tool.name} ${tool.description} ${s.name}`);
           let score = 0; for (const w of want) if (have.has(w)) score++;
-          return { s, tool, score };
+          return { s, tool, score, key: `${s.origin}|${tool.name}` };
         })).sort((a, b) => b.score - a.score || Number(b.s.live) - Number(a.s.live));
+
+        const sig = JSON.stringify({
+          sitesLoaded: !!siteUrls,
+          rows: rows.map((r) => [r.key, r.tool.description, r.s.name, r.s.live, r.score]),
+        });
+        if (sig === lastSig) return;
+        lastSig = sig;
+
+        const active = document.activeElement;
+        const focusKey = active?.dataset?.key || null;
+        const focusId = active?.id || null;
+
+        const emptyLinks = [
+          siteUrls?.florist ? `<li><a href="${esc(siteUrls.florist)}/" target="_blank" rel="noopener">Stem and Petal (demo florist)</a></li>` : "",
+          siteUrls?.library ? `<li><a href="${esc(siteUrls.library)}/" target="_blank" rel="noopener">Harbour Street Library (demo library)</a></li>` : "",
+          `<li><a href="/hub/" target="_blank" rel="noopener">Open your hub</a></li>`,
+        ].filter(Boolean).join("");
+
         app.innerHTML = `
-          <h1>Who should handle this?</h1>
-          <p class="who">${esc(host(client))} wants to: <strong>${esc(request.intent || "use a tool")}</strong></p>
+          <h1 tabindex="-1">Who should handle this?</h1>
+          <p class="who" title="${esc(client)}">${esc(host(client))} wants to: <strong>${esc(request.intent || "use a tool")}</strong></p>
           ${rows.length ? `<ul class="options">${rows.map((r, i) => `
-            <li><button data-i="${i}" class="${r.score ? "match" : ""}">
-              <strong>${esc(r.tool.name)}</strong>
+            <li><button data-i="${i}" data-key="${esc(r.key)}" class="${r.score ? "match" : ""}">
+              <span class="option-head"><strong>${esc(r.tool.name)}</strong>${r.score ? `<span class="match-badge">Recommended match</span>` : ""}</span>
               <span>${esc(r.tool.description)}</span>
               <span class="muted small"><span class="jack ${r.s.live ? "on" : ""}"></span>${esc(r.s.name)}, ${esc(host(r.s.origin))}${r.s.live ? ", open in a tab" : ", opens in a window"}</span>
             </button></li>`).join("")}</ul>`
-            : `<p>No site has offered your hub a tool yet. Open one that does, add it, and try again.</p>`}
+            : `<div class="stack" style="--gap:.6rem"><p>No site has offered your hub a tool yet. Open one in a new tab, add it to your hub, and it will appear right here:</p><ul class="empty-links">${emptyLinks}</ul></div>`}
           <div class="actions"><button class="quiet" id="no">Cancel</button></div>`;
         app.querySelector("#no").onclick = () => respond(false, { reason: "Nothing was chosen." });
-        app.querySelectorAll("[data-i]").forEach((b) => b.onclick = () => { off(); choose(rows[b.dataset.i]); });
+        app.querySelectorAll("[data-i]").forEach((b) => {
+          b.onclick = () => {
+            if (busy || answered) return;
+            busy = true;
+            off();
+            choose(rows[b.dataset.i]);
+          };
+        });
+
+        if (firstRender) {
+          firstRender = false;
+          app.querySelector("h1").focus();
+        } else if (focusKey) {
+          const match = [...app.querySelectorAll("[data-key]")].find((el) => el.dataset.key === focusKey);
+          match?.focus({ preventScroll: true });
+        } else if (focusId) {
+          app.querySelector(`#${CSS.escape(focusId)}`)?.focus({ preventScroll: true });
+        }
       };
       const off = sb.on(render);
+      // If /_sites.js finishes loading after the first empty render, update links cleanly.
+      if (!siteUrls) import("/_sites.js").then(({ sites }) => { siteUrls = sites; if (sb.state) render(sb.state); }).catch(() => {});
     }
 
     // Open the tool's own page, wait for it to say it is ready, and give each
@@ -139,13 +243,17 @@
       // Its tab is already open: have the server introduce the two tabs, and
       // they open a WebRTC channel between themselves. No new window.
       if (s.live && window.RTCPeerConnection) {
-        app.innerHTML = `<p class="muted">Introducing ${esc(host(client))} to the ${esc(s.name)} tab you have open.</p>`;
+        app.innerHTML = `<p class="muted" role="status">Introducing ${esc(host(client))} to the ${esc(s.name)} tab you have open...</p>`;
         const made = await sb.ask({ t: "intro", client, service: s.origin, tool: tool.name, rtc: true });
         if (made.ok) return respond(true, { tool, service: { name: s.name, origin: s.origin }, rtc: { line: made.line }, ...(await credentials()) });
       }
-      app.innerHTML = `<p class="muted">Opening ${esc(s.name)} and introducing it to ${esc(host(client))}.</p>`;
+      app.innerHTML = `<p class="muted" role="status">Opening ${esc(s.name)} and introducing it to ${esc(host(client))}...</p>`;
       const win = window.open(s.url, "_blank", "popup,width=560,height=720");
-      if (!win) return respond(false, { reason: "The site could not be opened." });
+      if (!win) {
+        return respond(false, {
+          reason: `Your browser blocked opening ${s.name} in a popup window. Allow popups for this hub, or open ${s.name} (${s.url}) in a tab first and try again.`,
+        });
+      }
       const ready = await Promise.race([
         new Promise((resolve) => serviceWaits.set(win, resolve)),
         new Promise((resolve) => setTimeout(() => resolve(null), 15000)),

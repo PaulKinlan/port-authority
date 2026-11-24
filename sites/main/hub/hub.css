@@ -14,20 +14,27 @@
 .choice label { font-weight: 600; background: var(--panel); border-radius: 12px; padding: 0.8rem 1rem; margin: 0; border: 2px solid transparent; cursor: pointer; }
 .choice label:has(:checked) { border-color: var(--ink); }
 .choice label span { display: block; font-weight: 400; margin-left: 1.6rem; }
+.conn-banner { background: var(--panel); border: 2px solid var(--line); border-radius: 12px; padding: 0.75rem 1rem; font-weight: 600; font-size: var(--step--1); }
+.conn-banner.warn { border-color: var(--red); color: var(--red); }
 
 /* popup */
 .ask { padding: 1.2rem; display: grid; gap: 1.2rem; }
 .ask h1 { font-size: var(--step-2); font-stretch: 100%; letter-spacing: -0.02em; line-height: 1.05; }
+.ask h1:focus { outline: none; }
 .ask .who { font-family: var(--mono); font-size: var(--step--1); background: var(--panel); padding: 0.5rem 0.7rem; border-radius: 8px; overflow-wrap: anywhere; }
 .ask .actions { display: flex; gap: 0.6rem; flex-wrap: wrap; }
+.ask .error { color: var(--red); font-weight: 600; }
+.empty-links { margin: 0; padding-left: 1.2rem; display: grid; gap: 0.45rem; }
 .options { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.5rem; }
 .options button {
-  width: 100%; display: grid; gap: 0.2rem; text-align: left; border-radius: 14px; padding: 0.8rem 1rem;
+  width: 100%; display: grid; gap: 0.25rem; text-align: left; border-radius: 14px; padding: 0.8rem 1rem;
   background: var(--panel); color: var(--ink); border-color: transparent; font-weight: 400; line-height: 1.35;
 }
 .options button:hover { border-color: var(--ink); background: var(--panel); }
+.options .option-head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; flex-wrap: wrap; }
 .options strong { font: 700 var(--step-0)/1.2 var(--display); }
 .options .match { border-color: var(--accent); }
+.match-badge { font: 700 0.75rem/1 var(--body); padding: 0.25em 0.55em; border-radius: 999px; background: var(--accent); color: var(--on-accent); white-space: nowrap; }
 .banner { background: var(--accent); color: var(--on-accent); padding: 0.8rem 1.2rem; font-weight: 600; }
 
 .hub-tabs { display: flex; flex-wrap: wrap; gap: .5rem; }
@@ -39,7 +46,7 @@
 .agent-pick legend { font: 700 var(--step-0)/1.2 var(--display); padding: 0; margin-bottom: .6rem; }
 .agent-card { position: relative; display: grid; grid-template-columns: auto 1fr; grid-template-areas: "badge who" "needs needs"; gap: .5rem .7rem; align-items: center; margin: 0; padding: .8rem .9rem; border-radius: 14px; background: var(--panel); border: 2px solid transparent; cursor: pointer; font-weight: 400; transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease; }
 .agent-card input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
-.agent-card .badge { grid-area: badge; width: 2.4rem; height: 2.4rem; border-radius: 10px; display: grid; place-items: center; font: 800 .95rem/1 var(--display); letter-spacing: .02em; color: #fff; background: linear-gradient(135deg, hsl(var(--hue) 70% 46%), hsl(calc(var(--hue) + 40) 75% 36%)); }
+.agent-card .badge { grid-area: badge; width: 2.4rem; height: 2.4rem; border-radius: 10px; display: grid; place-items: center; font: 800 .95rem/1 var(--display); letter-spacing: .02em; color: #fff; background: linear-gradient(135deg, hsl(var(--hue) 72% 26%), hsl(calc(var(--hue) + 30) 76% 20%)); }
 .agent-card .who { grid-area: who; display: grid; line-height: 1.2; }
 .agent-card .who strong { font: 700 var(--step-0)/1.15 var(--display); }
 .agent-card .needs { grid-area: needs; opacity: .8; }

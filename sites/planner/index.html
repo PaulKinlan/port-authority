@@ -4,132 +4,274 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Weekend Planner, a demo client</title>
+  <meta name="description" content="A pretend client site on its own origin that asks your Port Authority hub for tools, the registry, or your agent without knowing the other sites.">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <meta property="og:title" content="Weekend Planner, a demo client">
+  <meta property="og:description" content="A pretend client site on its own origin that asks your Port Authority hub for tools, the registry, or your agent without knowing the other sites.">
+  <meta property="og:type" content="website">
+  <meta name="twitter:card" content="summary">
   <link rel="stylesheet" href="/base.css">
   <link rel="stylesheet" href="/site.css">
   <style>:root { --accent: #f5b700; }</style>
 </head>
 <body>
+  <a class="skip-link" href="#main">Skip to content</a>
   <div class="wrap">
-    <header class="site-head">
-      <a class="wordmark" href="/">Weekend Planner</a>
-      <h1>This site has no flowers, no books and no agent.</h1>
-      <p class="demo-note">It has never heard of the florist or the library. It asks your hub for what it needs, you choose who answers, and it ends up holding a port. Add the <a data-site="florist" target="_blank">florist</a> and the <a data-site="library" target="_blank">library</a> to your hub first. You can close them again afterwards.</p>
+    <header class="demo-bar">
+      <span class="origin-pill" id="origin-pill"></span>
+      <nav aria-label="Demo sites">
+        <a data-site="main" href="#">Port Authority</a>
+        <a data-site="main" data-path="/hub/" href="#">Your hub</a>
+        <a data-site="main" data-path="/hub/agent/" href="#">Your agent</a>
+        <a data-site="florist" href="#">Florist</a>
+        <a data-site="library" href="#">Library</a>
+      </nav>
     </header>
-    <main class="cols">
-      <section class="panel stack">
-        <h2>Ask for one thing</h2>
-        <p class="small muted">You pick the site. It opens in a window, and this page gets a port straight to that one tool. No server is involved in the call.</p>
-        <div><label for="intent">I want to</label><input type="text" id="intent" value="send flowers to a friend"></div>
-        <p><button id="pick" disabled>Find someone who can</button></p>
-        <p class="small">Or as plain links: <a href="intent:find+a+book+about+raising+chickens">find a book about raising chickens</a>, <a href="intent:reserve+a+book">reserve a book</a>.</p>
-        <div id="picked" class="stack"></div>
-      </section>
-      <section class="panel stack">
-        <h2>Ask for every tool</h2>
-        <p class="small muted">An MCP connection to the tools of every site you have open, carried by your hub.</p>
-        <p><button id="registry" disabled>Connect to the registry</button></p>
-        <div id="tools" class="stack"></div>
-      </section>
-      <section class="panel stack">
-        <h2>Ask for your agent</h2>
-        <p class="small muted">An Agent Client Protocol session with whichever agent you chose in your hub.</p>
-        <p><button id="agent" disabled>Connect my agent</button></p>
-        <div id="chat" class="chat" aria-live="polite"></div>
-        <form id="say" hidden class="fields"><input type="text" id="prompt" aria-label="Message to your agent" value="book a delivery of the ember bouquet for &quot;Sam&quot;"><button>Send</button></form>
-      </section>
+    <main id="main">
+      <div class="site-head">
+        <a class="wordmark" href="/">Weekend Planner</a>
+        <h1>This site has no flowers, no books and no agent.</h1>
+        <p class="demo-note">It has never heard of the florist or the library. It asks <a data-site="main" data-path="/hub/" href="#" target="_blank" rel="noopener">your hub</a> for what it needs, you choose who answers, and it ends up holding a port. Add the <a data-site="florist" href="#" target="_blank" rel="noopener">florist</a> and the <a data-site="library" href="#" target="_blank" rel="noopener">library</a> to your hub first. You can close them for <strong>Ask for one thing</strong> (your hub reopens them when picked), while <strong>Ask for every tool</strong> and <strong>Ask for your agent</strong> (configured in <a data-site="main" data-path="/hub/agent/" href="#" target="_blank" rel="noopener">your agent settings</a>) need those tabs left open.</p>
+        <p id="load-error" class="small error" role="alert" hidden></p>
+      </div>
+      <div class="cols">
+        <section class="panel stack">
+          <h2>Ask for one thing</h2>
+          <p class="small muted">You pick the site. It opens in a window, and this page gets a port straight to that one tool. No server is involved in the call.</p>
+          <div><label for="intent">I want to</label><input type="text" id="intent" value="send flowers to a friend"></div>
+          <p><button id="pick" disabled>Find someone who can</button></p>
+          <p class="small">Or as plain links: <a href="intent:find+a+book+about+raising+chickens">find a book about raising chickens</a>, <a href="intent:reserve+a+book">reserve a book</a>.</p>
+          <div id="picked" class="stack" aria-live="polite"></div>
+        </section>
+        <section class="panel stack">
+          <h2>Ask for every tool</h2>
+          <p class="small muted">An MCP connection to the tools of every site you have open, carried by your hub.</p>
+          <p><button id="registry" disabled>Connect to the registry</button></p>
+          <div id="tools" class="stack" aria-live="polite"></div>
+        </section>
+        <section class="panel stack">
+          <h2>Ask for your agent</h2>
+          <p class="small muted">An Agent Client Protocol session with whichever agent you chose in <a data-site="main" data-path="/hub/agent/" href="#" target="_blank" rel="noopener">your hub</a>.</p>
+          <p><button id="agent" disabled>Connect my agent</button></p>
+          <div id="chat" class="chat" aria-live="polite"></div>
+          <form id="say" hidden class="fields"><input type="text" id="prompt" aria-label="Message to your agent" value="book a delivery of the ember bouquet for &quot;Sam&quot;"><button id="send-agent">Send</button></form>
+          <p id="agent-busy" class="status small muted" hidden><span id="agent-thinking">Agent is thinking...</span><button type="button" id="cancel-agent" class="tiny quiet">Cancel</button></p>
+        </section>
+      </div>
     </main>
   </div>
   <script type="module">
     import { sites } from "/_sites.js";
-    const hub = await import(`${sites.main}/hub.js`);
-    for (const a of document.querySelectorAll("a[data-site]")) a.href = sites[a.dataset.site] + "/";
     const $ = (id) => document.getElementById(id);
     const esc = (t) => String(t ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
     const text = (result) => (result.content || []).filter((c) => c.type === "text").map((c) => c.text).join("\n");
 
-    // Build a form from a tool's JSON schema, call it, show what came back.
-    function toolForm(container, tool, call, heading) {
-      const props = Object.entries(tool.inputSchema?.properties || {});
-      const box = document.createElement("div");
-      box.className = "stack";
-      box.innerHTML = `
-        ${heading ? `<p>${heading}</p>` : ""}
-        <form class="fields">
-          ${props.map(([key, p]) => `<div><label>${esc(p.description || key)}
-            ${p.enum ? `<select name="${esc(key)}">${p.enum.map((v) => `<option>${esc(v)}</option>`).join("")}</select>` : `<input type="text" name="${esc(key)}">`}</label></div>`).join("")}
-          <div><button class="tiny">Call ${esc(tool.name)}</button></div>
-        </form>
-        <div class="result" hidden></div>`;
-      box.querySelector("form").onsubmit = async (event) => {
-        event.preventDefault();
-        const args = Object.fromEntries(new FormData(event.target));
-        for (const [key, p] of props) if (p.type === "number") args[key] = Number(args[key]);
-        const out = box.querySelector(".result");
-        out.hidden = false;
-        try { const result = await call(args); out.textContent = (result.isError ? "Error: " : "") + text(result); }
-        catch (err) { out.textContent = "Error: " + err.message; }
-      };
-      container.append(box);
+    $("origin-pill").textContent = location.host;
+    for (const a of document.querySelectorAll("a[data-site]")) {
+      a.href = sites[a.dataset.site] + (a.dataset.path || "/");
     }
 
-    function showPicked(line, intent, _link, err) {
-      $("picked").innerHTML = "";
-      if (!line) return void ($("picked").innerHTML = `<p class="small">${esc(err?.message || "Nothing was picked.")}</p>`);
-      toolForm($("picked"), line.tool, line.call, `<span class="jack on"></span>Direct line to <strong>${esc(line.tool.name)}</strong> at ${esc(line.service.name)}, ${line.via === "webrtc" ? "over WebRTC to the tab you already have open" : "over a port to the window your hub opened"}.`);
-    }
-    $("pick").onclick = () => hub.pick($("intent").value).then((line) => showPicked(line), (err) => showPicked(null, "", null, err));
-    hub.intentLinks(showPicked);
+    // Intercept intent: clicks before hub.js finishes loading so the browser
+    // never tries to navigate to an unknown protocol handler.
+    let hubReady = false;
+    document.addEventListener("click", (event) => {
+      if (hubReady) return;
+      const link = event.target.closest?.('a[href^="intent:"]');
+      if (!link) return;
+      event.preventDefault();
+      $("picked").innerHTML = `<p class="small muted" role="status">Still connecting to your hub. Click the link again in a moment.</p>`;
+    });
 
-    $("registry").onclick = async () => {
-      try {
-        const reg = await hub.registry();
-        const render = async () => {
-          const tools = await reg.listTools();
-          $("tools").innerHTML = tools.length ? "" : `<p class="small">Connected, and the registry is empty. Connect a site to your hub and its tools appear here.</p>`;
-          for (const tool of tools) toolForm($("tools"), tool, (args) => reg.callTool(tool.name, args), `<code>${esc(tool.name)}</code><br><span class="small muted">${esc(tool.description)}</span>`);
-        };
-        reg.onChange(render);
-        $("registry").hidden = true;
-        await render();
-      } catch (err) { $("tools").innerHTML = `<p class="small">${esc(err.message)}</p>`; }
-    };
+    let fieldSeq = 0;
+    try {
+      const hub = await import(`${sites.main}/hub.js`);
 
-    $("agent").onclick = async () => {
-      try {
-        const agent = await hub.agent();
-        const sessionId = await agent.newSession();
-        $("agent").hidden = true;
-        $("say").hidden = false;
-        const chat = $("chat");
-        const add = (cls, t) => { const el = document.createElement("div"); el.className = cls; el.textContent = t; chat.append(el); chat.scrollTop = chat.scrollHeight; return el; };
-        add("them muted", `Connected to ${agent.info.agentInfo?.title || agent.info.agentInfo?.name || "your agent"}.`);
-        let bubble = null;
-        agent.onUpdate(({ update }) => {
-          if (update.sessionUpdate === "agent_message_chunk" && update.content?.type === "text") {
-            bubble ||= add("them", "");
-            bubble.textContent += update.content.text;
-          } else if (update.sessionUpdate === "tool_call") {
-            bubble = null;
-            add("tool", `tool: ${update.title}`);
-          } else if (update.sessionUpdate === "tool_call_update" && update.status) {
-            bubble = null;
-            add("tool", `tool ${update.status}`);
-          }
-          chat.scrollTop = chat.scrollHeight;
-        });
-        $("say").onsubmit = async (event) => {
+      // Build a form from a tool's JSON schema, call it, show what came back.
+      function toolForm(container, tool, call, heading, onDisconnected) {
+        const props = Object.entries(tool.inputSchema?.properties || {});
+        const required = new Set(tool.inputSchema?.required || []);
+        const box = document.createElement("div");
+        box.className = "stack";
+        box.innerHTML = `
+          ${heading ? `<p>${heading}</p>` : ""}
+          <form class="fields">
+            ${props.map(([key, p]) => {
+              const id = `tf-${++fieldSeq}`;
+              const req = required.has(key);
+              const reqAttr = req ? " required" : "";
+              const labelText = `${esc(p.description || key)}${req ? "" : ' <span class="muted small">(optional)</span>'}`;
+              const control = p.enum
+                ? `<select id="${id}" name="${esc(key)}"${reqAttr}>${p.enum.map((v) => `<option>${esc(v)}</option>`).join("")}</select>`
+                : `<input type="text" id="${id}" name="${esc(key)}"${reqAttr}>`;
+              return `<div><label for="${id}">${labelText}</label>${control}</div>`;
+            }).join("")}
+            <div><button class="tiny">Call ${esc(tool.name)}</button></div>
+          </form>
+          <div class="result" aria-live="polite" hidden></div>`;
+        const form = box.querySelector("form");
+        const submitBtn = form.querySelector("button");
+        form.onsubmit = async (event) => {
           event.preventDefault();
-          const message = $("prompt").value.trim();
-          if (!message) return;
-          add("me", message);
-          $("prompt").value = "";
-          bubble = null;
-          try { await agent.prompt(sessionId, message); } catch (err) { add("them", "Error: " + err.message); }
-          bubble = null;
+          const args = Object.fromEntries(new FormData(event.target));
+          for (const [key, p] of props) if (p.type === "number" && args[key] !== "") args[key] = Number(args[key]);
+          const out = box.querySelector(".result");
+          out.hidden = false;
+          out.classList.remove("error");
+          out.removeAttribute("role");
+          const prevLabel = submitBtn.textContent;
+          submitBtn.disabled = true;
+          submitBtn.textContent = "Calling...";
+          try {
+            const result = await call(args);
+            if (result.isError) {
+              out.classList.add("error");
+              out.setAttribute("role", "alert");
+            }
+            out.textContent = (result.isError ? "Error: " : "") + text(result);
+          } catch (err) {
+            out.classList.add("error");
+            out.setAttribute("role", "alert");
+            out.textContent = "Error: " + err.message;
+            if (onDisconnected && /revok|closed|grant|forgotten/i.test(err.message)) onDisconnected(err);
+          } finally {
+            submitBtn.disabled = false;
+            submitBtn.textContent = prevLabel;
+          }
         };
-      } catch (err) { $("chat").innerHTML = `<p class="small">${esc(err.message)}</p>`; }
-    };
-    for (const id of ["pick", "registry", "agent"]) $(id).disabled = false;
+        container.append(box);
+      }
+
+      function showPicked(line, intent, _link, err) {
+        $("picked").innerHTML = "";
+        if (!line) {
+          $("picked").innerHTML = `<p class="small error" role="alert">${esc(err?.message || "Nothing was picked.")}</p>`;
+          return;
+        }
+        toolForm($("picked"), line.tool, line.call, `<span class="jack on"></span>Direct line to <strong>${esc(line.tool.name)}</strong> at ${esc(line.service.name)}, ${line.via === "webrtc" ? "over WebRTC to the tab you already have open" : "over a port to the window your hub opened"}.`);
+      }
+      $("pick").onclick = () => hub.pick($("intent").value).then((line) => showPicked(line), (err) => showPicked(null, "", null, err));
+      hub.intentLinks(showPicked);
+      hubReady = true;
+
+      let activeReg = null;
+      const resetRegistry = (reason) => {
+        if (activeReg) { try { activeReg.close(); } catch {} activeReg = null; }
+        $("registry").hidden = false;
+        $("registry").textContent = "Reconnect to the registry";
+        if (reason) $("tools").innerHTML = `<p class="small error" role="alert">${esc(reason)}</p>`;
+      };
+      $("registry").onclick = async () => {
+        try {
+          const reg = activeReg = await hub.registry();
+          const render = async () => {
+            try {
+              const tools = await reg.listTools();
+              $("tools").innerHTML = tools.length ? "" : `<p class="small">Connected, and the registry is empty. Connect a site to your hub and its tools appear here.</p>`;
+              for (const tool of tools) {
+                toolForm(
+                  $("tools"),
+                  tool,
+                  (args) => reg.callTool(tool.name, args),
+                  `<code>${esc(tool.name)}</code><br><span class="small muted">${esc(tool.description)}</span>`,
+                  (err) => resetRegistry("Registry access ended: " + err.message),
+                );
+              }
+            } catch (err) {
+              resetRegistry("Registry connection ended: " + err.message);
+            }
+          };
+          reg.onChange(render);
+          $("registry").hidden = true;
+          await render();
+        } catch (err) {
+          $("tools").innerHTML = `<p class="small error" role="alert">${esc(err.message)}</p>`;
+        }
+      };
+
+      let activeAgent = null;
+      const resetAgent = (reason) => {
+        if (activeAgent) { try { activeAgent.close(); } catch {} activeAgent = null; }
+        $("agent").hidden = false;
+        $("agent").textContent = "Reconnect my agent";
+        $("say").hidden = true;
+        $("agent-busy").hidden = true;
+        if (reason) {
+          const el = document.createElement("div");
+          el.className = "them small error";
+          el.setAttribute("role", "alert");
+          el.textContent = reason;
+          $("chat").append(el);
+        }
+      };
+      $("agent").onclick = async () => {
+        try {
+          const agent = activeAgent = await hub.agent();
+          const sessionId = await agent.newSession();
+          $("agent").hidden = true;
+          $("say").hidden = false;
+          const chat = $("chat");
+          const add = (cls, t) => { const el = document.createElement("div"); el.className = cls; el.textContent = t; chat.append(el); chat.scrollTop = chat.scrollHeight; return el; };
+          add("them muted", `Connected to ${agent.info.agentInfo?.title || agent.info.agentInfo?.name || "your agent"}.`);
+          let bubble = null;
+          let inFlight = false;
+          agent.onUpdate(({ update }) => {
+            if (update.sessionUpdate === "agent_message_chunk" && update.content?.type === "text") {
+              bubble ||= add("them", "");
+              bubble.textContent += update.content.text;
+            } else if (update.sessionUpdate === "tool_call") {
+              bubble = null;
+              add("tool", `tool: ${update.title}`);
+            } else if (update.sessionUpdate === "tool_call_update" && update.status) {
+              bubble = null;
+              add("tool", `tool ${update.status}`);
+            }
+            chat.scrollTop = chat.scrollHeight;
+          });
+          $("cancel-agent").onclick = () => {
+            if (!inFlight) return;
+            $("agent-thinking").textContent = "Cancelling...";
+            agent.cancel(sessionId);
+          };
+          $("say").onsubmit = async (event) => {
+            event.preventDefault();
+            if (inFlight) return;
+            const message = $("prompt").value.trim();
+            if (!message) return;
+            inFlight = true;
+            add("me", message);
+            $("prompt").value = "";
+            $("prompt").disabled = true;
+            $("send-agent").disabled = true;
+            $("agent-thinking").textContent = "Agent is thinking...";
+            $("agent-busy").hidden = false;
+            bubble = null;
+            try {
+              await agent.prompt(sessionId, message);
+            } catch (err) {
+              if (/revok|closed|grant|forgotten/i.test(err.message)) {
+                resetAgent("Agent access ended: " + err.message);
+              } else {
+                const el = add("them error", "Error: " + err.message);
+                el.setAttribute("role", "alert");
+              }
+            } finally {
+              inFlight = false;
+              bubble = null;
+              $("prompt").disabled = false;
+              $("send-agent").disabled = false;
+              $("agent-busy").hidden = true;
+              if (!$("say").hidden) $("prompt").focus();
+            }
+          };
+        } catch (err) {
+          $("chat").innerHTML = `<p class="small error" role="alert">${esc(err.message)}</p>`;
+        }
+      };
+      for (const id of ["pick", "registry", "agent"]) $(id).disabled = false;
+    } catch (err) {
+      $("load-error").textContent = "Could not load Port Authority hub script: " + err.message;
+      $("load-error").hidden = false;
+    }
   </script>
 </body>
 </html>

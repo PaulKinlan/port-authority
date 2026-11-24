@@ -5,6 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>AI router: use your own model account on any site | Port Authority</title>
   <meta name="description" content="A site asks for an AI model. You pick one of your own accounts in a window from the router. The site gets a MessagePort to send prompts on and never sees your API key.">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <meta property="og:title" content="AI router: use your own model account on any site | Port Authority">
+  <meta property="og:description" content="A site asks for an AI model. You pick one of your own accounts in a window from the router. The site gets a MessagePort to send prompts on and never sees your API key.">
+  <meta property="og:type" content="website">
+  <meta name="twitter:card" content="summary">
   <link rel="stylesheet" href="/base.css">
   <script src="/errors.js"></script>
   <style>
@@ -12,22 +17,24 @@
     main section { display: grid; gap: 1rem; border-top: 2px solid var(--ink); padding-top: clamp(1.5rem, 4vw, 2.5rem); grid-template-columns: minmax(0, 1fr); }
     main h2 { font-size: var(--step-2); max-width: 26ch; }
     main ul, main ol { margin: 0; padding-left: 1.2rem; max-width: 66ch; display: grid; gap: 0.5rem; }
+    .hero { padding-top: 1.5rem; --gap: 1.1rem; }
     .live { border: 2px solid var(--ink); border-radius: 18px; padding: clamp(.8rem, 3vw, 1.4rem); display: grid; gap: 1rem; grid-template-columns: minmax(0, 1fr); background: color-mix(in srgb, var(--yellow) 10%, var(--paper)); }
     .live .two { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr)); align-items: start; }
     .status { display: flex; align-items: center; gap: 0.8rem; flex-wrap: wrap; }
-    .answer { background: var(--panel); border-radius: 12px; padding: 0.9rem 1rem; min-height: 6rem; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .answer { background: var(--panel); border-radius: 12px; padding: 0.9rem 1rem; min-height: 6rem; white-space: pre-wrap; overflow-wrap: anywhere; border: 2px solid transparent; }
+    .answer.error { color: var(--red); border-color: var(--red); font-weight: 600; }
     .sites { list-style: none; padding: 0; display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr)); max-width: none; }
     .sites li { background: var(--panel); border-radius: 16px; padding: 1rem 1.2rem; display: grid; gap: .4rem; }
     .sites .url { font: var(--step--1)/1.3 var(--mono); color: var(--muted); overflow-wrap: anywhere; }
     figure { margin: 0; overflow-x: auto; }
-    figure svg { min-width: 40rem; width: 100%; height: auto; display: block; }
+    figure svg { min-width: 44rem; width: 100%; height: auto; display: block; }
     figcaption { font-size: var(--step--1); color: var(--muted); margin-top: .5rem; }
     svg text { fill: var(--ink); font-family: var(--body); }
-    svg .url { font-family: var(--mono); font-size: 11px; fill: var(--muted); }
+    svg .url { font-family: var(--mono); font-size: 10px; fill: var(--muted); }
     svg .win { fill: var(--panel); stroke: var(--ink); stroke-width: 2; }
     svg .bar { fill: color-mix(in srgb, var(--ink) 12%, var(--panel)); stroke: var(--ink); stroke-width: 2; }
     svg .addr { fill: var(--panel); stroke: var(--line); }
-    svg .frame { fill: color-mix(in srgb, #7c5cff 12%, var(--panel)); stroke: #7c5cff; stroke-width: 2; stroke-dasharray: 6 4; }
+    svg .frame { fill: color-mix(in srgb, #5b39e0 12%, var(--panel)); stroke: #5b39e0; stroke-width: 2; stroke-dasharray: 6 4; }
     svg .work { fill: var(--panel); stroke: var(--ink); stroke-width: 2; } svg .cog { fill: none; stroke: var(--ink); stroke-width: 2; stroke-linecap: round; }
     svg .wire { stroke: var(--ink); stroke-width: 2; fill: none; marker-end: url(#tip); }
     svg .num { fill: var(--ink); } svg .numt { fill: var(--paper); font-weight: 700; font-size: 12px; }
@@ -38,21 +45,23 @@
   </style>
 </head>
 <body>
+  <a class="skip-link" href="#main">Skip to content</a>
   <div class="wrap">
     <header class="site-bar">
       <a class="wordmark" href="/">Port Authority</a>
-      <nav><a href="/">Experiments</a><a href="/guide/">The guide</a><a href="/patterns/">Port patterns</a><a href="/lab/">The lab</a><a href="/missing/">What is missing</a><a href="/reading/">Further reading</a><a href="/hub/">Your hub</a></nav>
+      <nav aria-label="Primary"><a href="/">Experiments</a><a href="/guide/">The guide</a><a href="/patterns/">Port patterns</a><a href="/comlink/">Comlink today</a><a href="/ai-router/" aria-current="page">AI router</a><a href="/lab/">The lab</a><a href="/missing/">What is missing</a><a href="/reading/">Further reading</a><a href="/hub/">Your hub</a></nav>
     </header>
-    <div class="stack" style="padding-block:2.5rem 1.5rem; --gap:1.1rem">
-      <h1 style="font-size:var(--step-3)">AI router: use your own model account on any site</h1>
-      <p>A site asks for an AI model. A window from the router opens and you pick one of your own accounts. The site gets a <code>MessagePort</code> to send prompts on. It never sees your API key, and you can stop it at any time.</p>
-    </div>
 
-    <main>
+    <main id="main">
+      <div class="stack hero">
+        <h1 style="font-size:var(--step-3)">AI router: use your own model account on any site</h1>
+        <p>A site asks for an AI model. A window from the router opens and you pick one of your own accounts. The site gets a <code>MessagePort</code> to send prompts on. It never sees your API key, and you can stop it at any time.</p>
+      </div>
+
       <section id="try" style="border-top:0; padding-top:0">
         <div class="live">
           <h2 style="font-size:var(--step-1)">Try it on this page</h2>
-          <p>This page is a site like any other. It has no AI account. Press the button, pick the practice model (or an account of your own), then send a prompt.</p>
+          <p>This page is a site like any other. It has no AI account. Press the button, pick the practice model (no API key needed) or an account of your own, then send a prompt.</p>
           <div class="status">
             <button id="choose" class="accent" disabled>Choose a model</button>
             <span id="state"><span class="jack"></span>No model yet</span>
@@ -61,12 +70,12 @@
           <div class="two">
             <form id="form" class="stack">
               <label for="prompt">Prompt</label>
-              <textarea id="prompt" rows="3">Explain what a MessagePort is in two sentences.</textarea>
+              <textarea id="prompt" rows="3" required>Explain what a MessagePort is in two sentences.</textarea>
               <div class="status"><button id="send" disabled>Send</button><button type="button" id="stop" class="quiet" hidden>Stop</button></div>
             </form>
             <div class="stack">
               <strong>Answer</strong>
-              <p class="answer" id="answer"><span class="muted">Nothing yet.</span></p>
+              <p class="answer" id="answer" aria-live="polite"><span class="muted">Nothing yet.</span></p>
             </div>
           </div>
           <div class="stack" style="--gap:.4rem">
@@ -109,64 +118,64 @@ onmessage = async (event) =&gt; {
       <section id="how">
         <h2>How it works</h2>
         <figure>
-          <svg viewBox="0 0 760 402" role="img" aria-labelledby="d-title d-desc" xmlns="http://www.w3.org/2000/svg">
+          <svg viewBox="0 0 880 412" role="img" aria-labelledby="d-title d-desc" xmlns="http://www.w3.org/2000/svg">
             <title id="d-title">The parts of the AI router and what passes between them</title>
             <desc id="d-desc">A browser window showing a site contains a hidden iframe from the router, and the iframe contains a worker. A second, smaller browser window is the router's picker. The picker passes a grant to the iframe. The worker asks the router server for permission and then calls the model provider.</desc>
             <defs><marker id="tip" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z" fill="var(--ink)"/></marker></defs>
 
             <!-- the site: a browser window -->
-            <rect class="win" x="10" y="10" width="360" height="324" rx="10"/>
-            <path class="bar" d="M10 46V20a10 10 0 0 1 10-10h340a10 10 0 0 1 10 10v26z"/>
+            <rect class="win" x="10" y="10" width="430" height="324" rx="10"/>
+            <path class="bar" d="M10 46V20a10 10 0 0 1 10-10h410a10 10 0 0 1 10 10v26z"/>
             <circle cx="28" cy="28" r="5" fill="var(--red)"/><circle cx="44" cy="28" r="5" fill="var(--yellow)"/><circle cx="60" cy="28" r="5" fill="var(--teal)"/>
-            <rect class="addr" x="76" y="17" width="284" height="22" rx="11"/>
-            <text class="url" x="88" y="32" data-url="site"></text>
+            <rect class="addr" x="76" y="17" width="354" height="22" rx="11"/>
+            <text class="url" x="86" y="31" data-url="site" data-max="336"></text>
             <text x="28" y="80" font-weight="700" font-size="16">A site's page</text>
             <text x="28" y="100" font-size="13">Holds a port. Sends prompts, reads answers.</text>
 
             <!-- the iframe inside it, and the worker inside that -->
-            <rect class="frame" x="28" y="120" width="324" height="200" rx="6"/>
+            <rect class="frame" x="28" y="120" width="394" height="200" rx="6"/>
             <text x="42" y="143" font-weight="700" font-size="15">Hidden iframe: the router frame</text>
             <text x="42" y="162" font-size="13">Keeps this site's grant. Starts the worker.</text>
-            <text class="url" x="42" y="180" data-url="frame"></text>
-            <rect class="work" x="42" y="194" width="296" height="112" rx="16"/>
+            <text class="url" x="42" y="180" data-url="frame" data-max="368"></text>
+            <rect class="work" x="42" y="194" width="366" height="112" rx="16"/>
             <path class="cog" d="M62 208v-5m0 23v-5m-9-6.500h5m8 0h5m-15.400-6.400 3.500 3.500m5.800 5.800 3.500 3.500m0-12.800-3.500 3.500m-5.800 5.800-3.500 3.500"/><circle class="cog" cx="62" cy="214.500" r="4"/>
             <text x="80" y="219" font-weight="700" font-size="15">Worker</text>
             <text x="56" y="244" font-size="13">Holds every port. Unlocks the key</text>
             <text x="56" y="261" font-size="13">in memory and calls the provider.</text>
-            <text class="url" x="56" y="292" data-url="worker"></text>
+            <text class="url" x="56" y="292" data-url="worker" data-max="340"></text>
 
             <!-- the picker: a smaller browser window -->
-            <rect class="win" x="450" y="10" width="300" height="150" rx="10"/>
-            <path class="bar" d="M450 46V20a10 10 0 0 1 10-10h280a10 10 0 0 1 10 10v26z"/>
-            <circle cx="468" cy="28" r="5" fill="var(--red)"/><circle cx="484" cy="28" r="5" fill="var(--yellow)"/><circle cx="500" cy="28" r="5" fill="var(--teal)"/>
-            <rect class="addr" x="516" y="17" width="224" height="22" rx="11"/>
-            <text class="url" x="526" y="32" data-url="pick"></text>
-            <text x="468" y="76" font-weight="700" font-size="16">Popup window: the picker</text>
-            <text x="468" y="96" font-size="13">Can read your accounts and keys.</text>
-            <text x="468" y="113" font-size="13">Open only while you choose.</text>
+            <rect class="win" x="510" y="10" width="360" height="150" rx="10"/>
+            <path class="bar" d="M510 46V20a10 10 0 0 1 10-10h340a10 10 0 0 1 10 10v26z"/>
+            <circle cx="528" cy="28" r="5" fill="var(--red)"/><circle cx="544" cy="28" r="5" fill="var(--yellow)"/><circle cx="560" cy="28" r="5" fill="var(--teal)"/>
+            <rect class="addr" x="576" y="17" width="284" height="22" rx="11"/>
+            <text class="url" x="586" y="31" data-url="pick" data-max="266"></text>
+            <text x="528" y="76" font-weight="700" font-size="16">Popup window: the picker</text>
+            <text x="528" y="96" font-size="13">Can read your accounts and keys.</text>
+            <text x="528" y="113" font-size="13">Open only while you choose.</text>
 
             <!-- the server and the provider -->
-            <rect class="win" x="450" y="210" width="140" height="100" rx="50" ry="18"/>
-            <text x="520" y="248" text-anchor="middle" font-weight="700" font-size="15">Router server</text>
-            <text x="520" y="268" text-anchor="middle" font-size="12">Grant list, usage,</text>
-            <text x="520" y="284" text-anchor="middle" font-size="12">unlock keys. No API keys.</text>
-            <rect class="win" x="610" y="210" width="140" height="100" rx="50" ry="18"/>
-            <text x="680" y="248" text-anchor="middle" font-weight="700" font-size="15">Model provider</text>
-            <text class="url" x="680" y="268" text-anchor="middle">api.anthropic.com</text>
-            <text class="url" x="680" y="284" text-anchor="middle">or another</text>
+            <rect class="win" x="510" y="210" width="166" height="100" rx="50" ry="18"/>
+            <text x="593" y="248" text-anchor="middle" font-weight="700" font-size="15">Router server</text>
+            <text x="593" y="268" text-anchor="middle" font-size="12">Grant list, usage,</text>
+            <text x="593" y="284" text-anchor="middle" font-size="12">unlock keys. No API keys.</text>
+            <rect class="win" x="704" y="210" width="166" height="100" rx="50" ry="18"/>
+            <text x="787" y="248" text-anchor="middle" font-weight="700" font-size="15">Model provider</text>
+            <text class="url" x="787" y="268" text-anchor="middle">api.anthropic.com</text>
+            <text class="url" x="787" y="284" text-anchor="middle">or another</text>
 
             <!-- what passes -->
             <path class="wire" d="M20 96C2 150 14 240 40 250"/>
             <circle class="num" cx="16" cy="170" r="10"/><text class="numt" x="16" y="174" text-anchor="middle">1</text>
-            <path class="wire" d="M450 120C410 120 400 140 356 146"/>
-            <circle class="num" cx="406" cy="130" r="10"/><text class="numt" x="406" y="134" text-anchor="middle">2</text>
-            <path class="wire" d="M338 240C390 240 410 252 446 256"/>
-            <circle class="num" cx="394" cy="244" r="10"/><text class="numt" x="394" y="248" text-anchor="middle">3</text>
-            <path class="wire" d="M338 280C420 360 620 364 676 314"/>
-            <circle class="num" cx="520" cy="350" r="10"/><text class="numt" x="520" y="354" text-anchor="middle">4</text>
+            <path class="wire" d="M510 120C472 120 462 140 426 146"/>
+            <circle class="num" cx="468" cy="130" r="10"/><text class="numt" x="468" y="134" text-anchor="middle">2</text>
+            <path class="wire" d="M408 240C454 240 472 252 506 256"/>
+            <circle class="num" cx="460" cy="244" r="10"/><text class="numt" x="460" y="248" text-anchor="middle">3</text>
+            <path class="wire" d="M408 280C500 362 720 364 782 314"/>
+            <circle class="num" cx="600" cy="350" r="10"/><text class="numt" x="600" y="354" text-anchor="middle">4</text>
 
-            <text x="10" y="372" font-size="13"><tspan font-weight="700">1</tspan> a port for prompts, passed on to the worker   <tspan font-weight="700" dx="10">2</tspan> the grant, on a private port</text>
-            <text x="10" y="392" font-size="13"><tspan font-weight="700">3</tspan> "is this grant still good?" on every request   <tspan font-weight="700" dx="10">4</tspan> the prompt and the key</text>
+            <text x="10" y="380" font-size="13"><tspan font-weight="700">1</tspan> a port for prompts, passed on to the worker   <tspan font-weight="700" dx="14">2</tspan> the grant, on a private port</text>
+            <text x="10" y="400" font-size="13"><tspan font-weight="700">3</tspan> "is this grant still good?" on every request   <tspan font-weight="700" dx="14">4</tspan> the prompt and the key</text>
           </svg>
           <figcaption>Solid boxes with an address bar are browser windows. The dashed box is an iframe, with its address inside it. The box with the cog is a worker, with the address of its script. Rounded boxes are servers.</figcaption>
         </figure>
@@ -203,7 +212,7 @@ onmessage = async (event) =&gt; {
             <tr><td>Worker inside the router frame</td><td>Only while a request runs</td><td>Yes, it sends them</td><td>Every port, and the grant in memory</td></tr>
             <tr><td>Picker window and router page</td><td>Yes</td><td>No</td><td>Your accounts, in the browser's storage for the router's address</td></tr>
             <tr><td>Router server</td><td>No</td><td>No</td><td>For each grant: the site's address, the account name and model name, request and token counts, and an unlock key</td></tr>
-            <tr><td>Model provider</td><td>Yes, it issued it</td><td>Yes</td><td></td></tr>
+            <tr><td>Model provider</td><td>Yes, it issued it</td><td>Yes</td><td>Your prompt and answer while processing (per its retention policy)</td></tr>
           </tbody>
         </table></div>
       </section>
@@ -223,19 +232,34 @@ onmessage = async (event) =&gt; {
         </ul>
       </section>
     </main>
-    <footer class="small muted" style="padding-block:2rem 4rem">Port Authority is a working name. By <a href="https://paul.kinlan.me">Paul Kinlan</a>.</footer>
+    <footer class="small muted" style="padding-block:2rem 4rem">Port Authority, by <a href="https://paul.kinlan.me">Paul Kinlan</a>.</footer>
   </div>
   <script type="module">
     import { sites as listed } from "/_sites.js";
     const sites = { ...listed, router: listed.router || listed.florist.replace("florist", "router") };   // older deployments do not list the router
     const $ = (id) => document.getElementById(id);
+    const esc = (t) => String(t ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
     const host = (url) => url.replace(/^https?:\/\//, "");
 
-    // Fill in the real addresses, in the diagram and the code.
+    // Fill in the real addresses, in the diagram and the code, trimming gracefully
+    // if a very long deployment hostname would ever overflow its SVG box.
     const urls = { site: host(location.origin) + "/ai-router/", frame: host(sites.router) + "/frame.html", worker: host(sites.router) + "/frame-worker.js", pick: host(sites.router) + "/pick.html" };
-    for (const el of document.querySelectorAll("[data-url]")) el.textContent = urls[el.dataset.url];
+    for (const el of document.querySelectorAll("[data-url]")) {
+      const full = urls[el.dataset.url];
+      el.textContent = full;
+      const max = Number(el.dataset.max);
+      if (max && typeof el.getComputedTextLength === "function" && el.getComputedTextLength() > max) {
+        const slash = full.indexOf("/");
+        const tail = slash >= 0 ? full.slice(slash) : "";
+        let head = slash >= 0 ? full.slice(0, slash) : full;
+        while (head.length > 6 && el.getComputedTextLength() > max) {
+          head = head.slice(0, -1);
+          el.textContent = head + "…" + tail;
+        }
+      }
+    }
     for (const el of document.querySelectorAll("[data-router]")) el.textContent = sites.router;
-    $("code-site").innerHTML = `import { connect } from "${sites.router}/router.js";
+    $("code-site").innerHTML = `import { connect } from "${esc(sites.router)}/router.js";
 
 const ai = await connect();              <span class="c">// adds the hidden frame, opens a port to it</span>
 
@@ -254,47 +278,79 @@ ai.left    <span class="c">// requests left on this site's grant</span>`;
       [sites.florist + "/card/", "Stem and Petal, a florist", "Writes the message for the card that goes with a bouquet, and streams it in. Lends a 2-request port to an iframe from a third site."],
       [sites.library + "/digest/", "Harbour Street Library", "Gives its port to a worker that writes a note for each book. Lends a port that stops after 3 requests."],
       [sites.router + "/", "Your router", "Add an account, see which sites you allowed and what they used, and stop any of them."],
-    ].map(([href, name, what]) => `<li><a href="${href}"><strong>${name}</strong></a><span>${what}</span><span class="url">${host(href)}</span></li>`).join("");
+    ].map(([href, name, what]) => `<li><a href="${esc(href)}"><strong>${esc(name)}</strong></a><span>${esc(what)}</span><span class="url">${esc(host(href))}</span></li>`).join("");
 
     // The demo: this page is a site that uses the router.
     const log = (text) => { const li = document.createElement("li"); li.textContent = text; if ($("log").querySelector(".muted")) $("log").innerHTML = ""; $("log").prepend(li); };
-    const { connect } = await import(`${sites.router}/router.js`);
-    const ai = await connect();
-    log(`Added a hidden frame from ${host(sites.router)} and posted it a port.`);
-    const show = () => {
-      $("state").innerHTML = ai.ready ? `<span class="jack on"></span>Using ${ai.model.account} · ${ai.model.name}${ai.left === null ? "" : `, ${ai.left} requests left`}` : `<span class="jack"></span>No model yet`;
-      $("choose").textContent = ai.ready ? "Choose a different model" : "Choose a model";
-      $("choose").disabled = false;
-      $("send").disabled = !ai.ready;
-      $("forget").hidden = !ai.ready;
+    const showAnswerError = (message) => {
+      const box = $("answer");
+      box.classList.add("error");
+      box.setAttribute("role", "alert");
+      box.textContent = message;
     };
-    ai.onchange(show);
-    show();
-    if (ai.ready) log("The frame already had a grant for this site, so no window was needed.");
-    $("choose").onclick = async () => {
-      log("Opened the router window.");
-      log((await ai.choose()) ? "The router window passed a grant to the frame. This page was told the model's name." : "The router window closed without a grant.");
+    const clearAnswerError = () => {
+      const box = $("answer");
+      box.classList.remove("error");
+      box.removeAttribute("role");
     };
-    $("forget").onclick = () => { ai.forget(); log("Told the frame to forget this site's grant."); };
-    let running = null;
-    $("stop").onclick = () => running?.cancel();
-    $("form").onsubmit = async (event) => {
-      event.preventDefault();
-      $("send").disabled = true; $("stop").hidden = false;
-      $("answer").textContent = "";
-      log("Posted the prompt to the frame, with a new port for the answer.");
-      running = ai.prompt({ messages: [{ role: "user", content: $("prompt").value }], maxTokens: 400 });
-      try {
-        let pieces = 0;
-        for await (const piece of running) { $("answer").textContent += piece; pieces++; }
-        log(`The answer arrived on that port in ${pieces} pieces.`);
-      } catch (error) {
-        $("answer").textContent = error.message;
-        log("The frame refused or failed: " + error.code);
-      }
-      running = null; $("stop").hidden = true;
+
+    try {
+      const { connect } = await import(`${sites.router}/router.js`);
+      const ai = await connect();
+      log(`Added a hidden frame from ${host(sites.router)} and posted it a port.`);
+      let running = null;
+      const show = () => {
+        const dot = document.createElement("span");
+        dot.className = ai.ready ? "jack on" : "jack";
+        const label = ai.ready
+          ? `Using ${ai.model.account} · ${ai.model.name}${ai.left === null ? "" : `, ${ai.left} requests left`}`
+          : "No model yet";
+        $("state").replaceChildren(dot, document.createTextNode(label));
+        $("choose").textContent = ai.ready ? "Choose a different model" : "Choose a model";
+        $("choose").disabled = false;
+        $("send").disabled = !ai.ready || !!running;
+        $("forget").hidden = !ai.ready;
+      };
+      ai.onchange(show);
       show();
-    };
+      if (ai.ready) log("The frame already had a grant for this site, so no window was needed.");
+      $("choose").onclick = async () => {
+        clearAnswerError();
+        try {
+          const ok = await ai.choose();
+          log("Opened the router window.");
+          log(ok ? "The router window passed a grant to the frame. This page was told the model's name." : "The router window closed without a grant.");
+        } catch (error) {
+          showAnswerError(error.message);
+          log(error.message);
+        }
+      };
+      $("forget").onclick = () => { ai.forget(); log("Told the frame to forget this site's grant."); };
+      $("stop").onclick = () => running?.cancel();
+      $("form").onsubmit = async (event) => {
+        event.preventDefault();
+        const text = $("prompt").value.trim();
+        if (!text) return;
+        $("send").disabled = true; $("stop").hidden = false;
+        clearAnswerError();
+        $("answer").textContent = "";
+        log("Posted the prompt to the frame, with a new port for the answer.");
+        running = ai.prompt({ messages: [{ role: "user", content: text }], maxTokens: 400 });
+        try {
+          let pieces = 0;
+          for await (const piece of running) { $("answer").textContent += piece; pieces++; }
+          log(`The answer arrived on that port in ${pieces} pieces.`);
+        } catch (error) {
+          showAnswerError(error.message);
+          log("The frame refused or failed: " + (error.code || "error"));
+        }
+        running = null; $("stop").hidden = true;
+        show();
+      };
+    } catch (error) {
+      showAnswerError("Could not connect to the AI router: " + error.message);
+      log("Could not connect to the AI router: " + error.message);
+    }
   </script>
   <script type="module" src="/refs.js"></script>
 </body>
