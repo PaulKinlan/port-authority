@@ -79,6 +79,7 @@ await shot("alive-signals");
 
 // ---- restart a worker that stopped answering
 await open("alive-restart");
+await click("Start the worker"); await wait(300);
 await click("Ask: primes below 5 million");
 check("restart: the worker answers", !!(await until(async () => /348,513 primes below 5,000,000/.test(await boxText("page")))), flat(await boxText("page")));
 await click("Make the worker hang");

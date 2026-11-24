@@ -80,6 +80,7 @@ await shot("swpair-stopped");
 
 // ---- a line for every tab
 await open("built-lines");
+await click("Give the two pages a line to each other");
 await click("Join the two workers");
 await sees("swb", /held, to the florist's worker/);
 await click("Tab one: get a line"); await click("Tab two: get a line");
@@ -102,6 +103,7 @@ check("lines: and the new line is answered", !!(await until(async () => ((await 
 
 // ---- an address on one site, answered by the other site's worker
 await open("built-swfetch");
+await click("Give the two pages a line to each other");
 await click("Join the two workers");
 await sees("swb", /held, to the florist's worker/);
 await click("Florist's page: fetch the library's shelf");
@@ -130,7 +132,8 @@ check("planner: with no page to carry a port, the link cannot be repaired", !!(a
 
 // ---- shared workers, joined once
 await open("built-sharedpair");
-await click("Join the two shared workers");
+await click("Give tab one of each site a line");
+await click("Join the two SharedWorkers");
 check("shared: both shared workers hold a port", !!(await sees("swa", /held, to the library's shared worker/)) && !!(await sees("swb", /held, to the florist's shared worker/)), flat(await boxText("swa")));
 check("shared: each worker knows both of its tabs", /Tabs: florist tab (one, florist tab two|two, florist tab one)/.test(await boxText("swa")), flat(await boxText("swa")));
 await click("Florist tab two: post a note");

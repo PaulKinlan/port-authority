@@ -295,6 +295,7 @@ await click("Stop the sound");
 // The router: windows that know only their own name and the worker in the middle.
 const win = (name) => page.locator(`${at} .box[data-name="${name}"] iframe`).contentFrame().locator("body").innerText();
 at = "#demo"; await page.goto(`${root}/patterns/router/?play=0`); await page.waitForSelector(`${at} .controls button`, { timeout: 15000 }); await wait(900);
+await click("Register the three windows"); await enabled("Orders: send to the kitchen");
 await click("Orders: send to the kitchen"); await click("Kitchen: send to the driver"); await click("Orders: send to the florist");
 check("router: a shared worker passes messages on by name, and says when a name is unknown", !!(await until(async () => /from orders: message 1/.test(await win("kitchen")) && /from kitchen: message 1/.test(await win("driver")) && /undelivered: nobody is called florist/.test(await win("orders")))) && /Passed on: 2\. Undelivered: 1/.test((await boxText("router")).replace(/\n/g, " ")), flat(await boxText("router")));
 await click("Close the kitchen"); await until(async () => /Knows: (orders, driver|driver, orders)/.test((await boxText("router")).replace(/\n/g, " ")), 6000); await click("Orders: send to the kitchen");
@@ -302,8 +303,9 @@ check("router: a closed window leaves the table", !!(await until(async () => /un
 check("router: the page has a diagram of the data flow", (await page.locator("#how figure.flow svg").count()) === 1 && (await page.locator("#how figure.flow svg").evaluate((el) => el.getBoundingClientRect().width)) > 250);
 
 await open("router", "built-swroute");
+await click("Register the three windows"); await enabled("Orders: send to the kitchen");
 await click("Orders: send to the kitchen"); const swFirst = await until(async () => /from orders: message 1/.test(await win("kitchen")));
-await click("Make the service worker forget"); await until(async () => /Knows: nobody/.test((await boxText("router")).replace(/\n/g, " ")));
+await click("Make the Service Worker forget"); await until(async () => /Knows: nobody/.test((await boxText("router")).replace(/\n/g, " ")));
 await click("Kitchen: send to the driver");
 check("router: a service worker that has forgotten asks who is here, and still delivers", !!swFirst && !!(await until(async () => /from kitchen: message 1/.test(await win("driver")))) && /asked who is here: [1-9]/.test((await boxText("router")).replace(/\n/g, " ")), flat(await boxText("router")));
 

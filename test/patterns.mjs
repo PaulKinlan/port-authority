@@ -15,6 +15,8 @@ const wait = (ms) => page.waitForTimeout(ms);
 
 await page.goto(root + "/");
 await page.waitForSelector("#hero-demo .controls button");
+await click("#hero-demo", "Connect Site A to the introducer"); await wait(200);
+await click("#hero-demo", "Connect Site B to the introducer"); await wait(200);
 await click("#hero-demo", "Introduce them"); await wait(700);
 await click("#hero-demo", "Site A says hello"); await wait(300);
 check("hero: B hears A directly", /Site A says hello 1/.test(await frameText("#hero-demo", "right")));
@@ -36,7 +38,8 @@ check("shapes: a sandboxed frame is an iframe with about:srcdoc underneath", (aw
 check("shapes: a real page in a frame shows its URL", /<iframe>[^]*\/patterns\/peer\.html\?name=/.test(await page.locator("#exchange .ctx").first().evaluate((el) => el.querySelector(".ctx-bar").textContent + el.querySelector(".ctx-foot").textContent)));
 check("shapes: the shared worker shows its script", (await kind("#exchange", "worker")) === "shared" && /SharedWorker.*\/patterns\/exchange\.js/.test(await drawn("#exchange", "worker")));
 check("shapes: the key under a diagram lists what is in it", /Window.*<iframe>.*MessageChannel/s.test(await page.locator("#hello .stage-legend").innerText()));
-check("shapes: the page has the full key", (await page.locator("#key .stage-legend > div").count()) === 9);
+check("shapes: the page has the full key", (await page.locator("#key .stage-legend > li").count()) === 9);
+await click("#reply", "Connect Client one"); await click("#reply", "Connect Client two"); await wait(200);
 await click("#reply", "Client one asks"); await click("#reply", "Client two asks"); await wait(2200);
 check("reply: each client gets its own answer", /answer to #1: 7 \(for one\)/.test(await frameText("#reply", "one")) && /\(for two\)/.test(await frameText("#reply", "two")));
 await click("#attenuate", "Share read-only"); await wait(300);
@@ -46,11 +49,14 @@ check("attenuate: read allowed, add denied", /answer: 41/.test(guest) && /answer
 await click("#attenuate", "Revoke"); await wait(600);
 await click("#attenuate", "Guest reads"); await wait(800);
 check("attenuate: revoke kills the line", /line is dead/.test(await frameText("#attenuate", "guest")));
-await page.locator("#exchange").scrollIntoViewIfNeeded(); await wait(800);
+await page.locator("#exchange").scrollIntoViewIfNeeded(); await wait(400);
+await click("#exchange", "Left tab joins SharedWorker"); await wait(300);
+await click("#exchange", "Right tab joins SharedWorker"); await wait(600);
 const left = page.locator("#exchange .box iframe").first().contentFrame();
 await left.locator("#hi").click(); await wait(400);
 const right = page.locator("#exchange .box iframe").last().contentFrame();
 check("exchange: tabs talk directly", /hi #1/.test(await right.locator("#log").innerText()), (await page.locator('#exchange .box[data-name="worker"]').innerText()).replace(/\n/g, " | "));
+await click("#stream", "Open a channel"); await wait(200);
 await click("#stream", "Send a stream"); await wait(3200);
 check("stream: reader got every chunk", /stream ended/.test(await frameText("#stream", "reader")) && /read chunk 6/.test(await frameText("#stream", "reader")) === false || /stream ended/.test(await frameText("#stream", "reader")));
 if (process.argv[2]) await page.screenshot({ path: process.argv[2] + "/patterns.png", fullPage: true });

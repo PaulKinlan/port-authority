@@ -20,24 +20,28 @@ for (const id of ["canvas", "functions", "zerocopy", "tearoff", "tabserver"]) { 
 await wait(1000);
 
 await page.locator("#canvas").scrollIntoViewIfNeeded();
+await click("#canvas", "Open a channel to the painter"); await wait(200);
 await click("#canvas", "Ask the painter to paint"); await wait(1500);
 const shot = await page.locator("#canvas canvas").screenshot();
 if (process.argv[2]) await page.locator("#canvas .demo").screenshot({ path: process.argv[2] + "/canvas.png" });
 const distinct = new Set(shot.toString("base64").match(/.{40}/g)).size;
 check("canvas: another origin painted into this page's canvas", /painting frames/.test(await frameText("#canvas", "painter")) && distinct > 40, `(${distinct} distinct chunks)`);
 
-await click("#functions", "Lend onTick"); await wait(2500);
+await click("#functions", "Lend onTick"); await wait(200);
+await click("#functions", "Start the countdown"); await wait(2200);
 check("functions: the lent function ran here", /onTick\(5, "counting"\) ran here/.test(await boxText("#functions", "page")));
 await click("#functions", "Take the function back"); await wait(1800);
 const fn = await boxText("#functions", "page");
 check("functions: calls stop after it is taken back", !/onTick\(0/.test(fn) && /closed it/.test(fn));
 
+await click("#zerocopy", "Open a channel"); await wait(200);
 await click("#zerocopy", "Copy 64 MB"); await wait(2500);
 await click("#zerocopy", "Transfer 64 MB"); await wait(1500);
 const z = await boxText("#zerocopy", "page");
 check("zerocopy: both round trips complete, sender held 0 bytes", /copy: [\d.]+ ms/.test(z) && /transfer: [\d.]+ ms round trip, sender held 0 bytes/.test(z), z.replace(/\n/g, " | "));
 
-await page.locator("#tearoff").scrollIntoViewIfNeeded(); await wait(1200);
+await page.locator("#tearoff").scrollIntoViewIfNeeded();
+await click("#tearoff", "Connect to the feed"); await wait(1400);
 const before = Number(await page.locator("#tearoff .meter").innerText());
 const [popup] = await Promise.all([page.waitForEvent("popup"), click("#tearoff", "Tear it off")]);
 await popup.waitForFunction(() => /^\d+$/.test(document.getElementById("meter").textContent));
@@ -48,6 +52,7 @@ const after = Number(await page.locator("#tearoff .meter").innerText());
 check("tearoff: the port comes back", after > inPopup, `(${after})`);
 
 await page.locator("#tabserver").scrollIntoViewIfNeeded();
+await click("#tabserver", "Connect this tab to the Service Worker");
 await page.waitForFunction(() => /holding a port/.test(document.querySelector('#tabserver .box[data-name="sw"]').textContent), null, { timeout: 15000 }).catch(() => {});
 await page.locator("#tabserver textarea").fill("<h1>Served by tab one</h1>");
 await click("#tabserver", "Load the served page"); await wait(1500);
@@ -59,23 +64,28 @@ check("tabserver: a different tab gets a real page at a real URL", /Served by ta
 for (const id of ["stream-intro", "pipeline", "reload"]) { await page.locator("#" + id).scrollIntoViewIfNeeded(); await page.waitForSelector(`#${id} .controls button`); }
 await wait(800);
 const reads = async () => ((await frameText("#stream-intro", "right")).match(/read \d+/g) || []).length;
+await click("#stream-intro", "Connect Source and Reader to the introducer"); await wait(300);
 await click("#stream-intro", "Stream through the introducer"); await wait(2200);
 await click("#stream-intro", "Remove the introducer"); await wait(600);
 const r1 = await reads(); await wait(2500); const r2 = await reads();
 check("stream relayed through the introducer stalls when it is removed", r1 > 0 && r2 <= r1 + 1, `(${r1} then ${r2})`);
 await click("#stream-intro", "Start again"); await wait(1200);
-await click("#stream-intro", "Introduce, then stream directly"); await wait(2200);
+await click("#stream-intro", "Connect Source and Reader to the introducer"); await wait(300);
+await click("#stream-intro", "Introduce them with a port"); await wait(500);
+await click("#stream-intro", "Stream down the direct port"); await wait(2200);
 await click("#stream-intro", "Remove the introducer"); await wait(300);
 const d1 = await reads(); await wait(2500); const d2 = await reads();
 check("stream sent down the introduced port keeps flowing", d2 >= d1 + 2, `(${d1} then ${d2})`);
 
+await click("#pipeline", "Connect the three origins"); await wait(200);
 await click("#pipeline", "Start the pipe"); await wait(2500);
 check("pipeline: chunks cross three origins transformed", /read CHUNK \d+!/.test(await frameText("#pipeline", "sink")));
 await click("#pipeline", "Pause the reader"); await wait(2500);
 const asked1 = await boxText("#pipeline", "page"); await wait(2500); const asked2 = await boxText("#pipeline", "page");
 check("pipeline: pausing the reader stops the source", asked1 === asked2, asked2.replace(/\n/g, " "));
 
-await page.locator("#reload").scrollIntoViewIfNeeded(); await wait(2500);
+await page.locator("#reload").scrollIntoViewIfNeeded();
+await click("#reload", "Connect the feed to the frame"); await wait(2000);
 await click("#reload", "Reload the frame"); await wait(2500);
 await click("#reload", "Reload the frame"); await wait(2500);
 const bank = await boxText("#reload", "bank");

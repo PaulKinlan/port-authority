@@ -89,6 +89,7 @@ await tab.close();
 
 // ---- one socket for every tab
 await page.locator("#socket").scrollIntoViewIfNeeded();
+await click("#socket", "Connect both tabs to the SharedWorker");
 await until(async () => /tab \d+, tab \d+/.test(await boxText("#socket", "worker")));
 const opened = () => page.locator("#socket [data-opened]").innerText().then(Number);
 const first = await opened();

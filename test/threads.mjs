@@ -32,6 +32,7 @@ check("frozen: workers kept talking while the page was stuck", !!m && Number(m[1
 await shot("#frozen .demo", "frozen");
 
 await page.locator("#filter").scrollIntoViewIfNeeded();
+await click("#filter", "Connect the filter"); await wait(200);
 await click("#filter", "Start the video"); await wait(2500);
 let note = await boxText("#filter", "out");
 const first = Number(note.match(/(\d+) frames back/)?.[1] || 0);
