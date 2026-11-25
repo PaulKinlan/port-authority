@@ -7,6 +7,7 @@
 
 import { generate, PROVIDERS } from "/providers.js";
 import { askOver } from "/line.js";
+import { chatApi } from "/chat.js";
 
 let grant = null;         // this site's grant, kept in storage by the frame
 let info = null;          // what the server last said about the grant
@@ -49,46 +50,73 @@ function setCaller(provider, port) {
   waiting = waiting.filter((w) => w.provider !== provider);
 }
 
+const refuse = (code, text) => Object.assign(new Error(text), { code });
+
 // One request: ask the server, hand the request to the page that calls the
-// provider, and post each piece of text to the reply port. The API key stays
-// encrypted here: the encrypted copy and the unlock key are passed on together.
-async function run(message, reply, budget) {
-  const stop = new AbortController();
-  reply.onmessage = (event) => { if (event.data && event.data.t === "cancel") stop.abort(new DOMException("cancelled", "AbortError")); };
-  const fail = (code, text) => { reply.postMessage({ t: "error", code, message: text }); reply.close(); };
-  if (!grant) return fail("no-grant", "This site has no model yet. Ask the person to choose one.");
+// provider, and yield each piece of text. Returns { usage, left } at the end.
+// The API key stays encrypted here: the encrypted copy and the unlock key are
+// passed on together.
+// request: { system, messages, maxTokens, temperature, topP, stop }
+async function* answer(request, budget, signal) {
+  if (!grant) throw refuse("no-grant", "This site has no model yet. Ask the person to choose one.");
   if (budget) {
-    if (budget.left <= 0) return fail("limit", "This port was lent for a fixed number of requests and has used them all.");
+    if (budget.left <= 0) throw refuse("limit", "This port was lent for a fixed number of requests and has used them all.");
     budget.left--;
   }
   let allowed;
-  try { allowed = await ask("use"); } catch { if (budget) budget.left++; return fail("offline", "The router server could not be reached."); }
+  try { allowed = await ask("use"); } catch { if (budget) budget.left++; throw refuse("offline", "The router server could not be reached."); }
   if (!allowed.ok) {
     if (budget) budget.left++;
     const why = allowed.why;
     forget(); announce();
-    return fail(why === "used up" ? "limit" : "no-grant", why === "used up" ? "This site has used all the requests it was given." : `The grant for this site is ${why}.`);
+    throw refuse(why === "used up" ? "limit" : "no-grant", why === "used up" ? "This site has used all the requests it was given." : `The grant for this site is ${why}.`);
   }
   info = allowed.grant;
   let usage = null;
   try {
-    const request = { system: message.system, messages: message.messages, maxTokens: message.maxTokens };
-    const pieces = grant.provider === "builtin" ? askOver(builtin, request, stop.signal)
+    const wanted = { system: request.system, messages: request.messages, maxTokens: request.maxTokens, temperature: request.temperature, topP: request.topP, stop: request.stop };
+    const pieces = grant.provider === "builtin" ? askOver(builtin, wanted, signal)
       : PROVIDERS[grant.provider] && PROVIDERS[grant.provider].kind
-        ? askOver(await callerFor(grant.provider), { account: { provider: grant.provider, model: grant.model, wrap: allowed.wrap, sealed: grant.sealed }, ask: request }, stop.signal)
-        : generate({ provider: grant.provider, model: grant.model }, message, stop.signal);   // the practice model: no network call
+        ? askOver(await callerFor(grant.provider), { account: { provider: grant.provider, model: grant.model, wrap: allowed.wrap, sealed: grant.sealed }, ask: wanted }, signal)
+        : generate({ provider: grant.provider, model: grant.model }, wanted, signal);   // the practice model: no network call
     for (;;) {
       const { value, done } = await pieces.next();
       if (done) { usage = value; break; }
+      yield value;
+    }
+    return { usage, left: info.requests - info.used };
+  } finally {
+    announce();
+    if (usage && (usage.tokensIn || usage.tokensOut)) ask("report", usage).catch(() => {});
+  }
+}
+
+// The router's own few messages: the answer goes to the reply port, piece by piece.
+async function run(message, reply, budget) {
+  const stop = new AbortController();
+  reply.onmessage = (event) => { if (event.data && event.data.t === "cancel") stop.abort(new DOMException("cancelled", "AbortError")); };
+  try {
+    const pieces = answer({ system: message.system, messages: message.messages, maxTokens: message.maxTokens }, budget, stop.signal);
+    for (;;) {
+      const { value, done } = await pieces.next();
+      if (done) { reply.postMessage({ t: "done", usage: value.usage, left: value.left }); break; }
       reply.postMessage({ t: "text", text: value });
     }
-    reply.postMessage({ t: "done", usage, left: info.requests - info.used });
   } catch (error) {
     reply.postMessage({ t: "error", code: error.name === "AbortError" ? "cancelled" : error.code || "provider", message: String(error.message || error) });
   }
   reply.close();
-  announce();
-  if (usage && (usage.tokensIn || usage.tokensOut)) ask("report", usage).catch(() => {});
+}
+
+// The same model in the shape of the Chat Completions API. The site asks for a
+// port, and on that port this worker answers calls to chat.completions.create
+// and to nothing else. It is the same grant and the same budget as the port the
+// site asked on. Hawser carries the calls. See chat.js.
+async function chatPort(budget) {
+  const { expose } = await import("/hawser.js");
+  const line = new MessageChannel();
+  expose(chatApi((request, signal) => answer(request, budget, signal), () => (grant ? grant.model : null)), line.port1, { only: ["chat.completions.create"] });
+  return line.port2;
 }
 
 // Every port into this worker speaks the same few messages. A lent port has a
@@ -104,6 +132,8 @@ function serve(port, budget = null) {
       const requests = Number(message.requests) > 0 ? Math.round(Number(message.requests)) : null;
       serve(line.port1, requests ? { left: requests } : null);
       port.postMessage({ t: "lent", n: message.n }, [line.port2]);
+    } else if (message.t === "api") {
+      chatPort(budget).then((line) => port.postMessage({ t: "api", n: message.n }, [line]));
     } else if (message.t === "forget" && !budget) { forget(); announce(); }
   };
   port.postMessage(state());

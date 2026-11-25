@@ -136,6 +136,26 @@ await florist.reload();
 await florist.waitForSelector("#write:not([disabled])");
 check("after a reload the site still has its model, with no window", /Using Work key/.test(await florist.locator("#state").innerText()) && /already had a grant/.test(await florist.locator("#log").innerText()));
 
+// The same model in the shape of the Chat Completions API, as a site would call it.
+const routed = await florist.evaluate(async (router) => {
+  const { connect } = await import(router + "/router.js");
+  const ai = await connect();
+  const stream = await ai.chat.completions.create({
+    model: "some-other-model", stream: true, stream_options: { include_usage: true }, temperature: 0.2, stop: "END", max_tokens: 99,
+    messages: [{ role: "system", content: "You write cards." }, { role: "user", content: [{ type: "text", text: "A card for Ada" }] }],
+  });
+  const chunks = [];
+  for await (const chunk of stream) chunks.push(chunk);
+  return chunks;
+}, base("router"));
+check("a site can ask in the shape of the Chat Completions API and read chunks", routed.length === 6 && routed.every((c) => c.object === "chat.completion.chunk" && /^chatcmpl-/.test(c.id))
+  && routed[0].choices[0].delta.role === "assistant" && routed.slice(1, 4).map((c) => c.choices[0].delta.content).join("") === "Dear Ada, well done on passing." && routed[4].choices[0].finish_reason === "stop", JSON.stringify(routed).slice(0, 120));
+check("the chunks name the model the person chose, and the last one carries the usage", routed.every((c) => c.model === "claude-sonnet-5-5") && JSON.stringify(routed[5].usage) === JSON.stringify({ prompt_tokens: 21, completion_tokens: 9, total_tokens: 30 }) && routed[5].choices.length === 0);
+const sent = seen.at(-1);
+check("the request reached the provider with the site's settings", sent.body.model === "claude-sonnet-5-5" && sent.body.system === "You write cards." && sent.body.temperature === 0.2 && sent.body.max_tokens === 99
+  && JSON.stringify(sent.body.stop_sequences) === '["END"]' && JSON.stringify(sent.body.messages) === JSON.stringify([{ role: "user", content: "A card for Ada" }]), JSON.stringify(sent.body));
+check("that call was also made by the page for the one provider, with the key the site never sees", sent.from === base("router") + "/call.html?provider=anthropic" && sent.key === KEY && !JSON.stringify(routed).includes(KEY));
+
 // Another site has no grant, even though the same frame is used.
 const library = await ctx.newPage();
 await library.goto(base("library") + "/digest/");
@@ -164,6 +184,29 @@ const lent = await library.locator("#lent").innerText();
 check("a port lent for 3 requests answers 3", /Request 3: This is the practice model/.test(lent));
 check("and refuses the fourth", /Request 4 was refused: This port was lent/.test(lent), lent.split("\n")[0]);
 
+// Chat Completions on the second site: a whole answer, a refusal, a lent port and a stop.
+const plain = await library.evaluate(async (router) => {
+  const { connect, fromPort } = await import(router + "/router.js");
+  const ai = await connect();
+  const caught = async (work) => { try { await work(); return null; } catch (e) { return { name: e.name, message: e.message, code: e.code, status: e.status, param: e.param, type: e.type }; } };
+  const hello = [{ role: "user", content: "Hello there" }];
+  const answer = await ai.chat.completions.create({ messages: hello });
+  const refused = await caught(() => ai.chat.completions.create({ messages: hello, tools: [{ type: "function", function: { name: "f" } }] }));
+  const lent = fromPort(await ai.lend({ requests: 1 }));
+  await lent.started;
+  const first = await lent.chat.completions.create({ messages: hello });
+  const second = await caught(() => lent.chat.completions.create({ messages: hello }));
+  const stop = new AbortController();
+  setTimeout(() => stop.abort(), 300);
+  const stopped = await caught(() => ai.chat.completions.create({ messages: hello }, { signal: stop.signal }));
+  return { answer, refused, first: first.choices[0].message.content, second, stopped };
+}, base("router"));
+check("without stream, the site gets a whole chat.completion object", plain.answer.object === "chat.completion" && plain.answer.model === "not a real model" && plain.answer.choices[0].message.role === "assistant"
+  && /practice model/.test(plain.answer.choices[0].message.content) && /Hello there/.test(plain.answer.choices[0].message.content) && plain.answer.choices[0].finish_reason === "stop" && plain.answer.usage.total_tokens > 0, JSON.stringify(plain.answer).slice(0, 100));
+check("a request for tools is refused by name, as an error the site can read", plain.refused && plain.refused.code === "unsupported" && plain.refused.status === 400 && plain.refused.param === "tools" && plain.refused.type === "invalid_request_error", JSON.stringify(plain.refused));
+check("a lent port speaks it too, and still stops at its limit", /practice model/.test(plain.first) && plain.second && plain.second.code === "limit" && plain.second.status === 429, JSON.stringify(plain.second));
+check("a site can stop a request with an AbortSignal", plain.stopped && plain.stopped.name === "AbortError", JSON.stringify(plain.stopped));
+
 // The main site is another site. Whether the browser gives the frame separate
 // storage there depends on the browser and its settings, so this only reports it.
 // The router does not rely on it: grants are stored under the embedding site's address.
@@ -189,7 +232,7 @@ await home.bringToFront();
 await home.evaluate(() => dispatchEvent(new Event("focus")));
 await home.locator("#grants li[data-id]").nth(2).waitFor();
 const grants = await home.locator("#grants").innerText();
-check("the router lists both sites with their usage", /florist/.test(grants) && /3 of 5 requests used/.test(grants) && /63 tokens in, 27 out/.test(grants) && /library/.test(grants) && /7 of 20 requests used/.test(grants), grants.replace(/\n/g, " | "));
+check("the router lists both sites with their usage", /florist/.test(grants) && /4 of 5 requests used/.test(grants) && /84 tokens in, 36 out/.test(grants) && /library/.test(grants) && /10 of 20 requests used/.test(grants), grants.replace(/\n/g, " | "));
 
 // Stop the florist. Its next request is refused, and its stored copy of the key cannot be opened.
 await home.locator("#grants li", { hasText: "florist" }).locator("[data-revoke]").click();

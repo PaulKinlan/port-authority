@@ -65,13 +65,19 @@ const wait = (ms, signal) => new Promise((resolve, reject) => {
 });
 
 // account: { provider, key, model }
-// ask:     { system, messages: [{ role: "user" | "assistant", content: "text" }], maxTokens }
+// ask:     { system, messages: [{ role: "user" | "assistant", content: "text" }], maxTokens,
+//            temperature, topP, stop: ["text"] }   the last three are optional
 // Yields strings. Returns { tokensIn, tokensOut } when the provider reports them.
 export async function* generate(account, ask, signal) {
   const messages = (ask.messages || []).map((m) => ({ role: m.role === "assistant" ? "assistant" : "user", content: String(m.content) }));
   const system = ask.system ? String(ask.system) : "";
   const maxTokens = Math.min(Math.max(Number(ask.maxTokens) || 600, 1), 4000);
   const usage = { tokensIn: 0, tokensOut: 0 };
+  // Settings a site may set. They are sent to the provider only when the site
+  // set them. The practice model and the built-in model take no notice of them.
+  const temperature = Number.isFinite(ask.temperature) ? Math.min(Math.max(ask.temperature, 0), 2) : null;
+  const topP = Number.isFinite(ask.topP) ? Math.min(Math.max(ask.topP, 0), 1) : null;
+  const stop = Array.isArray(ask.stop) ? ask.stop.filter((s) => typeof s === "string" && s).slice(0, 4) : [];
 
   if (account.provider === "practice") {
     const last = messages.at(-1)?.content || "";
@@ -96,7 +102,11 @@ export async function* generate(account, ask, signal) {
     const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST", signal,
       headers: { "content-type": "application/json", "x-api-key": account.key, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
-      body: JSON.stringify({ model: account.model, max_tokens: maxTokens, stream: true, messages, ...(system ? { system } : {}) }),
+      body: JSON.stringify({
+        model: account.model, max_tokens: maxTokens, stream: true, messages, ...(system ? { system } : {}),
+        // Anthropic counts temperature from 0 to 1.
+        ...(temperature !== null ? { temperature: Math.min(temperature, 1) } : {}), ...(topP !== null ? { top_p: topP } : {}), ...(stop.length ? { stop_sequences: stop } : {}),
+      }),
     });
     if (!response.ok) throw await refuse(response, "Anthropic");
     for await (const event of events(response)) {
@@ -114,7 +124,10 @@ export async function* generate(account, ask, signal) {
     const response = await fetch(base + "/chat/completions", {
       method: "POST", signal,
       headers: { "content-type": "application/json", ...(account.key ? { authorization: "Bearer " + account.key } : {}) },
-      body: JSON.stringify({ model: account.model, stream: true, stream_options: { include_usage: true }, ...limit, messages: [...(system ? [{ role: "system", content: system }] : []), ...messages] }),
+      body: JSON.stringify({
+        model: account.model, stream: true, stream_options: { include_usage: true }, ...limit, messages: [...(system ? [{ role: "system", content: system }] : []), ...messages],
+        ...(temperature !== null ? { temperature } : {}), ...(topP !== null ? { top_p: topP } : {}), ...(stop.length ? { stop } : {}),
+      }),
     });
     if (!response.ok) throw await refuse(response, PROVIDERS[account.provider].name);
     for await (const event of events(response)) {

@@ -5,6 +5,14 @@
 //   if (!ai.ready) await ai.choose();          // call this from a click
 //   for await (const piece of ai.prompt("Write a haiku about ports")) show(piece);
 //
+// A site that already speaks the Chat Completions API can ask in that shape:
+//
+//   const answer = await ai.chat.completions.create({ messages: [{ role: "user", content: "Hello" }] });
+//   show(answer.choices[0].message.content);
+//
+//   const stream = await ai.chat.completions.create({ messages, stream: true });
+//   for await (const chunk of stream) show(chunk.choices[0]?.delta?.content || "");
+//
 // The site never sees an API key. It holds a MessagePort into a hidden frame
 // served from the router's address, and that frame makes the calls.
 
@@ -22,9 +30,22 @@ export function fromPort(port) {
   port.onmessage = (event) => {
     const message = event.data || {};
     if (message.t === "state") { current = message; first(); for (const fn of changed) fn(api); }
-    else if (message.t === "lent") { waiting.get(message.n)?.(event.ports[0]); waiting.delete(message.n); }
+    else if (message.t === "lent" || message.t === "api") { waiting.get(message.n)?.(event.ports[0]); waiting.delete(message.n); }
   };
   port.postMessage({ t: "state" });
+
+  // The Chat Completions calls travel on a port of their own, carried by
+  // Hawser. Both are fetched the first time a site calls create().
+  let remote = null;
+  const chatRemote = () => remote ??= (async () => {
+    const n = ++lends;
+    const asked = new Promise((resolve) => { waiting.set(n, resolve); port.postMessage({ t: "api", n }); });
+    const [{ wrap }, line] = await Promise.all([import(ROUTER + "/hawser.js"), asked]);
+    return { api: wrap(line) };
+  })();
+  // An error arrives in the shape the Chat Completions API uses, and is thrown
+  // with the same fields an OpenAI client puts on its errors.
+  const chatError = (e) => Object.assign(new Error(e.message), { name: e.code === "cancelled" ? "AbortError" : "Error", code: e.code, status: e.status, type: e.type, param: e.param, error: e });
 
   const api = {
     get ready() { return !!current.ready; },
@@ -64,6 +85,30 @@ export function fromPort(port) {
         cancel() { line.port1.postMessage({ t: "cancel" }); },
         get usage() { return result ? result.usage : null; },
       };
+    },
+
+    // The same model in the shape of the Chat Completions API: the same
+    // request in, and the same completion object out, or with stream: true
+    // something you can `for await` over for the same chunks. The person
+    // chose the model, so `model` in the request is ignored and the answer
+    // says which model it was. Text only: a request that asks for tools,
+    // images or a setting the router does not pass on is refused, not
+    // quietly changed. Pass { signal } as the second argument to stop it.
+    chat: {
+      completions: {
+        async create(body, options = {}) {
+          const { api } = await chatRemote();
+          const answer = await api.chat.completions.create(body, options.signal ? { signal: options.signal } : {});
+          if (answer && answer.error) throw chatError(answer.error);
+          if (!answer || typeof answer[Symbol.asyncIterator] !== "function") return answer;
+          return (async function* () {
+            for await (const chunk of answer) {
+              if (chunk.error) throw chatError(chunk.error);
+              yield chunk;
+            }
+          })();
+        },
+      },
     },
 
     // Ask for another port into the same grant, to give to a worker or to

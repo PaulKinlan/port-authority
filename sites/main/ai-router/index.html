@@ -115,6 +115,31 @@ onmessage = async (event) =&gt; {
   const ai = fromPort(event.ports[0]);
   const text = await ai.prompt("Summarise this in one line: ...").text();
 };</pre>
+        <h3 id="chat">In the shape of the Chat Completions API</h3>
+        <p>Much code already speaks the Chat Completions API. A list of messages goes in, and a completion object or a stream of chunks comes out. The router answers in that shape too. The call does not go over HTTP. It goes down the same port, to the same grant, with the same limits.</p>
+<pre>const answer = await ai.chat.completions.create({
+  messages: [
+    { role: "system", content: "You write short cards." },
+    { role: "user", content: "A card for Ada, who passed her exam" },
+  ],
+});
+output.textContent = answer.choices[0].message.content;
+
+<span class="c">// or a few words at a time</span>
+const stream = await ai.chat.completions.create({ messages, stream: true });
+for await (const chunk of stream) {
+  output.textContent += chunk.choices[0]?.delta?.content ?? "";
+}</pre>
+        <ul>
+          <li>The person chose the model, so <code>model</code> in the request is ignored. The answer says which model it was.</li>
+          <li>The router reads <code>messages</code>, <code>stream</code>, <code>stream_options.include_usage</code>, <code>max_completion_tokens</code> or <code>max_tokens</code>, <code>temperature</code>, <code>top_p</code> and <code>stop</code>. The practice model and the browser's built-in model take no notice of the last three.</li>
+          <li>Messages are text. A request with tools, images, a <code>response_format</code> other than text, or any setting the router does not pass on is refused, and the error names the field. The router does not drop a setting and answer anyway.</li>
+          <li>The token limit can be up to 4,000. With no limit in the request, the router asks for 600.</li>
+          <li>An error has the fields an OpenAI client puts on its errors: <code>status</code>, <code>code</code>, <code>type</code> and <code>param</code>. A site with no grant gets 401. A site that has used its requests gets 429.</li>
+          <li>Pass <code>{ signal }</code> as the second argument to stop a request.</li>
+          <li><code>finish_reason</code> is always <code>"stop"</code>. The router is not told when an answer was cut short by the token limit.</li>
+        </ul>
+        <p>The calls are carried by <a href="/comlink/">Hawser</a>, the remote-object library from this site. The first call to <code>create()</code> asks the router's worker for one more port. On that port the worker answers <code>chat.completions.create</code> and nothing else. A port from <code>lend()</code> can do the same, inside its own limit.</p>
       </section>
 
       <section id="how">
