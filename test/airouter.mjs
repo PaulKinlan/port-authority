@@ -1,12 +1,14 @@
 // The AI router, end to end: a site asks for a model, the person picks one in
 // the router window, the site gets a port, and the key never reaches the site.
-// Needs `npx wrangler dev --port 8787` running, or LIVE=<workers.dev subdomain>.
+// Needs `npx wrangler dev --port 8787` running (PORT=<n> for another port), or LIVE=<workers.dev subdomain>.
 import { createRequire } from "node:module";
 const { chromium } = createRequire(import.meta.url)("playwright");
 const LIVE = process.env.LIVE;
-const base = (name) => LIVE ? (name === "hub" && process.env.LIVE_MAIN) || `https://${name === "hub" ? "portauthority" : "pa-" + name}.${LIVE}` : `http://${name}.localhost:8787`;
+const base = (name) => LIVE ? (name === "hub" && process.env.LIVE_MAIN) || `https://${name === "hub" ? "portauthority" : "pa-" + name}.${LIVE}` : `http://${name}.localhost:${process.env.PORT || 8787}`;
 const browser = await chromium.launch(process.env.HTTPS_PROXY && LIVE ? { proxy: { server: process.env.HTTPS_PROXY } } : {});
 const ctx = await browser.newContext();
+// The pages ask for web fonts. The tests do not wait on another network for them.
+await ctx.route(/^https:\/\/fonts\.(googleapis|gstatic)\.com\//, (route) => route.abort());
 const errors = [];
 ctx.on("page", (p) => { p.on("pageerror", (e) => errors.push(`${p.url()}: ${e.message}`)); });
 let failed = 0;

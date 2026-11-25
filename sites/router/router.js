@@ -13,39 +13,97 @@
 //   const stream = await ai.chat.completions.create({ messages, stream: true });
 //   for await (const chunk of stream) show(chunk.choices[0]?.delta?.content || "");
 //
-// The site never sees an API key. It holds a MessagePort into a hidden frame
-// served from the router's address, and that frame makes the calls.
+// The site never sees an API key. It holds a MessagePort into a router page,
+// and that page makes the calls. There are two ways to hold it:
+//
+//   ai.mode === "frame"    A hidden frame from the router's address, inside
+//                          this page. The router window opens only while the
+//                          person chooses, and the grant is still there after
+//                          a reload. This is what connect() tries first.
+//   ai.mode === "window"   The router window itself, kept open. connect()
+//                          falls back to this when the frame does not load,
+//                          for example because this site's own
+//                          Content-Security-Policy forbids frames from other
+//                          addresses. Closing the window disconnects the site,
+//                          and ai.choose() opens it again.
+//
+// connect({ via: "window" }) skips the frame.
 
 const ROUTER = new URL(import.meta.url).origin;
 
-// Wrap any port into the router frame. connect() uses it, and so does a
-// worker or another page that was handed a lent port.
-export function fromPort(port) {
+const noModel = () => Object.assign(new Error("This site is not connected to a model. Ask the person to choose one."), { code: "no-grant" });
+const closed = () => Object.assign(new Error("The connection to the router was closed."), { code: "closed" });
+// An error arrives in the shape the Chat Completions API uses, and is thrown
+// with the same fields an OpenAI client puts on its errors.
+const chatError = (e) => Object.assign(new Error(e.message), { name: e.code === "cancelled" ? "AbortError" : "Error", code: e.code, status: e.status, type: e.type, param: e.param, error: e });
+const STATUS = { "no-grant": 401, closed: 503 };
+const asChatError = (error) => (error && (error.code === "closed" || error.code === "no-grant") && !error.status
+  ? chatError({ message: error.message, type: error.code === "closed" ? "api_error" : "authentication_error", param: null, code: error.code, status: STATUS[error.code] })
+  : error);
+
+// Everything a site can do with a port into the router. The port can be put
+// in later and taken away again, because in window mode it comes and goes
+// with the router window.
+function channel() {
+  let port = null;
   let current = { ready: false };
-  let lends = 0;
-  const waiting = new Map();
+  let count = 0;                 // numbers the requests for another port
+  const waiting = new Map();     // those requests, until the port arrives
   const changed = new Set();
+  const drops = new Set();       // told when the port goes, so that nothing waits for ever
+  let remote = null;             // the Chat Completions calls travel on a port of their own
   let first;
   const started = new Promise((resolve) => { first = resolve; });
-  port.onmessage = (event) => {
-    const message = event.data || {};
-    if (message.t === "state") { current = message; first(); for (const fn of changed) fn(api); }
-    else if (message.t === "lent" || message.t === "api") { waiting.get(message.n)?.(event.ports[0]); waiting.delete(message.n); }
-  };
-  port.postMessage({ t: "state" });
+  const notify = () => { for (const fn of changed) fn(api); };
 
-  // The Chat Completions calls travel on a port of their own, carried by
-  // Hawser. Both are fetched the first time a site calls create().
-  let remote = null;
-  const chatRemote = () => remote ??= (async () => {
-    const n = ++lends;
-    const asked = new Promise((resolve) => { waiting.set(n, resolve); port.postMessage({ t: "api", n }); });
-    const [{ wrap }, line] = await Promise.all([import(ROUTER + "/hawser.js"), asked]);
-    return { api: wrap(line) };
-  })();
-  // An error arrives in the shape the Chat Completions API uses, and is thrown
-  // with the same fields an OpenAI client puts on its errors.
-  const chatError = (e) => Object.assign(new Error(e.message), { name: e.code === "cancelled" ? "AbortError" : "Error", code: e.code, status: e.status, type: e.type, param: e.param, error: e });
+  // A promise that rejects if the port goes away. Call off() when done with it.
+  const untilDropped = () => {
+    let drop;
+    const lost = new Promise((_, reject) => { drop = reject; });
+    lost.catch(() => {});
+    drops.add(drop);
+    return { lost, off: () => drops.delete(drop) };
+  };
+  const askForPort = (message) => {
+    if (!port) return Promise.reject(noModel());
+    const n = ++count;
+    return new Promise((resolve, reject) => { waiting.set(n, { resolve, reject }); port.postMessage({ ...message, n }); });
+  };
+
+  function attach(next) {
+    detach(true);
+    port = next;
+    port.onmessage = (event) => {
+      if (port !== next) return;
+      const message = event.data || {};
+      if (message.t === "state") { current = message; first(); notify(); }
+      else if (message.t === "lent" || message.t === "api") { waiting.get(message.n)?.resolve(event.ports[0]); waiting.delete(message.n); }
+    };
+    port.postMessage({ t: "state" });
+  }
+  function detach(quiet = false) {
+    if (!port) return;
+    try { port.close(); } catch { /* already closed */ }
+    port = null;
+    remote = null;
+    current = { ready: false };
+    const error = closed();
+    for (const { reject } of waiting.values()) reject(error);
+    waiting.clear();
+    for (const drop of [...drops]) drop(error);
+    drops.clear();
+    if (!quiet) notify();
+  }
+
+  // Hawser carries the Chat Completions calls. It and the port are fetched the
+  // first time a site calls create().
+  const chatRemote = () => {
+    if (!remote) {
+      remote = Promise.all([import(ROUTER + "/hawser.js"), askForPort({ t: "api" })]).then(([{ wrap }, line]) => ({ api: wrap(line) }));
+      remote.catch(() => {});
+    }
+    return remote;
+  };
 
   const api = {
     get ready() { return !!current.ready; },
@@ -63,14 +121,17 @@ export function fromPort(port) {
       const line = new MessageChannel();
       const queue = [];
       let wake = null, finished = false, failure = null, result = null;
+      const end = (error) => { if (finished) return; finished = true; failure = error || null; drops.delete(end); try { line.port1.close(); } catch { /* closed */ } wake?.(); wake = null; };
       line.port1.onmessage = (event) => {
         const m = event.data;
-        if (m.t === "text") queue.push(m.text);
-        else if (m.t === "done") { finished = true; result = m; line.port1.close(); }
-        else if (m.t === "error") { finished = true; failure = Object.assign(new Error(m.message), { code: m.code }); line.port1.close(); }
-        wake?.(); wake = null;
+        if (m.t === "text") { queue.push(m.text); wake?.(); wake = null; }
+        else if (m.t === "done") { result = m; end(); }
+        else if (m.t === "error") end(Object.assign(new Error(m.message), { code: m.code }));
       };
-      port.postMessage({ t: "prompt", system: ask.system || options.system, messages: ask.messages, maxTokens: ask.maxTokens || options.maxTokens }, [line.port2]);
+      if (port) {
+        drops.add(end);
+        port.postMessage({ t: "prompt", system: ask.system || options.system, messages: ask.messages, maxTokens: ask.maxTokens || options.maxTokens }, [line.port2]);
+      } else end(noModel());
       const pieces = (async function* () {
         for (;;) {
           while (queue.length) yield queue.shift();
@@ -82,7 +143,7 @@ export function fromPort(port) {
       return {
         [Symbol.asyncIterator]: () => pieces,
         async text() { let all = ""; for await (const piece of pieces) all += piece; return all; },
-        cancel() { line.port1.postMessage({ t: "cancel" }); },
+        cancel() { try { line.port1.postMessage({ t: "cancel" }); } catch { /* closed */ } },
         get usage() { return result ? result.usage : null; },
       };
     },
@@ -97,16 +158,29 @@ export function fromPort(port) {
     chat: {
       completions: {
         async create(body, options = {}) {
-          const { api } = await chatRemote();
-          const answer = await api.chat.completions.create(body, options.signal ? { signal: options.signal } : {});
-          if (answer && answer.error) throw chatError(answer.error);
-          if (!answer || typeof answer[Symbol.asyncIterator] !== "function") return answer;
-          return (async function* () {
-            for await (const chunk of answer) {
-              if (chunk.error) throw chatError(chunk.error);
-              yield chunk;
-            }
-          })();
+          const whole = untilDropped();
+          try {
+            if (!port) throw noModel();
+            const { api: far } = await Promise.race([chatRemote(), whole.lost]);
+            const answer = await Promise.race([far.chat.completions.create(body, options.signal ? { signal: options.signal } : {}), whole.lost]);
+            if (answer && answer.error) throw chatError(answer.error);
+            if (!answer || typeof answer[Symbol.asyncIterator] !== "function") return answer;
+            const chunks = answer[Symbol.asyncIterator]();
+            const each = untilDropped();
+            return (async function* () {
+              try {
+                for (;;) {
+                  const { value, done } = await Promise.race([chunks.next(), each.lost]);
+                  if (done) return;
+                  if (value.error) throw chatError(value.error);
+                  yield value;
+                }
+              } catch (error) { throw asChatError(error); } finally {
+                each.off();
+                Promise.resolve().then(() => chunks.return?.()).catch(() => {});   // tells the router to stop, if it has not finished
+              }
+            })();
+          } catch (error) { throw asChatError(error); } finally { whole.off(); }
         },
       },
     },
@@ -114,45 +188,147 @@ export function fromPort(port) {
     // Ask for another port into the same grant, to give to a worker or to
     // someone else. With { requests: n } it stops working after n requests.
     // A lent port cannot lend again.
-    lend(limits = {}) {
-      const n = ++lends;
-      return new Promise((resolve) => { waiting.set(n, resolve); port.postMessage({ t: "lend", n, requests: limits.requests }); });
-    },
+    lend(limits = {}) { return askForPort({ t: "lend", requests: limits.requests }); },
 
     // Drop this site's grant from this browser.
-    forget() { port.postMessage({ t: "forget" }); },
+    forget() { if (port) port.postMessage({ t: "forget" }); },
   };
-  return api;
+  return { api, attach, detach, begin: () => first() };
 }
 
-// Add the hidden router frame to this page and open a port to it.
-export async function connect() {
-  const frame = document.createElement("iframe");
-  frame.src = ROUTER + "/frame.html";
-  frame.hidden = true;
-  frame.title = "AI router";
-  frame.allow = "language-model";    // lets the frame use the browser's built-in model, where there is one
-  const loaded = new Promise((resolve, reject) => { frame.onload = resolve; frame.onerror = () => reject(new Error("The router frame did not load.")); });
-  document.body.append(frame);
-  await loaded;
-  const line = new MessageChannel();
-  frame.contentWindow.postMessage({ router: "hello" }, ROUTER, [line.port2]);
-  const api = fromPort(line.port1);
-  await api.started;
+// Wrap any port into the router. connect() uses it, and so does a worker or
+// another page that was handed a lent port.
+export function fromPort(port) {
+  const link = channel();
+  link.attach(port);
+  return link.api;
+}
 
-  // Open the router window so the person can pick an account and a model.
-  // Browsers only allow a window to open during a click. Resolves true when
-  // this site has a model afterwards, false if the person closed it without
-  // choosing, and rejects with code "popup-blocked" if the browser blocked the
-  // window.
-  api.choose = () => new Promise((resolve, reject) => {
-    const w = 460, h = 640;
-    const picker = window.open(ROUTER + "/pick.html", "ai-router-picker", `popup,width=${w},height=${h},left=${Math.max(0, screenX + (outerWidth - w) / 2)},top=${Math.max(0, screenY + (outerHeight - h) / 2)}`);
-    if (!picker) return reject(Object.assign(new Error("Your browser blocked the router window. Allow popups for this site and click again."), { code: "popup-blocked" }));
-    const before = api.model ? JSON.stringify(api.model) + api.expires : "";
-    const off = api.onchange(() => { if (api.ready && JSON.stringify(api.model) + api.expires !== before) { off(); clearInterval(timer); resolve(true); } });
-    const timer = setInterval(() => { if (picker.closed) { clearInterval(timer); setTimeout(() => { off(); resolve(api.ready && JSON.stringify(api.model) + api.expires !== before); }, 300); } }, 300);
+// Add the hidden router frame to this page and say hello to it. Resolves
+// false when the frame does not answer: this page's own
+// Content-Security-Policy may forbid it, or the router may be out of reach.
+function openFrame(link) {
+  return new Promise((resolve) => {
+    const frame = document.createElement("iframe");
+    frame.src = ROUTER + "/frame.html";
+    frame.hidden = true;
+    frame.title = "AI router";
+    frame.allow = "language-model";    // lets the frame use the browser's built-in model, where there is one
+    const line = new MessageChannel();
+    let settled = false;
+    let timer = setTimeout(() => finish(false), 10000);    // it never loaded at all
+    function finish(ok) {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      removeEventListener("message", heard);
+      document.removeEventListener("securitypolicyviolation", refused);
+      if (!ok) frame.remove();
+      resolve(ok);
+    }
+    // The frame says it is there, and then the worker inside it reports on this site's grant.
+    function heard(event) {
+      if (event.source !== frame.contentWindow || event.origin !== ROUTER || !event.data || event.data.router !== "frame-ready") return;
+      clearTimeout(timer);
+      link.attach(line.port1);
+      link.api.started.then(() => finish(true));
+    }
+    // This page's own policy would not let the frame load.
+    function refused(event) {
+      if (event.disposition === "enforce" && String(event.blockedURI).startsWith(ROUTER) && /^(frame-src|child-src|default-src)/.test(event.effectiveDirective || event.violatedDirective || "")) finish(false);
+    }
+    addEventListener("message", heard);
+    document.addEventListener("securitypolicyviolation", refused);
+    frame.onload = () => {
+      try { frame.contentWindow.postMessage({ router: "hello" }, ROUTER, [line.port2]); } catch { return finish(false); }
+      // The router frame answers at once. A page that loaded in its place does not.
+      clearTimeout(timer);
+      timer = setTimeout(() => finish(false), 2500);
+    };
+    frame.onerror = () => finish(false);
+    document.body.append(frame);
   });
+}
+
+const POPUP = () => { const w = 460, h = 640; return `popup,width=${w},height=${h},left=${Math.max(0, screenX + (outerWidth - w) / 2)},top=${Math.max(0, screenY + (outerHeight - h) / 2)}`; };
+const blocked = () => Object.assign(new Error("Your browser blocked the router window. Allow popups for this site and click again."), { code: "popup-blocked" });
+
+// Connect this page to the router. Resolves to the object described at the
+// top of this file, with choose() and mode added.
+export async function connect(options = {}) {
+  const link = channel();
+  const api = link.api;
   api.router = ROUTER;
+  const viaFrame = options.via !== "window" && await openFrame(link);
+  Object.defineProperty(api, "mode", { value: viaFrame ? "frame" : "window", enumerable: true });
+
+  // choose() opens the router window so the person can pick an account and a
+  // model. Browsers only allow a window to open during a click. It resolves
+  // true when this site has a model afterwards, false if the person closed
+  // the window or said no, and rejects with code "popup-blocked" if the
+  // browser blocked the window.
+
+  if (viaFrame) {
+    // The window finds the frame inside this page, hands it the grant and closes.
+    api.choose = () => new Promise((resolve, reject) => {
+      const picker = window.open(ROUTER + "/pick.html", "ai-router-picker", POPUP());
+      if (!picker) return reject(blocked());
+      const before = api.model ? JSON.stringify(api.model) + api.expires : "";
+      const off = api.onchange(() => { if (api.ready && JSON.stringify(api.model) + api.expires !== before) { off(); clearInterval(timer); resolve(true); } });
+      const timer = setInterval(() => { if (picker.closed) { clearInterval(timer); setTimeout(() => { off(); resolve(api.ready && JSON.stringify(api.model) + api.expires !== before); }, 300); } }, 300);
+    });
+    return api;
+  }
+
+  // With no frame, the window is the way through, and it stays open. This page
+  // passes it a port, as it would have passed one to the frame. The browser
+  // tells the window which site the port came from.
+  link.begin();
+  let picker = null;      // the router window, while it is open
+  let watching = null;
+  let answer = null;      // resolves the choose() that is waiting
+  const settle = (ok) => {
+    const done = answer;
+    answer = null;
+    if (!done) return;
+    if (!ok || api.ready) return done(!!ok);
+    // The window said yes. Wait for the port to say so too.
+    const off = api.onchange(() => { if (api.ready) { off(); clearTimeout(late); done(true); } });
+    const late = setTimeout(() => { off(); done(api.ready); }, 3000);
+  };
+  const lost = () => {
+    clearInterval(watching);
+    picker = null;
+    link.detach();
+    settle(false);
+  };
+  addEventListener("message", (event) => {
+    if (!picker || event.source !== picker || event.origin !== ROUTER) return;
+    const message = event.data || {};
+    if (message.router === "picker-ready") {
+      const line = new MessageChannel();
+      picker.postMessage({ router: "hello" }, ROUTER, [line.port2]);   // only a page at the router's address can receive this
+      link.attach(line.port1);
+    } else if (message.router === "picked") settle(!!message.ok);
+    else if (message.router === "closing") lost();
+  });
+  // The window has no reason to stay once this page has gone.
+  addEventListener("pagehide", () => { try { if (picker && !picker.closed) picker.postMessage({ router: "bye" }, ROUTER); } catch { /* gone */ } });
+
+  api.choose = () => new Promise((resolve, reject) => {
+    settle(false);
+    if (picker && !picker.closed) {
+      // The window is open. Bring it forward so the person can choose again.
+      answer = resolve;
+      picker.postMessage({ router: "choose" }, ROUTER);
+      try { picker.focus(); } catch { /* not allowed */ }
+      return;
+    }
+    picker = window.open(ROUTER + "/pick.html#window", "ai-router-picker", POPUP());
+    if (!picker) { picker = null; return reject(blocked()); }
+    answer = resolve;
+    clearInterval(watching);
+    watching = setInterval(() => { if (picker && picker.closed) lost(); }, 300);
+  });
   return api;
 }

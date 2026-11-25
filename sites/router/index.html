@@ -92,6 +92,8 @@
           <li>The worker hands the prompt, the encrypted key and the unlock key to one more hidden page inside the frame. That page is served with a rule that lets it connect to the provider you chose and to nothing else, not even the router.</li>
           <li>That page decrypts your API key in memory and calls the provider straight from your browser. The answer comes back down the port a few words at a time.</li>
         </ol>
+        <h3>When a site cannot have the frame</h3>
+        <p>A site whose own rules forbid frames from other addresses passes its port to the window instead. The window then does the frame's job, and stays open while the site uses the model. Closing it disconnects the site.</p>
         <h3>When you press Stop</h3>
         <p>The server deletes the unlock key. The encrypted copy of your API key that was left with that site can no longer be opened, and the frame deletes it the next time it checks.</p>
         <h3>Who can see what</h3>

@@ -1,5 +1,6 @@
-// The worker inside the router frame. It holds the ports that sites, their
-// workers and their frames send prompts on. For each prompt it asks the
+// The worker inside the router frame, or inside the router window when that
+// serves a site (see host.js). It holds the ports that sites, their workers
+// and their frames send prompts on. For each prompt it asks the
 // router's server whether the grant is still good, and then hands the request
 // to the page that may call the provider (call.js). This worker can connect to
 // the router's server and to nothing else, so it cannot reach a provider
@@ -9,9 +10,9 @@ import { generate, PROVIDERS } from "/providers.js";
 import { askOver } from "/line.js";
 import { chatApi } from "/chat.js";
 
-let grant = null;         // this site's grant, kept in storage by the frame
+let grant = null;         // this site's grant, kept in storage by the page that started this worker
 let info = null;          // what the server last said about the grant
-let builtin = null;       // a port to the frame, for the browser's built-in model
+let builtin = null;       // a port to that page, for the browser's built-in model
 let ready;
 const started = new Promise((resolve) => { ready = resolve; });
 const ports = new Set();  // every port that should hear about a change of state
@@ -28,7 +29,7 @@ function state() {
 }
 const announce = () => { for (const port of ports) port.postMessage(state()); };
 
-// The page that may call this grant's provider. The frame opens it and sends a
+// The page that may call this grant's provider. The host page opens it and sends a
 // port to it. A request that gets here first waits a few seconds for the port.
 let caller = null;        // { provider, port }
 let waiting = [];
@@ -139,7 +140,7 @@ function serve(port, budget = null) {
   port.postMessage(state());
 }
 
-// Messages from the frame that started this worker.
+// Messages from the page that started this worker.
 onmessage = async (event) => {
   const message = event.data;
   if (message.t === "init") {
@@ -150,6 +151,9 @@ onmessage = async (event) => {
       catch { /* offline: keep the grant, the next request will ask again */ }
     }
     serve(event.ports[0]);    // the site's own port
+    // The page that started this worker listens on a port of its own, to show
+    // the person what the site is told. It is never served: nothing it posts is read.
+    if (event.ports[2]) { ports.add(event.ports[2]); event.ports[2].postMessage(state()); }
     ready();
   } else if (message.t === "caller") {
     setCaller(message.provider, event.ports[0]);

@@ -14,6 +14,7 @@ $("about-pa-link").href = sites.main + "/";
 $("explainer-link").href = sites.main + "/ai-router/";
 $("limits-link").href = sites.main + "/ai-router/#limits";
 $("try").innerHTML = [
+  [sites.main + "/chat/", "Chat", "A chat app that keeps your conversations in your browser and uses your accounts."],
   [sites.florist + "/card/", "Stem and Petal", "A florist that writes the card for a bouquet."],
   [sites.library + "/digest/", "Harbour Street Library", "A library that hands its port to a worker, and lends a 3-request port."],
   [sites.main + "/ai-router/", "Port Authority", "How the router works, with a box to try it in."],
