@@ -11,6 +11,7 @@
 import { choices, server, seal, random, me } from "/store.js";
 import { PROVIDERS } from "/providers.js";
 import { startHost } from "/host.js";
+import { accountForm, formInUse } from "/account-form.js";
 const main = document.getElementById("main");
 const esc = (text) => String(text).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 
@@ -69,6 +70,9 @@ if (!frame && !direct) {
   const tellSite = (message) => { try { opener.postMessage(message, site); } catch { /* the site has gone */ } };
   let busy = false;
   let view = "";      // "choose" or "connected"
+  let prefer = "";    // the choice to tick: an account that was added in this window a moment ago
+  // An account saved in this window is offered at once, and ticked.
+  const added = (account) => { prefer = account.id + "|" + account.models[0]; draw(); };
   let last = null;    // what the worker last told the site about its grant
 
   // Hand the grant over: to the frame inside the site, or to this window's own worker.
@@ -137,13 +141,17 @@ if (!frame && !direct) {
       main.innerHTML = `
         <p class="origin">${esc(site)}</p>
         <h1 tabindex="-1">This site wants to use an AI model</h1>
-        <p>You have no account for it to use yet. Add one in your router. This window will show it as soon as it is saved.</p>
-        <div class="actions"><a class="button accent" href="/" target="_blank" rel="noopener">Add an account</a><button class="quiet" id="no">Close</button></div>`;
+        <p>You have no account for it to use yet. Add one here. It is kept in this browser, at the router's address, and the site never sees it.</p>
+        <form class="fields" id="form" novalidate></form>
+        <div class="actions"><button class="quiet" id="no">Close</button></div>
+        <p class="small muted">You can see and remove your accounts at <a href="/" target="_blank" rel="noopener">your router</a>.</p>`;
+      accountForm(document.getElementById("form"), added);
       document.getElementById("no").onclick = cancel;
       return;
     }
     const currentIndex = current ? list.findIndex((c) => c.label === current.label && c.model === current.model) : -1;
-    const selectedIndex = currentIndex >= 0 ? currentIndex : 0;
+    const preferIndex = prefer ? list.findIndex((c) => c.key === prefer) : -1;
+    const selectedIndex = preferIndex >= 0 ? preferIndex : currentIndex >= 0 ? currentIndex : 0;
     document.title = `Choose a model | AI router`;
     main.innerHTML = `
       <p class="origin">${esc(site)}</p>
@@ -155,6 +163,7 @@ if (!frame && !direct) {
         <legend class="small muted">Choose an account and model</legend>
         ${list.map((c, i) => `<label><input type="radio" name="choice" value="${esc(c.key)}" ${i === selectedIndex ? "checked" : ""}><span><strong>${esc(c.label)} · ${esc(c.model)}</strong><span class="muted small">${esc(c.note || c.providerName)}</span></span></label>`).join("")}
       </fieldset>
+      <details id="add"><summary class="button quiet tiny">Add an account</summary><form class="fields" id="form" novalidate></form></details>
       <p class="note small" id="lock" aria-live="polite"></p>
       <div class="limits">
         <div><label for="requests">Stop after</label><select id="requests"><option value="5">5 requests</option><option value="20" selected>20 requests</option><option value="100">100 requests</option><option value="1000">1,000 requests</option></select></div>
@@ -174,6 +183,7 @@ if (!frame && !direct) {
     };
     document.getElementById("choices").addEventListener("change", lock);
     lock();
+    accountForm(document.getElementById("form"), added);
     document.getElementById("no").onclick = cancel;
     document.getElementById("yes").onclick = async () => {
       if (busy) return;
@@ -232,5 +242,5 @@ if (!frame && !direct) {
     addEventListener("pagehide", () => tellSite({ router: "closing" }));
   }
   // An account added in another tab shows up here without a reload.
-  addEventListener("storage", () => { if (!busy && view === "choose") draw(); });
+  addEventListener("storage", () => { if (!busy && view === "choose" && !formInUse(document.getElementById("form"))) draw(); });
 }

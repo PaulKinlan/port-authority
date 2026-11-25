@@ -16,6 +16,7 @@ let failed = 0;
 const check = (name, ok, extra = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${name}${extra ? " " + extra : ""}`); if (!ok) failed++; };
 const popupFrom = async (page, click) => { const [popup] = await Promise.all([page.waitForEvent("popup"), click()]); await popup.waitForLoadState(); return popup; };
 const KEY = "sk-test-THIS-KEY-MUST-NOT-LEAK-0123456789";
+const KEY2 = "sk-spare-THIS-ONE-MUST-NOT-LEAK-EITHER-9876543210";
 
 // A stand-in for Anthropic. What it says depends on the last thing it was asked.
 const MARKDOWN = [
@@ -38,6 +39,19 @@ await ctx.route("https://api.anthropic.com/**", async (route) => {
     + pieces.map((text) => sse({ type: "content_block_delta", index: 0, delta: { type: "text_delta", text } })).join("")
     + sse({ type: "message_delta", usage: { output_tokens: 9 } }) + sse({ type: "message_stop" });
   route.fulfill({ status: 200, headers: { ...cors, "content-type": "text/event-stream" }, body: answer }).catch(() => {});   // the page may have stopped waiting
+});
+
+// A stand-in for OpenAI, for an account that is set up later, in the router window.
+const seenOpenAI = [];
+await ctx.route("https://api.openai.com/**", async (route) => {
+  const request = route.request();
+  const cors = { "access-control-allow-origin": "*", "access-control-allow-headers": "*" };
+  if (request.method() === "OPTIONS") return route.fulfill({ status: 204, headers: cors });
+  const body = JSON.parse(request.postData());
+  seenOpenAI.push({ key: request.headers()["authorization"], body, from: request.frame().url() });
+  const data = (o) => `data: ${JSON.stringify(o)}\n\n`;
+  const answer = ["A note ", "from the ", "stand-in."].map((content) => data({ choices: [{ index: 0, delta: { content } }] })).join("") + data({ choices: [], usage: { prompt_tokens: 12, completion_tokens: 6 } }) + "data: [DONE]\n\n";
+  route.fulfill({ status: 200, headers: { ...cors, "content-type": "text/event-stream" }, body: answer }).catch(() => {});
 });
 
 // The person has one account in their router.
@@ -92,6 +106,44 @@ await chat.locator(".msg.assistant").nth(2).waitFor();
 await chat.locator("#model-jack.on").waitFor();
 check("after a reload the conversation is still there", (await chat.locator(".msg").count()) === 6 && (await chat.locator("#title").innerText()) === "Write a card for Ada");
 check("and so is the model, with no window", /Work key · claude-sonnet-5-5/.test(await chat.locator("#model-text").innerText()) && ctx.pages().length === 2);
+
+// Change the model. The model button opens the router window again, and an account can be set up there.
+popup = await popupFrom(chat, () => chat.click("#model"));
+await popup.waitForSelector("#yes");
+check("the model button opens the router window, which says what the app uses now", /It uses Work key · claude-sonnet-5-5 now/.test(await popup.locator("#main").innerText()) && (await popup.locator("#add").count()) === 1);
+await popup.click("#add summary");
+await popup.selectOption("#provider", "openai");
+await popup.fill("#label", "Spare key");
+await popup.fill("#key", KEY2);
+await popup.click("#form button");
+await popup.locator("#choices label", { hasText: "Spare key · gpt-6.2-sol" }).waitFor();
+check("an account set up in the router window is offered at once, and ticked", /Spare key · gpt-6\.2-sol/.test(await popup.locator("#choices label:has(input:checked)").innerText()) && /prompts to api\.openai\.com\./.test(await popup.locator("#lock").innerText()));
+check("the new account is saved in the router, for the next site too", (await home.evaluate(() => JSON.parse(localStorage.getItem("router.accounts")).map((a) => a.label).join())) === "Work key,Spare key");
+await Promise.all([popup.waitForEvent("close"), popup.click("#yes")]);
+await chat.locator("#model-text", { hasText: "Spare key · gpt-6.2-sol" }).waitFor();
+const anthropicBefore = seen.length;
+await chat.fill("#prompt", "Now with the other one");
+await chat.press("#prompt", "Enter");
+await chat.locator(".msg.assistant").nth(3).locator(".msg-actions").waitFor();
+check("after the change the app's next message goes to the new provider, with the conversation so far", (await chat.locator(".msg.assistant .md").nth(3).innerText()) === "A note from the stand-in." && seen.length === anthropicBefore
+  && seenOpenAI.at(-1).from === base("router") + "/call.html?provider=openai" && seenOpenAI.at(-1).key === "Bearer " + KEY2 && seenOpenAI.at(-1).body.model === "gpt-6.2-sol" && seenOpenAI.at(-1).body.messages.length === 8, JSON.stringify(seenOpenAI.at(-1) && seenOpenAI.at(-1).body.messages.length));
+const callPages = chat.frames().filter((f) => f.url().includes("/call.html")).map((f) => f.url());
+check("the page for the old provider is gone, and there is one page, for the new provider", callPages.join() === base("router") + "/call.html?provider=openai", callPages.join());
+const newCall = chat.frames().find((f) => f.url().includes("/call.html"));
+const reach = (address) => newCall.evaluate((a) => fetch(a, { mode: "no-cors" }).then(() => "allowed", () => "blocked"), address);
+check("the new page cannot connect to the old provider", (await reach("https://api.anthropic.com/v1/messages")) === "blocked" && seen.length === anthropicBefore);
+check("the answer is labelled with the model that wrote it, and the earlier ones keep theirs", (await chat.locator(".msg.assistant .who").allInnerTexts()).map((t) => t.toLowerCase()).join() === "claude-sonnet-5-5,claude-sonnet-5-5,claude-sonnet-5-5,gpt-6.2-sol");
+// And back again.
+popup = await popupFrom(chat, () => chat.click("#model"));
+await popup.waitForSelector("#yes");
+check("the router window ticks the model in use", /Spare key · gpt-6\.2-sol/.test(await popup.locator("#choices label:has(input:checked)").innerText()));
+await popup.locator("#choices label", { hasText: "Work key · claude-sonnet-5-5" }).click();
+await Promise.all([popup.waitForEvent("close"), popup.click("#yes")]);
+await chat.locator("#model-text", { hasText: "Work key · claude-sonnet-5-5" }).waitFor();
+// The frame opens the page for the provider as soon as it has the grant. Give it a moment to load.
+const callPagesNow = () => chat.frames().filter((f) => f.url().includes("/call.html")).map((f) => f.url()).join();
+for (let i = 0; i < 50 && callPagesNow() !== base("router") + "/call.html?provider=anthropic"; i++) await chat.waitForTimeout(100);
+check("the model can be changed back, and the page for the other provider is closed again", callPagesNow() === base("router") + "/call.html?provider=anthropic", callPagesNow());
 
 // What the model writes is shown as Markdown, and none of it runs.
 await chat.click("#new-chat");

@@ -4,7 +4,8 @@ import { sites } from "/_sites.js";
 import { PROVIDERS, generate } from "/providers.js";
 import { openCaller } from "/caller.js";
 import { askOver } from "/line.js";
-import { accounts, saveAccount, removeAccount, server, random } from "/store.js";
+import { accounts, removeAccount, server } from "/store.js";
+import { accountForm } from "/account-form.js";
 const $ = (id) => document.getElementById(id);
 const esc = (text) => String(text).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 $("main-link").href = sites.main + "/ai-router/";
@@ -21,23 +22,8 @@ $("try").innerHTML = [
 ].map(([href, name, what]) => `<li><span><a href="${esc(href)}"><strong>${esc(name)}</strong></a><br><span class="small muted">${esc(what)}</span></span></li>`).join("");
 
 // ---- accounts
-const keyed = Object.entries(PROVIDERS).filter(([, p]) => p.needsKey || p.local);
-$("provider").innerHTML = keyed.map(([id, p]) => `<option value="${esc(id)}">${esc(p.name)}</option>`).join("");
-const setFormState = (text, isError = false) => {
-  const el = $("form-state");
-  el.textContent = text;
-  el.className = isError ? "small error" : "small muted";
-};
-const providerChanged = () => {
-  const p = PROVIDERS[$("provider").value];
-  $("provider-note").textContent = p.note;
-  $("key-row").hidden = !p.needsKey;
-  $("key").required = !!p.needsKey;
-  $("models").value = p.models.join(", ");
-  setFormState("");
-};
-$("provider").onchange = providerChanged;
-providerChanged();
+// The form that adds an account is shared with the router window.
+accountForm($("form"), () => { $("add").open = false; drawAccounts(); });
 
 let latestGrants = [];
 
@@ -103,23 +89,6 @@ $("accounts").onclick = async (event) => {
       }
     }
   }
-};
-$("form").onsubmit = (event) => {
-  event.preventDefault();
-  const provider = $("provider").value;
-  const p = PROVIDERS[provider];
-  const label = $("label").value.trim();
-  const key = p.needsKey ? $("key").value.trim() : "";
-  const models = $("models").value.split(",").map((m) => m.trim()).filter(Boolean);
-  if (!label) { setFormState("Enter a name for this account.", true); $("label").focus(); return; }
-  if (p.needsKey && !key) { setFormState("Enter an API key for " + p.name + ".", true); $("key").focus(); return; }
-  if (!models.length) { setFormState("Enter at least one model name.", true); $("models").focus(); return; }
-  saveAccount({ id: random(6), provider, label, key, models });
-  $("form").reset();
-  providerChanged();
-  setFormState("Account saved.");
-  $("add").open = false;
-  drawAccounts();
 };
 
 // ---- grants

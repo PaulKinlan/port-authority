@@ -41,13 +41,7 @@
         <ul class="rows" id="accounts"></ul>
         <details id="add">
           <summary class="button quiet">Add an account</summary>
-          <form class="fields" id="form" novalidate>
-            <div><label for="provider">Provider</label><select id="provider"></select><p class="small muted" id="provider-note"></p></div>
-            <div><label for="label">Name for this account</label><input type="text" id="label" required maxlength="40" placeholder="Work key"></div>
-            <div id="key-row"><label for="key">API key</label><input type="password" id="key" autocomplete="off"></div>
-            <div><label for="models">Models, separated by commas</label><input type="text" id="models" required></div>
-            <div class="actions"><button class="accent">Save</button><span class="small muted" id="form-state" role="status" aria-live="polite"></span></div>
-          </form>
+          <form class="fields" id="form" novalidate></form>
         </details>
       </section>
 
@@ -83,7 +77,7 @@
           <li>The site adds a hidden frame from this address to its page and gives it one end of a <code>MessageChannel</code>. The site keeps the other end. That end is its port.</li>
           <li>When you press the site's button, a small window from this address opens. Only pages from this address can read the accounts you saved here, so the window can list them and the site cannot.</li>
           <li>The frame tells the window which site it is inside. It learned that from the browser, not from anything the site wrote, and the window shows you that address.</li>
-          <li>You choose an account, a model and a limit. The window records your choice on the router's server and gets back an unlock key. It encrypts your API key with that, gives the encrypted copy to the frame, and closes.</li>
+          <li>You choose an account, a model and a limit. You can add an account in that window if you have none, or want another. The window records your choice on the router's server and gets back an unlock key. It encrypts your API key with that, gives the encrypted copy to the frame, and closes.</li>
         </ol>
         <h3>When the site sends a prompt</h3>
         <ol>

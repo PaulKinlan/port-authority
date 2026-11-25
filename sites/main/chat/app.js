@@ -48,7 +48,7 @@ function drawConnection() {
   button.classList.toggle("ask", !!ai && !ready);
   button.disabled = !ai && !unreachable;
   text.textContent = unreachable ? "Router out of reach" : !ai ? "Connecting" : ready ? `${ai.model.account} · ${ai.model.name}` : ai.mode === "window" ? "Connect a model" : "Choose a model";
-  button.title = ready ? "The model this app uses" : "";
+  button.title = ready ? "Choose a different model, or set up another account" : "";
 
   const state = $("connection-state");
   if (unreachable) state.textContent = "This app could not load the router, so it has no model to ask. Check your connection and reload the page.";
@@ -361,7 +361,10 @@ $("scrim").addEventListener("click", closeSide);
 addEventListener("keydown", (event) => { if (event.key === "Escape" && $("app").classList.contains("side-is-open")) { closeSide(); $("side-open").focus(); } });
 
 // The model, and how this app holds the router.
-$("model").addEventListener("click", () => { if (ai && !ai.ready) choose(); else $("connection-dialog").showModal(); });
+// The model button opens the router window: to choose a model the first time, to change
+// it, or to set up another account. What this app is using, and how it holds the router,
+// are under "Model and router" in the menu.
+$("model").addEventListener("click", () => { if (ai) choose(); else $("connection-dialog").showModal(); });
 $("connection-choose").addEventListener("click", async () => { $("connection-dialog").close(); await choose(); });
 $("connection-forget").addEventListener("click", () => { ai.forget(); $("connection-dialog").close(); });
 $("via").addEventListener("change", (event) => {

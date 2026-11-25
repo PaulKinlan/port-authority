@@ -296,6 +296,9 @@ for await (const chunk of stream) {
 
         <h3>Where the ports end up</h3>
         <p>Every port leads to the same worker. The site's page holds one. A worker the site starts can hold another, and so can an iframe from a third site that the page chooses to lend to. None of them can open the router window, and none holds a key. The browser's built-in model cannot be used from a worker, so for that one the frame lends the worker a port and answers on it.</p>
+        <h3 id="change">Changing the model</h3>
+        <p>A site can open the router window again at any time, and it is the same steps. The window shows what the site uses now. You can pick another account or model, or add a new account there and then. The new grant replaces the old one in the frame.</p>
+        <p>If the new model is with a different provider, the frame closes the call page for the old provider and opens one for the new. The address of the call page names the provider, as in <code>/call.html?provider=openai</code>, and the server sends that page with a rule that allows that one provider. So after a change, nothing in the page can reach the old provider. The rule is about the provider's address, not about which of its models is asked for. The model is set by the router's worker from the grant, and a site cannot change it.</p>
         <h3>After a reload</h3>
         <p>The frame stored the grant under the site's address, so the site has its model again with no window. If you pressed Stop in the router, the server has deleted the unlock key. The encrypted key left inside that site can no longer be opened, and the frame deletes it the next time it checks. A site that uses the window has to open it again, and that takes a click.</p>
 
