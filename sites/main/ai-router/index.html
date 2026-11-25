@@ -40,6 +40,22 @@
     svg .frame.call { fill: var(--panel); }
     svg .wire { stroke: var(--ink); stroke-width: 2; fill: none; marker-end: url(#tip); }
     svg .num { fill: var(--ink); } svg .numt { fill: var(--paper); font-weight: 700; font-size: 12px; }
+    svg .store { fill: color-mix(in srgb, var(--yellow) 18%, var(--panel)); stroke: var(--ink); stroke-width: 1.5; }
+    svg .chip { fill: var(--panel); stroke: var(--ink); stroke-width: 1.5; }
+    svg .ghost { opacity: 0.6; } svg .cross { stroke: var(--red); stroke-width: 4; stroke-linecap: round; fill: none; }
+    /* A diagram that can be stepped through, one action at a time. Until someone asks, it shows everything. */
+    .flow { overflow: visible; } .flow-art { overflow-x: auto; }
+    .flow-bar { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; margin-top: 0.8rem; }
+    .flow-now { max-width: 70ch; font-weight: 600; min-height: 4.8em; margin-top: 0.8rem; } .flow-now:empty { display: none; }
+    .flow .hop, .flow [data-from], .flow [data-until] { transition: opacity 0.2s; }
+    .flow[data-at] .hop { opacity: 0.12; } .flow[data-at] .hop.done { opacity: 0.5; } .flow[data-at] .hop.now { opacity: 1; }
+    .flow[data-at] .hop.now .wire { stroke-width: 4.5; }
+    .flow[data-at] .hop.now .num { fill: var(--yellow); stroke: var(--ink); stroke-width: 2; } .flow[data-at] .hop.now .numt { fill: #0f1c3f; }
+    .flow .later { opacity: 0; } .flow .over { opacity: 0.25; }
+    .steps { display: grid; gap: 0.6rem; }
+    .steps h4 { font: 700 var(--step-0)/1.2 var(--body); margin: 0.6rem 0 0; }
+    .steps li.now { background: color-mix(in srgb, var(--yellow) 26%, transparent); box-shadow: 0 0 0 0.4rem color-mix(in srgb, var(--yellow) 26%, transparent); border-radius: 2px; }
+    @media (prefers-reduced-motion: reduce) { .flow .hop, .flow [data-from], .flow [data-until] { transition: none; } }
     table { border-collapse: collapse; font-size: var(--step--1); min-width: 34rem; width: 100%; }
     th, td { text-align: left; padding: 0.55rem 0.8rem 0.55rem 0; border-top: 1px solid var(--line); vertical-align: top; }
     thead th { border-top: 0; }
@@ -144,110 +160,156 @@ for await (const chunk of stream) {
 
       <section id="how">
         <h2>How it works</h2>
-        <figure>
-          <svg viewBox="0 0 880 536" role="img" aria-labelledby="d-title d-desc" xmlns="http://www.w3.org/2000/svg">
-            <title id="d-title">The parts of the AI router and what passes between them</title>
-            <desc id="d-desc">A browser window showing a site contains a hidden iframe from the router, and the iframe contains a worker. A second, smaller browser window is the router's picker. The iframe also contains a second hidden iframe, the call page. The picker passes a grant to the first iframe. The worker asks the router server for permission, then hands the prompt and the locked key to the call page. The call page calls the model provider, and can connect to nothing else.</desc>
-            <defs><marker id="tip" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z" fill="var(--ink)"/></marker></defs>
+        <p>This is the whole pattern, one step at a time. It is written about an AI model, but nothing in it is about AI. It is a way for a service at one address to keep something for you, and let any site use it without ever holding it.</p>
 
-            <!-- the site: a browser window -->
-            <rect class="win" x="10" y="10" width="430" height="446" rx="10"/>
-            <path class="bar" d="M10 46V20a10 10 0 0 1 10-10h410a10 10 0 0 1 10 10v26z"/>
-            <circle cx="28" cy="28" r="5" fill="var(--red)"/><circle cx="44" cy="28" r="5" fill="var(--yellow)"/><circle cx="60" cy="28" r="5" fill="var(--teal)"/>
-            <rect class="addr" x="76" y="17" width="354" height="22" rx="11"/>
-            <text class="url" x="86" y="31" data-url="site" data-max="336"></text>
-            <text x="28" y="80" font-weight="700" font-size="16">A site's page</text>
-            <text x="28" y="100" font-size="13">Holds a port. Sends prompts, reads answers.</text>
+        <h3 id="why">Why it takes a frame and a window</h3>
+        <p>The router keeps your accounts in your browser, in the storage for the router's own address. A site that wants to use one puts a hidden frame from the router in its page. You would expect that frame to read your accounts. It cannot.</p>
+        <p>A browser keeps a frame's storage under two things: the address of the frame, and the site the frame is inside. This is called storage partitioning. The router frame inside a florist's page has storage of its own, and it is empty. The frame inside a library's page has another. Neither is the storage you filled at the router's own address. Browsers do this so that a frame cannot follow you from site to site.</p>
+        <ul>
+          <li><strong>A router window</strong>, open in its own right, can read your accounts. It cannot stay open for ever, and a site cannot reach inside it.</li>
+          <li><strong>A router frame</strong>, inside the site, can stay for as long as the page does, and the site can talk to it. It knows nothing about you.</li>
+        </ul>
+        <p>So the pattern uses both. The window is where you decide. The frame is what the site talks to afterwards. The rest is how a decision gets from the window to the frame without passing through the site.</p>
 
-            <!-- the iframe inside it, and the worker inside that -->
-            <rect class="frame" x="28" y="120" width="394" height="322" rx="6"/>
-            <text x="42" y="143" font-weight="700" font-size="15">Hidden iframe: the router frame</text>
-            <text x="42" y="162" font-size="13">Keeps this site's grant. Starts the worker.</text>
-            <text class="url" x="42" y="180" data-url="frame" data-max="368"></text>
-            <rect class="work" x="42" y="194" width="366" height="96" rx="16"/>
-            <path class="cog" d="M62 208v-5m0 23v-5m-9-6.500h5m8 0h5m-15.400-6.400 3.500 3.500m5.800 5.800 3.500 3.500m0-12.800-3.500 3.500m-5.800 5.800-3.500 3.500"/><circle class="cog" cx="62" cy="214.500" r="4"/>
-            <text x="80" y="219" font-weight="700" font-size="15">Worker</text>
-            <text x="56" y="241" font-size="13">Holds every port. Checks the grant, then</text>
-            <text x="56" y="258" font-size="13">hands each request to the call page.</text>
-            <text class="url" x="56" y="279" data-url="worker" data-max="340"></text>
-
-            <!-- the call page: a second iframe inside the router frame -->
-            <rect class="frame call" x="42" y="318" width="366" height="110" rx="6"/>
-            <text x="56" y="341" font-weight="700" font-size="15">Hidden iframe: the call page</text>
-            <text x="56" y="362" font-size="13">Unlocks the key in memory. The browser lets</text>
-            <text x="56" y="379" font-size="13">it connect to the one provider you chose.</text>
-            <text class="url" x="56" y="408" data-url="call" data-max="340"></text>
-
-            <!-- the picker: a smaller browser window -->
-            <rect class="win" x="510" y="10" width="360" height="150" rx="10"/>
-            <path class="bar" d="M510 46V20a10 10 0 0 1 10-10h340a10 10 0 0 1 10 10v26z"/>
-            <circle cx="528" cy="28" r="5" fill="var(--red)"/><circle cx="544" cy="28" r="5" fill="var(--yellow)"/><circle cx="560" cy="28" r="5" fill="var(--teal)"/>
-            <rect class="addr" x="576" y="17" width="284" height="22" rx="11"/>
-            <text class="url" x="586" y="31" data-url="pick" data-max="266"></text>
-            <text x="528" y="76" font-weight="700" font-size="16">Popup window: the picker</text>
-            <text x="528" y="96" font-size="13">Can read your accounts and keys.</text>
-            <text x="528" y="113" font-size="13">Open only while you choose.</text>
-
-            <!-- the server and the provider -->
-            <rect class="win" x="510" y="210" width="166" height="100" rx="50" ry="18"/>
-            <text x="593" y="248" text-anchor="middle" font-weight="700" font-size="15">Router server</text>
-            <text x="593" y="268" text-anchor="middle" font-size="12">Grant list, usage,</text>
-            <text x="593" y="284" text-anchor="middle" font-size="12">unlock keys. No API keys.</text>
-            <rect class="win" x="617" y="332" width="166" height="100" rx="50" ry="18"/>
-            <text x="700" y="370" text-anchor="middle" font-weight="700" font-size="15">Model provider</text>
-            <text class="url" x="700" y="390" text-anchor="middle">api.anthropic.com</text>
-            <text class="url" x="700" y="406" text-anchor="middle">or another</text>
-
-            <!-- what passes -->
-            <path class="wire" d="M20 96C2 150 14 240 40 250"/>
-            <circle class="num" cx="16" cy="170" r="10"/><text class="numt" x="16" y="174" text-anchor="middle">1</text>
-            <path class="wire" d="M510 120C472 120 462 140 426 146"/>
-            <circle class="num" cx="468" cy="130" r="10"/><text class="numt" x="468" y="134" text-anchor="middle">2</text>
-            <path class="wire" d="M408 240C454 240 472 252 506 256"/>
-            <circle class="num" cx="460" cy="244" r="10"/><text class="numt" x="460" y="248" text-anchor="middle">3</text>
-            <path class="wire" d="M300 290V316"/>
-            <circle class="num" cx="324" cy="303" r="10"/><text class="numt" x="324" y="307" text-anchor="middle">4</text>
-            <path class="wire" d="M408 378C470 378 540 382 613 382"/>
-            <circle class="num" cx="510" cy="380" r="10"/><text class="numt" x="510" y="384" text-anchor="middle">5</text>
-
-            <text x="10" y="484" font-size="13"><tspan font-weight="700">1</tspan> a port for prompts, passed on to the worker   <tspan font-weight="700" dx="14">2</tspan> the grant, on a private port</text>
-            <text x="10" y="504" font-size="13"><tspan font-weight="700">3</tspan> "is this grant still good?" on every request   <tspan font-weight="700" dx="14">4</tspan> the prompt and the locked key, on a port</text>
-            <text x="10" y="524" font-size="13"><tspan font-weight="700">5</tspan> the prompt and the key, to the one provider this page may connect to</text>
-          </svg>
-          <figcaption>Solid boxes with an address bar are browser windows. The dashed boxes are iframes, each with its address inside it. The box with the cog is a worker, with the address of its script. Rounded boxes are servers.</figcaption>
+        <h3 id="usual">The usual way: a hidden frame</h3>
+        <figure class="flow" data-flow data-steps="frame-steps">
+          <div class="flow-art"><svg viewBox="0 0 960 578" role="img" aria-labelledby="f1-title f1-desc" xmlns="http://www.w3.org/2000/svg"><title id="f1-title">The usual way: the site holds the router in a hidden frame</title><desc id="f1-desc">A site's page contains a hidden iframe from the router. The iframe contains a worker, a second hidden iframe called the call page, and storage of its own. A separate popup window from the router can read the router's own storage, where the accounts and API keys are. Sixteen numbered arrows show a port passing from the site to the worker, the window finding the frame and handing it a grant, and a prompt going from the site through the worker and the call page to the model provider. The numbered steps under the diagram say what each arrow is.</desc><defs><marker id="tip" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="14" markerHeight="14" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z" fill="var(--ink)"/></marker></defs><rect class="win" x="10" y="10" width="432" height="556" rx="10"/><path class="bar" d="M10 46V20a10 10 0 0 1 10-10h412a10 10 0 0 1 10 10v26z"/><circle cx="28" cy="28" r="5" fill="var(--red)"/><circle cx="44" cy="28" r="5" fill="var(--yellow)"/><circle cx="60" cy="28" r="5" fill="var(--teal)"/><rect class="addr" x="76" y="17" width="356" height="22" rx="11"/><text class="url" x="86" y="31" data-url="site" data-max="338"></text><text x="28" y="74" font-size="16" font-weight="700">A site's page</text><text x="28" y="94" font-size="13">Holds one end of a port. Never sees the key.</text><rect class="frame" x="44" y="126" width="380" height="426" rx="6"/><text x="58" y="149" font-size="15" font-weight="700">Hidden iframe: the router frame</text><text x="58" y="168" font-size="13">Learns which site it is in from the browser.</text><text class="url" x="58" y="186" data-url="frame" data-max="300"></text><rect class="store" x="58" y="200" width="244" height="100" rx="12"/><text x="72" y="221" font-size="13" font-weight="700">The frame's storage, in this site</text><text x="72" y="238" font-size="12">Kept apart from the router's own.</text><g data-from="9"><rect class="chip" x="72" y="254" width="96" height="30" rx="15"/><text x="120" y="274" text-anchor="middle" font-size="12" font-weight="600">the grant</text></g><g data-from="9"><rect class="chip" x="176" y="254" width="114" height="30" rx="15"/><text x="233" y="274" text-anchor="middle" font-size="12" font-weight="600">encrypted key</text></g><rect class="work" x="58" y="312" width="352" height="92" rx="16"/><path class="cog" d="M78 325.5v-5m0 23v-5m-9-6.5h5m8 0h5m-15.4-6.4 3.5 3.5m5.8 5.8 3.5 3.5m0-12.8-3.5 3.5m-5.8 5.8-3.5 3.5"/><circle class="cog" cx="78" cy="332" r="4"/><text x="96" y="337" font-size="15" font-weight="700">Worker</text><text x="72" y="360" font-size="13">Holds the site's port. Asks the server before</text><text x="72" y="377" font-size="13">every request. Cannot reach a provider.</text><text class="url" x="72" y="394" data-url="worker" data-max="320"></text><rect class="frame call" x="58" y="432" width="352" height="104" rx="6"/><text x="72" y="455" font-size="15" font-weight="700">Hidden iframe: the call page</text><text x="72" y="476" font-size="13">Unlocks the key in memory. The browser lets</text><text x="72" y="493" font-size="13">it connect to the one provider you chose.</text><text class="url" x="72" y="520" data-url="call" data-max="320"></text><g data-until="9"><rect class="win" x="500" y="10" width="450" height="242" rx="10"/><path class="bar" d="M500 46V20a10 10 0 0 1 10-10h430a10 10 0 0 1 10 10v26z"/><circle cx="518" cy="28" r="5" fill="var(--red)"/><circle cx="534" cy="28" r="5" fill="var(--yellow)"/><circle cx="550" cy="28" r="5" fill="var(--teal)"/><rect class="addr" x="566" y="17" width="374" height="22" rx="11"/><text class="url" x="576" y="31" data-url="pick" data-max="356"></text><text x="518" y="74" font-size="16" font-weight="700">Popup window: the router window</text><text x="518" y="94" font-size="13">Open only while you choose.</text><rect class="store" x="518" y="126" width="414" height="110" rx="12"/><text x="532" y="149" font-size="13" font-weight="700">The router's own storage</text><text x="532" y="167" font-size="12">Only a router page in a window of its own can read it.</text><g><rect class="chip" x="532" y="186" width="150" height="30" rx="15"/><text x="607" y="206" text-anchor="middle" font-size="12" font-weight="600">your accounts</text></g><g><rect class="chip" x="692" y="186" width="150" height="30" rx="15"/><text x="767" y="206" text-anchor="middle" font-size="12" font-weight="600">your API keys</text></g></g><rect class="win" x="560" y="300" width="210" height="112" rx="50" ry="18"/><text x="665" y="340" font-size="15" font-weight="700" text-anchor="middle">Router server</text><text x="665" y="360" font-size="12" text-anchor="middle">Grants, usage, unlock keys.</text><text x="665" y="376" font-size="12" text-anchor="middle">No API keys. No prompts.</text><rect class="win" x="560" y="452" width="210" height="104" rx="50" ry="18"/><text x="665" y="492" font-size="15" font-weight="700" text-anchor="middle">Model provider</text><text class="url" x="665" y="512" text-anchor="middle">api.anthropic.com</text><text class="url" x="665" y="528" text-anchor="middle">or another</text><g class="hop" data-step="1"><path class="wire" d="M372 96V124"/><circle class="num" cx="394" cy="108" r="11"/><text class="numt" x="394" y="112" text-anchor="middle">1</text></g><g class="hop" data-step="2"><path class="wire" d="M372 150V310"/><circle class="num" cx="394" cy="176" r="11"/><text class="numt" x="394" y="180" text-anchor="middle">2</text></g><g class="hop" data-step="3"><path class="wire" d="M442 60H498"/><circle class="num" cx="470" cy="42" r="11"/><text class="numt" x="470" y="46" text-anchor="middle">3</text></g><g class="hop" data-step="4"><path class="wire" d="M500 96C466 96 458 146 428 146"/><circle class="num" cx="478" cy="102" r="11"/><text class="numt" x="478" y="106" text-anchor="middle">4</text></g><g class="hop" data-step="5"><path class="wire" d="M424 172C458 172 466 126 498 126"/><circle class="num" cx="446" cy="180" r="11"/><text class="numt" x="446" y="184" text-anchor="middle">5</text></g><g class="hop" data-step="6"><path class="wire" d="M620 252V298"/><circle class="num" cx="598" cy="275" r="11"/><text class="numt" x="598" y="279" text-anchor="middle">6</text></g><g class="hop" data-step="7"><path class="wire" d="M700 298V254"/><circle class="num" cx="722" cy="275" r="11"/><text class="numt" x="722" y="279" text-anchor="middle">7</text></g><g class="hop" data-step="8"><circle class="num" cx="716" cy="90" r="11"/><text class="numt" x="716" y="94" text-anchor="middle">8</text><text x="732" y="94" font-size="12">encrypts your key</text></g><g class="hop" data-step="9"><path class="wire" d="M500 228C440 228 380 262 304 262"/><circle class="num" cx="462" cy="222" r="11"/><text class="numt" x="462" y="226" text-anchor="middle">9</text></g><g class="hop" data-step="10"><circle class="num" cx="862" cy="90" r="11"/><text class="numt" x="862" y="94" text-anchor="middle">10</text><text x="878" y="94" font-size="12">closes</text></g><g class="hop" data-step="11"><path class="wire" d="M26 100C20 190 22 330 56 356"/><circle class="num" cx="24" cy="236" r="11"/><text class="numt" x="24" y="240" text-anchor="middle">11</text></g><g class="hop" data-step="12"><path class="wire" d="M410 338H558"/><circle class="num" cx="486" cy="324" r="11"/><text class="numt" x="486" y="328" text-anchor="middle">12</text></g><g class="hop" data-step="13"><path class="wire" d="M560 378H412"/><circle class="num" cx="486" cy="392" r="11"/><text class="numt" x="486" y="396" text-anchor="middle">13</text></g><g class="hop" data-step="14"><path class="wire" d="M226 404V430"/><circle class="num" cx="248" cy="417" r="11"/><text class="numt" x="248" y="421" text-anchor="middle">14</text></g><g class="hop" data-step="15"><path class="wire" d="M410 470C480 470 490 496 558 496"/><circle class="num" cx="478" cy="462" r="11"/><text class="numt" x="478" y="466" text-anchor="middle">15</text></g><g class="hop" data-step="16"><path class="wire" d="M560 528C490 528 480 508 412 508"/><circle class="num" cx="486" cy="534" r="11"/><text class="numt" x="486" y="538" text-anchor="middle">16</text></g></svg></div>
+          <p class="flow-now" role="status" aria-live="polite"></p>
+          <div class="flow-bar">
+            <button type="button" class="tiny" data-go="start">Step through it</button>
+            <button type="button" class="tiny quiet" data-go="back" hidden>Back</button>
+            <button type="button" class="tiny" data-go="next" hidden>Next</button>
+            <button type="button" class="tiny quiet" data-go="all" hidden>Show it all</button>
+          </div>
+          <figcaption>Solid boxes with an address bar are browser windows. Dashed boxes are iframes, each with its address inside it. The box with the cog is a worker. Rounded boxes are servers. Shaded boxes are storage in your browser. Each numbered arrow is one step in the list below.</figcaption>
         </figure>
+        <div class="steps" id="frame-steps">
+          <h4>When the site's page loads</h4>
+          <ol>
+            <li data-step="1">The site's script adds a hidden iframe from the router's address and posts it one end of a <code>MessageChannel</code>. The site keeps the other end. That end is the site's port.</li>
+            <li data-step="2">The frame starts a worker and passes the port on to it. From here the site's page talks to the worker directly.</li>
+          </ol>
+          <h4>When you choose</h4>
+          <ol start="3">
+            <li data-step="3">You click a button on the site, and the site opens the router window. It is a normal top-level window at the router's address, so it can read the accounts you saved there.</li>
+            <li data-step="4">The window has to find the router frame inside the page that opened it. It posts a port to each of that page's frames, and names the router's address as the only address allowed to receive it. The browser drops the message for every frame that is not a router page. The site cannot take the port and cannot listen in.</li>
+            <li data-step="5">The frame answers on that port with the address of the site it is inside. It learned that from the browser when the site said hello, not from anything the site wrote. The window shows you that address.</li>
+            <li data-step="6">You choose an account, a model and a limit. The window sends your choice to the router's server.</li>
+            <li data-step="7">The server records the grant and returns an unlock key. It keeps a copy of the unlock key. It is never sent your API key.</li>
+            <li data-step="8">The window encrypts your API key with the unlock key.</li>
+            <li data-step="9">The window posts the grant and the encrypted key to the frame, over the private port. The frame keeps them in its storage for this site.</li>
+            <li data-step="10">The window closes. Nothing of the router is on screen from here on.</li>
+          </ol>
+          <h4>Every prompt</h4>
+          <ol start="11">
+            <li data-step="11">The site posts a prompt on its port, with a new port for the answer. It arrives in the worker.</li>
+            <li data-step="12">The worker asks the router's server whether the grant is still good.</li>
+            <li data-step="13">The server counts the request and returns the unlock key. If you pressed Stop, or the limit is used up, it refuses. Then the encrypted key in the frame can no longer be opened.</li>
+            <li data-step="14">The worker posts the prompt, the encrypted key and the unlock key to the call page. That is a second hidden iframe inside the frame. It is served with a rule that lets it connect to the provider you chose and to nothing else.</li>
+            <li data-step="15">The call page decrypts the API key in memory and sends the prompt to the provider, straight from your browser.</li>
+            <li data-step="16">The answer comes back the same way, a few words at a time: from the provider to the call page, to the worker, and down the reply port to the site.</li>
+          </ol>
+        </div>
 
-        <h3>The first time a site asks</h3>
-        <ol>
-          <li>The site's script adds a hidden iframe from the router's address and posts it one end of a <code>MessageChannel</code>. The site keeps the other end.</li>
-          <li>The frame starts a worker and posts that port on to it. From here the site's page talks to the worker directly. The frame only keeps the grant in storage, because a worker has no <code>localStorage</code>.</li>
-          <li>On a click, the script opens the picker window. The picker is a normal top-level window at the router's address, so it can read the accounts you saved there.</li>
-          <li>The picker has to find the router frame inside the page that opened it. It posts a message to each of that page's frames with the router's address as the required target origin. The browser drops the message for any frame that is not a router page. The message carries a port, so the picker and the frame now have a line the site cannot listen to.</li>
-          <li>The frame tells the picker which site it is inside. The frame learned that from the browser when the site said hello, not from anything the site wrote. The picker shows you that address.</li>
-          <li>You choose. The picker records the grant on the router server and gets back an unlock key. It encrypts your API key with it and posts the grant and the encrypted key to the frame over the private port. The frame stores them and passes them to the worker. The picker closes.</li>
-        </ol>
-        <h3>Every prompt</h3>
-        <ol>
-          <li>The site posts the prompt on its port, with a new port for the answer. It arrives in the worker.</li>
-          <li>The worker asks the router server whether the grant is still good. The server counts the request and returns the unlock key, or refuses.</li>
-          <li>The worker posts the prompt, the encrypted key and the unlock key to the call page. That is a second hidden iframe inside the router frame, at <code>/call.html?provider=anthropic</code> for an Anthropic account. The frame opened it when you chose, and gave the worker a port to it.</li>
-          <li>The call page decrypts the API key in memory, calls the provider directly from the browser, and posts each piece of the answer back. The worker passes each piece to the site's reply port.</li>
-          <li>The site can post <code>cancel</code> on the reply port to stop the request.</li>
-        </ol>
+        <h3 id="window">When a site cannot have the frame</h3>
+        <p>Some sites cannot put a frame from another address in their pages. Their own Content-Security-Policy forbids it. For those, the router window does the frame's job, and it has to stay open. The frame is better when a site can have it: nothing has to stay open, and a reload needs no click. The <a href="/chat/">chat app</a> can be switched to either way, so you can see both.</p>
+        <figure class="flow" data-flow data-steps="window-steps">
+          <div class="flow-art"><svg viewBox="0 0 960 560" role="img" aria-labelledby="f2-title f2-desc" xmlns="http://www.w3.org/2000/svg"><title id="f2-title">When the frame cannot load: the router window stays open</title><desc id="f2-desc">A site's page has no router frame in it: the browser would not load one. A router window stays open beside it. The window contains the worker, the call page and the router's own storage. Fifteen numbered arrows show the site passing a port to the window, the window recording a grant, and a prompt going from the site through the worker and the call page inside the window to the model provider. The numbered steps under the diagram say what each arrow is.</desc><rect class="win" x="10" y="10" width="290" height="336" rx="10"/><path class="bar" d="M10 46V20a10 10 0 0 1 10-10h270a10 10 0 0 1 10 10v26z"/><circle cx="28" cy="28" r="5" fill="var(--red)"/><circle cx="44" cy="28" r="5" fill="var(--yellow)"/><circle cx="60" cy="28" r="5" fill="var(--teal)"/><rect class="addr" x="76" y="17" width="214" height="22" rx="11"/><text class="url" x="86" y="31" data-url="site" data-max="196"></text><text x="28" y="74" font-size="16" font-weight="700">A site's page</text><text x="28" y="94" font-size="13">Its own rules allow no frames</text><text x="28" y="111" font-size="13">from other addresses.</text><g class="ghost"><rect class="frame" x="28" y="232" width="254" height="96" rx="6"/><text x="42" y="258" font-size="15" font-weight="700">The router frame</text><text x="42" y="279" font-size="13">The browser will not load it.</text><path class="cross" d="M210 292l44 24m0-24l-44 24"/></g><rect class="win" x="400" y="10" width="330" height="540" rx="10"/><path class="bar" d="M400 46V20a10 10 0 0 1 10-10h310a10 10 0 0 1 10 10v26z"/><circle cx="418" cy="28" r="5" fill="var(--red)"/><circle cx="434" cy="28" r="5" fill="var(--yellow)"/><circle cx="450" cy="28" r="5" fill="var(--teal)"/><rect class="addr" x="466" y="17" width="254" height="22" rx="11"/><text class="url" x="476" y="31" data-url="pickwindow" data-max="236"></text><text x="418" y="74" font-size="16" font-weight="700">The router window</text><text x="418" y="94" font-size="13">Stays open while the site uses the model.</text><rect class="work" x="418" y="150" width="294" height="92" rx="16"/><path class="cog" d="M438 163.5v-5m0 23v-5m-9-6.5h5m8 0h5m-15.4-6.4 3.5 3.5m5.8 5.8 3.5 3.5m0-12.8-3.5 3.5m-5.8 5.8-3.5 3.5"/><circle class="cog" cx="438" cy="170" r="4"/><text x="456" y="175" font-size="15" font-weight="700">Worker</text><text x="432" y="200" font-size="13">Holds the site's port. Asks the server</text><text x="432" y="217" font-size="13">before every request.</text><rect class="frame call" x="418" y="272" width="294" height="100" rx="6"/><text x="432" y="295" font-size="15" font-weight="700">Hidden iframe: the call page</text><text x="432" y="316" font-size="13">Unlocks the key. May connect to</text><text x="432" y="333" font-size="13">the one provider you chose.</text><text class="url" x="432" y="358" data-url="call" data-max="266"></text><rect class="store" x="418" y="404" width="294" height="130" rx="12"/><text x="432" y="427" font-size="13" font-weight="700">The router's own storage</text><g><rect class="chip" x="432" y="440" width="128" height="30" rx="15"/><text x="496" y="460" text-anchor="middle" font-size="12" font-weight="600">your accounts</text></g><g><rect class="chip" x="568" y="440" width="130" height="30" rx="15"/><text x="633" y="460" text-anchor="middle" font-size="12" font-weight="600">your API keys</text></g><g data-from="8"><rect class="chip" x="432" y="486" width="240" height="30" rx="15"/><text x="552" y="506" text-anchor="middle" font-size="12" font-weight="600">this site's grant, encrypted key</text></g><rect class="win" x="780" y="130" width="170" height="120" rx="50" ry="18"/><text x="865" y="172" font-size="15" font-weight="700" text-anchor="middle">Router server</text><text x="865" y="192" font-size="12" text-anchor="middle">Grants, usage,</text><text x="865" y="208" font-size="12" text-anchor="middle">unlock keys.</text><rect class="win" x="780" y="282" width="170" height="110" rx="50" ry="18"/><text x="865" y="322" font-size="15" font-weight="700" text-anchor="middle">Model provider</text><text class="url" x="865" y="342" text-anchor="middle">api.anthropic.com</text><text class="url" x="865" y="358" text-anchor="middle">or another</text><g class="hop" data-step="1"><circle class="num" cx="190" cy="304" r="11"/><text class="numt" x="190" y="308" text-anchor="middle">1</text></g><g class="hop" data-step="2"><path class="wire" d="M300 60H398"/><circle class="num" cx="350" cy="60" r="11"/><text class="numt" x="350" y="64" text-anchor="middle">2</text></g><g class="hop" data-step="3"><path class="wire" d="M400 92H302"/><circle class="num" cx="350" cy="92" r="11"/><text class="numt" x="350" y="96" text-anchor="middle">3</text></g><g class="hop" data-step="4"><path class="wire" d="M300 124H398"/><circle class="num" cx="350" cy="124" r="11"/><text class="numt" x="350" y="128" text-anchor="middle">4</text></g><g class="hop" data-step="5"><path class="wire" d="M690 104V148"/><circle class="num" cx="668" cy="126" r="11"/><text class="numt" x="668" y="130" text-anchor="middle">5</text></g><g class="hop" data-step="6"><path class="wire" d="M730 96C790 96 830 100 830 128"/><circle class="num" cx="782" cy="110" r="11"/><text class="numt" x="782" y="114" text-anchor="middle">6</text></g><g class="hop" data-step="7"><path class="wire" d="M880 130C880 50 800 62 732 62"/><circle class="num" cx="852" cy="64" r="11"/><text class="numt" x="852" y="68" text-anchor="middle">7</text></g><g class="hop" data-step="8"><circle class="num" cx="692" cy="501" r="11"/><text class="numt" x="692" y="505" text-anchor="middle">8</text></g><g class="hop" data-step="9"><path class="wire" d="M300 196H416"/><circle class="num" cx="350" cy="196" r="11"/><text class="numt" x="350" y="200" text-anchor="middle">9</text></g><g class="hop" data-step="10"><path class="wire" d="M712 180H778"/><circle class="num" cx="746" cy="180" r="11"/><text class="numt" x="746" y="184" text-anchor="middle">10</text></g><g class="hop" data-step="11"><path class="wire" d="M780 212H714"/><circle class="num" cx="746" cy="212" r="11"/><text class="numt" x="746" y="216" text-anchor="middle">11</text></g><g class="hop" data-step="12"><path class="wire" d="M565 242V270"/><circle class="num" cx="587" cy="256" r="11"/><text class="numt" x="587" y="260" text-anchor="middle">12</text></g><g class="hop" data-step="13"><path class="wire" d="M712 306H778"/><circle class="num" cx="746" cy="306" r="11"/><text class="numt" x="746" y="310" text-anchor="middle">13</text></g><g class="hop" data-step="14"><path class="wire" d="M780 344H714"/><circle class="num" cx="746" cy="344" r="11"/><text class="numt" x="746" y="348" text-anchor="middle">14</text></g><g class="hop" data-step="15"><circle class="num" cx="706" cy="74" r="11"/><text class="numt" x="706" y="78" text-anchor="middle">15</text><text x="690" y="78" font-size="12" text-anchor="end">when it closes</text></g></svg></div>
+          <p class="flow-now" role="status" aria-live="polite"></p>
+          <div class="flow-bar">
+            <button type="button" class="tiny" data-go="start">Step through it</button>
+            <button type="button" class="tiny quiet" data-go="back" hidden>Back</button>
+            <button type="button" class="tiny" data-go="next" hidden>Next</button>
+            <button type="button" class="tiny quiet" data-go="all" hidden>Show it all</button>
+          </div>
+          <figcaption>Solid boxes with an address bar are browser windows. Dashed boxes are iframes, each with its address inside it. The box with the cog is a worker. Rounded boxes are servers. Shaded boxes are storage in your browser. Each numbered arrow is one step in the list below.</figcaption>
+        </figure>
+        <div class="steps" id="window-steps">
+          <h4>When the site's page loads</h4>
+          <ol>
+            <li data-step="1">The site's script adds the router frame, and the browser refuses to load it. <code>connect()</code> hears of it from the browser's own report, or from the frame never answering, and sets <code>ai.mode</code> to <code>"window"</code>.</li>
+          </ol>
+          <h4>When you connect</h4>
+          <ol start="2">
+            <li data-step="2">You click a button on the site, and the site opens the router window.</li>
+            <li data-step="3">The window tells the page that opened it that it is ready. The message carries nothing.</li>
+            <li data-step="4">The site posts the window one end of a <code>MessageChannel</code>, and names the router's address as the only address allowed to receive it. The site keeps the other end.</li>
+            <li data-step="5">The window starts the same worker the frame would have, and passes the port on to it. The window knows which site this is, because the browser says where the port came from.</li>
+            <li data-step="6">You choose an account, a model and a limit. The window sends your choice to the router's server.</li>
+            <li data-step="7">The server records the grant and returns an unlock key.</li>
+            <li data-step="8">The window encrypts your API key and keeps the grant itself, in the router's own storage. It does not close.</li>
+          </ol>
+          <h4>Every prompt</h4>
+          <ol start="9">
+            <li data-step="9">The site posts a prompt on its port. It arrives in the worker, inside the window.</li>
+            <li data-step="10">The worker asks the router's server whether the grant is still good.</li>
+            <li data-step="11">The server counts the request and returns the unlock key, or refuses.</li>
+            <li data-step="12">The worker passes the prompt, the encrypted key and the unlock key to the call page, inside the window.</li>
+            <li data-step="13">The call page decrypts the API key in memory and sends the prompt to the provider.</li>
+            <li data-step="14">The answer comes back the same way, and down the reply port to the site.</li>
+          </ol>
+          <h4>When the window closes</h4>
+          <ol start="15">
+            <li data-step="15">The site is disconnected. A request that was waiting fails with an error the site can read. The grant is still in the router's storage, so the next time the site opens the window it connects at once, with nothing to choose.</li>
+          </ol>
+        </div>
+
+        <h3 id="checks">What each check is for</h3>
+        <p>The site is not trusted, and it sits between you and the router the whole time. Each of these stops one thing a site could try.</p>
+        <div class="scroll"><table>
+          <thead><tr><th>The check</th><th>Who makes it</th><th>What it stops</th></tr></thead>
+          <tbody>
+            <tr><td>The window posts its port with the router's address as the only allowed receiver</td><td>The browser, for the window</td><td>A site putting a frame of its own where the router frame should be, and being handed the grant</td></tr>
+            <tr><td>The site never makes the line between the window and the frame</td><td>The design</td><td>A site keeping one end of that line and reading what crosses it</td></tr>
+            <tr><td>The frame takes a grant only from a page at the router's address</td><td>The frame, from <code>event.origin</code></td><td>A site handing the frame a grant it wrote itself</td></tr>
+            <tr><td>The frame takes its hello only from the page it is inside, and reads that page's address from the browser</td><td>The frame, from <code>event.source</code> and <code>event.origin</code></td><td>A site claiming to be another site, to use that site's grant</td></tr>
+            <tr><td>The window shows you that address before you choose</td><td>You</td><td>Allowing a site you did not mean to</td></tr>
+            <tr><td>The key in the frame is encrypted, and the server holds what opens it</td><td>The server, on every request</td><td>A grant that cannot be stopped. Stop works from any tab, though the frame's storage cannot be reached from outside the site</td></tr>
+            <tr><td>The call page may connect to one provider. Every other router page may connect only to the router</td><td>The browser, from a <code>Content-Security-Policy</code> header</td><td>A changed or injected router script sending your key or your prompt somewhere else</td></tr>
+            <tr><td>The call page takes a port only from a router page it is inside</td><td>The call page</td><td>A site framing the call page itself and asking it to make calls</td></tr>
+            <tr><td>Everything the site can do is a message on a port</td><td>The design</td><td>A site reading the key. There is no message that returns it</td></tr>
+          </tbody>
+        </table></div>
+
+        <h3 id="messages">The messages</h3>
+        <p>There are few of them, so that the whole of it can be read. A message between windows is found by its <code>router</code> field. A message on a port is found by its <code>t</code> field.</p>
+        <div class="scroll"><table>
+          <thead><tr><th>From, to</th><th>The message</th><th>What it is for</th></tr></thead>
+          <tbody>
+            <tr><td>Site to frame</td><td><code>{ router: "hello" }</code> and a port</td><td>The site's port. Sent with the router's address as the target</td></tr>
+            <tr><td>Frame to site</td><td><code>{ router: "frame-ready" }</code></td><td>The frame loaded. A site that hears nothing uses the window</td></tr>
+            <tr><td>Window to each frame of the site</td><td><code>{ router: "picker" }</code> and a port</td><td>Finds the router frame. Only a router page receives it</td></tr>
+            <tr><td>Frame to window, on that port</td><td><code>{ t: "site", site, current }</code></td><td>Which site this is, and what it uses now</td></tr>
+            <tr><td>Window to frame, on that port</td><td><code>{ t: "grant", grant, info }</code></td><td>The grant and the encrypted key. The frame answers <code>{ t: "stored" }</code></td></tr>
+            <tr><td>Window to site</td><td><code>{ router: "picker-ready" }</code></td><td>With no frame: the window is ready for a port</td></tr>
+            <tr><td>Site to window</td><td><code>{ router: "hello" }</code> and a port</td><td>With no frame: the site's port, sent to the window</td></tr>
+            <tr><td>Window to site</td><td><code>{ router: "picked", ok }</code>, <code>{ router: "closing" }</code></td><td>With no frame: you chose, or the window is going</td></tr>
+            <tr><td>Site to window</td><td><code>{ router: "choose" }</code>, <code>{ router: "bye" }</code></td><td>With no frame: ask you to choose again, or the site's page is going</td></tr>
+            <tr><td>Site to worker, on its port</td><td><code>{ t: "prompt", system, messages, maxTokens }</code> and a reply port</td><td>One request</td></tr>
+            <tr><td>Worker to site, on the reply port</td><td><code>{ t: "text", text }</code>, then <code>{ t: "done", usage, left }</code> or <code>{ t: "error", code, message }</code></td><td>The answer, in pieces. The site can post <code>{ t: "cancel" }</code> to stop it</td></tr>
+            <tr><td>Worker to site, on its port</td><td><code>{ t: "state", ready, model, left, expires }</code></td><td>Sent whenever the grant changes, and when asked with <code>{ t: "state" }</code></td></tr>
+            <tr><td>Site to worker, on its port</td><td><code>{ t: "lend", n, requests }</code></td><td>Another port into the same grant, with a limit. Answered with <code>{ t: "lent", n }</code> and the port</td></tr>
+            <tr><td>Site to worker, on its port</td><td><code>{ t: "api", n }</code></td><td>A port that speaks the Chat Completions API. Answered with <code>{ t: "api", n }</code> and the port</td></tr>
+            <tr><td>Site to worker, on its port</td><td><code>{ t: "forget" }</code></td><td>Drop this site's grant from this browser</td></tr>
+          </tbody>
+        </table></div>
+
         <h3>Where the ports end up</h3>
         <p>Every port leads to the same worker. The site's page holds one. A worker the site starts can hold another, and so can an iframe from a third site that the page chooses to lend to. None of them can open the router window, and none holds a key. The browser's built-in model cannot be used from a worker, so for that one the frame lends the worker a port and answers on it.</p>
-        <h3>When a site cannot have the frame</h3>
-        <p>Some sites cannot put a frame from another address in their pages. Their own Content-Security-Policy forbids it. For those, the router window does the frame's job.</p>
-        <ol>
-          <li><code>connect()</code> adds the frame as usual. The frame says it is there the moment it loads. If the browser reports that the site's policy blocked it, or nothing answers, <code>connect()</code> gives up on the frame and sets <code>ai.mode</code> to <code>"window"</code>.</li>
-          <li>On a click, the site opens the router window. The window says it is ready, and the site posts it one end of a <code>MessageChannel</code>, with the router's address as the only address allowed to receive it.</li>
-          <li>The window learns which site this is from the browser, as the frame would have. It starts the same worker, opens the same call page, and stays open. Prompts go from the site to the worker inside the window.</li>
-          <li>Closing the window disconnects the site. A request that was waiting fails with an error the site can read. The grant is kept in the window's own storage, so the next time the site opens the window it connects at once, with nothing to choose.</li>
-        </ol>
-        <p>The frame is better when a site can have it. Nothing has to stay open, and a reload needs no click. The <a href="/chat/">chat app</a> can be switched to either way, so you can see both.</p>
-        <p>The site never makes the line between the window and the frame. In the usual way, the window finds the frame itself, by posting to each frame of the page that opened it and naming the router's address as the target. A site that made that line could keep one end of it, and be handed the grant.</p>
         <h3>After a reload</h3>
-        <p>The frame stored the grant under the site's address, so the site has its model again with no window. A browser gives a frame inside another site storage of its own, so the frame cannot read the accounts you saved at the router's address. That is why a window has to hand it the grant. If you pressed Stop in the router, the server has deleted the unlock key. The encrypted key left inside that site can no longer be opened, and the frame deletes it the next time it checks.</p>
+        <p>The frame stored the grant under the site's address, so the site has its model again with no window. If you pressed Stop in the router, the server has deleted the unlock key. The encrypted key left inside that site can no longer be opened, and the frame deletes it the next time it checks. A site that uses the window has to open it again, and that takes a click.</p>
+
+        <h3 id="reuse">Using the pattern for something else</h3>
+        <p>The same parts fit any service that keeps something for a person and lets sites use it without holding it: a signing key, a wallet, an address book, a way to pay. These are the parts.</p>
+        <ol>
+          <li>A page at the service's own address, where the person keeps the thing. Here it is the list of accounts.</li>
+          <li>A hidden frame that a site embeds. It keeps one grant, for that one site, and nothing else about the person.</li>
+          <li>A window, opened by a click, where the person decides. It finds the frame by naming the service's address as the target, and hands the grant to the frame directly.</li>
+          <li>A port from the site to a worker inside the frame. Everything the site may do is a message on that port, and no message returns the thing itself.</li>
+          <li>A record of each grant on a server, with something the grant needs on every use. That is what lets a person stop a site from anywhere.</li>
+          <li>The window as the way through, for a site that cannot have the frame.</li>
+        </ol>
+        <p>It is built from port patterns described elsewhere on this site: <a href="/patterns/introduce/">introducing two parties and stepping away</a>, and <a href="/patterns/attenuate/">handing on a port that can do less</a>. The code is short enough to read: <code>router.js</code> is what a site loads, <code>host.js</code> is the job the frame and the window both do, and <code>pick.js</code> is the window.</p>
       </section>
 
       <section id="who">
@@ -293,7 +355,7 @@ for await (const chunk of stream) {
 
     // Fill in the real addresses, in the diagram and the code, trimming gracefully
     // if a very long deployment hostname would ever overflow its SVG box.
-    const urls = { site: host(location.origin) + "/ai-router/", frame: host(sites.router) + "/frame.html", worker: host(sites.router) + "/frame-worker.js", pick: host(sites.router) + "/pick.html", call: host(sites.router) + "/call.html?provider=anthropic" };
+    const urls = { site: host(location.origin) + "/ai-router/", frame: host(sites.router) + "/frame.html", worker: host(sites.router) + "/frame-worker.js", pick: host(sites.router) + "/pick.html", call: host(sites.router) + "/call.html?provider=anthropic", pickwindow: host(sites.router) + "/pick.html#window" };
     for (const el of document.querySelectorAll("[data-url]")) {
       const full = urls[el.dataset.url];
       el.textContent = full;
@@ -404,6 +466,7 @@ ai.left    <span class="c">// requests left on this site's grant</span>`;
       log("Could not connect to the AI router: " + error.message);
     }
   </script>
+  <script type="module" src="/ai-router/flow.js"></script>
   <script type="module" src="/refs.js"></script>
 </body>
 </html>

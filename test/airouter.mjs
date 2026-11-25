@@ -278,6 +278,25 @@ check("the explainer page's own demo gets an answer", /A note from the stand-in\
 const mainFrame = main.frames().find((f) => f.url().includes("/frame.html"));
 const mainKept = await mainFrame.evaluate(() => Object.keys(localStorage).join(" "));
 console.log(`note in this browser the frame inside ${base("hub")} ${/router\\.accounts/.test(mainKept) ? "can see the storage of the router's own pages" : "has storage of its own"}`);
+
+// The two diagrams on the explainer: every numbered arrow has a step written under it, and
+// the diagram can be stepped through one arrow at a time. Nothing moves until it is asked to.
+for (const [id, count] of [["frame-steps", 16], ["window-steps", 15]]) {
+  const figure = main.locator(`figure[data-flow][data-steps="${id}"]`);
+  const hops = await figure.locator(".hop").evaluateAll((all) => all.map((hop) => Number(hop.dataset.step)));
+  const steps = await main.locator(`#${id} li[data-step]`).evaluateAll((all) => all.map((li) => Number(li.dataset.step)));
+  const inOrder = Array.from({ length: count }, (_, i) => i + 1).join();
+  check(`the ${id} diagram has one numbered arrow for each of its ${count} steps`, hops.join() === inOrder && steps.join() === inOrder, hops.join());
+  check("it shows the whole picture until it is asked to step", (await figure.getAttribute("data-at")) === null && (await figure.locator(".hop.now").count()) === 0 && (await figure.locator(".flow-now").innerText()) === "");
+  await figure.locator('[data-go="start"]').click();
+  await figure.locator('[data-go="next"]').click();
+  await figure.locator('[data-go="next"]').click();
+  check("stepping shows one arrow at a time, with its words", (await figure.getAttribute("data-at")) === "3" && (await figure.locator(".hop.now").count()) === 1 && (await figure.locator(".hop.now").getAttribute("data-step")) === "3"
+    && (await figure.locator(".hop.done").count()) === 2 && new RegExp(`^Step 3 of ${count}\\. `).test(await figure.locator(".flow-now").innerText()) && (await main.locator(`#${id} li.now`).getAttribute("data-step")) === "3", await figure.locator(".flow-now").innerText());
+  await figure.locator('[data-go="all"]').click();
+  check("and it can be put back to the whole picture", (await figure.getAttribute("data-at")) === null && (await figure.locator('[data-go="start"]').isVisible()));
+}
+check("the diagrams show this deployment's own addresses", (await main.locator('figure[data-steps="window-steps"] [data-url="pickwindow"]').textContent()).endsWith("/pick.html#window"));
 await main.close();
 
 // Neither key reached a site, in anything the three sites were sent.
