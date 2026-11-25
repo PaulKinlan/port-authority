@@ -16,7 +16,8 @@ export function me() {
   return who;
 }
 
-export const accounts = () => read("router.accounts", []);
+// An account saved for a provider the router no longer has is left out.
+export const accounts = () => read("router.accounts", []).filter((a) => a && Object.hasOwn(PROVIDERS, a.provider));
 export function saveAccount(account) {
   const all = accounts().filter((a) => a.id !== account.id);
   all.push(account);
@@ -29,7 +30,6 @@ export async function choices() {
   const out = [];
   for (const a of accounts()) for (const model of a.models) out.push({ key: a.id + "|" + model, label: a.label, provider: a.provider, providerName: PROVIDERS[a.provider].name, model, secretKey: a.key || "" });
   if (await hasBuiltin()) out.push({ key: "builtin", label: "This browser", provider: "builtin", providerName: PROVIDERS.builtin.name, model: "built-in", note: "Runs on this device. Free." });
-  out.push({ key: "practice", label: "Practice model", provider: "practice", providerName: PROVIDERS.practice.name, model: PROVIDERS.practice.models[0], note: "Not a real model. No key, no network call." });
   return out;
 }
 

@@ -45,7 +45,7 @@ function drawAccounts() {
   $("accounts").innerHTML = all.length ? all.map((a) => `<li data-id="${esc(a.id)}">
     <span><strong>${esc(a.label)}</strong><br><span class="small muted">${esc(PROVIDERS[a.provider].name)} · ${esc(a.models.join(", "))} ${a.key ? " · key ends " + esc(a.key.slice(-4)) : ""}</span><br><span class="small" data-result></span></span>
     <span class="actions"><button class="tiny quiet" data-test>Test</button><button class="tiny quiet" data-remove>Remove</button></span></li>`).join("")
-    : `<li class="muted">None yet. Without one you can still use the practice model, which is not a real model.</li>`;
+    : `<li class="muted">None yet. A site can only use an account you add here.</li>`;
 }
 drawAccounts();
 $("accounts").onclick = async (event) => {

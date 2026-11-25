@@ -78,7 +78,7 @@ async function* answer(request, budget, signal) {
     const pieces = grant.provider === "builtin" ? askOver(builtin, wanted, signal)
       : PROVIDERS[grant.provider] && PROVIDERS[grant.provider].kind
         ? askOver(await callerFor(grant.provider), { account: { provider: grant.provider, model: grant.model, wrap: allowed.wrap, sealed: grant.sealed }, ask: wanted }, signal)
-        : generate({ provider: grant.provider, model: grant.model }, wanted, signal);   // the practice model: no network call
+        : generate({ provider: grant.provider, model: grant.model }, wanted, signal);   // not a provider the router knows: generate() says so
     for (;;) {
       const { value, done } = await pieces.next();
       if (done) { usage = value; break; }

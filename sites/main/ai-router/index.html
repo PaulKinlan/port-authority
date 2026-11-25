@@ -63,7 +63,7 @@
       <section id="try" style="border-top:0; padding-top:0">
         <div class="live">
           <h2 style="font-size:var(--step-1)">Try it on this page</h2>
-          <p>This page is a site like any other. It has no AI account. Press the button, pick the practice model (no API key needed) or an account of your own, then send a prompt.</p>
+          <p>This page is a site like any other. It has no AI account. Press the button, pick one of your accounts, then send a prompt. You need an account in <a id="try-router" href="#">your router</a> first.</p>
           <div class="status">
             <button id="choose" class="accent" disabled>Choose a model</button>
             <span id="state"><span class="jack"></span>No model yet</span>
@@ -132,7 +132,7 @@ for await (const chunk of stream) {
 }</pre>
         <ul>
           <li>The person chose the model, so <code>model</code> in the request is ignored. The answer says which model it was.</li>
-          <li>The router reads <code>messages</code>, <code>stream</code>, <code>stream_options.include_usage</code>, <code>max_completion_tokens</code> or <code>max_tokens</code>, <code>temperature</code>, <code>top_p</code> and <code>stop</code>. The practice model and the browser's built-in model take no notice of the last three.</li>
+          <li>The router reads <code>messages</code>, <code>stream</code>, <code>stream_options.include_usage</code>, <code>max_completion_tokens</code> or <code>max_tokens</code>, <code>temperature</code>, <code>top_p</code> and <code>stop</code>. The browser's built-in model takes no notice of the last three.</li>
           <li>Messages are text. A request with tools, images, a <code>response_format</code> other than text, or any setting the router does not pass on is refused, and the error names the field. The router does not drop a setting and answer anyway.</li>
           <li>The token limit can be up to 4,000. With no limit in the request, the router asks for 600.</li>
           <li>An error has the fields an OpenAI client puts on its errors: <code>status</code>, <code>code</code>, <code>type</code> and <code>param</code>. A site with no grant gets 401. A site that has used its requests gets 429.</li>
@@ -299,6 +299,7 @@ for await (const chunk of stream) {
       }
     }
     for (const el of document.querySelectorAll("[data-router]")) el.textContent = sites.router;
+    $("try-router").href = sites.router + "/";
     $("code-site").innerHTML = `import { connect } from "${esc(sites.router)}/router.js";
 
 const ai = await connect();              <span class="c">// adds the hidden frame, opens a port to it</span>

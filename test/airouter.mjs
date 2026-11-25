@@ -13,6 +13,7 @@ let failed = 0;
 const check = (name, ok, extra = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${name}${extra ? " " + extra : ""}`); if (!ok) failed++; };
 const popupFrom = async (page, click) => { const [popup] = await Promise.all([page.waitForEvent("popup"), click()]); await popup.waitForLoadState(); return popup; };
 const KEY = "sk-test-THIS-KEY-MUST-NOT-LEAK-0123456789";
+const KEY2 = "sk-spare-THIS-ONE-MUST-NOT-LEAK-EITHER-9876543210";
 
 // A stand-in for Anthropic: answers the streaming Messages API and records the key it was sent.
 const seen = [];
@@ -28,18 +29,28 @@ await ctx.route("https://api.anthropic.com/**", async (route) => {
   route.fulfill({ status: 200, headers: { "access-control-allow-origin": "*", "content-type": "text/event-stream" }, body });
 });
 
-// The person adds an account at the router's own address.
+// A stand-in for OpenAI: answers the streaming Chat Completions API. A prompt
+// that says "slowly" is kept waiting, so that a test can stop it.
+const seenOpenAI = [];
+await ctx.route("https://api.openai.com/**", async (route) => {
+  const request = route.request();
+  const cors = { "access-control-allow-origin": "*", "access-control-allow-headers": "*" };
+  if (request.method() === "OPTIONS") return route.fulfill({ status: 204, headers: cors });
+  const body = JSON.parse(request.postData());
+  seenOpenAI.push({ key: request.headers()["authorization"], body, from: request.frame().url(), path: new URL(request.url()).pathname });
+  if (/slowly/.test(body.messages.at(-1).content)) await new Promise((resolve) => setTimeout(resolve, 2500));
+  const data = (o) => `data: ${JSON.stringify(o)}\n\n`;
+  const answer = ["A note ", "from the ", "stand-in."].map((content) => data({ choices: [{ index: 0, delta: { content } }] })).join("")
+    + data({ choices: [], usage: { prompt_tokens: 12, completion_tokens: 6 } }) + "data: [DONE]\n\n";
+  if (request.headers()["authorization"] !== "Bearer " + KEY2) return route.fulfill({ status: 401, headers: cors, contentType: "application/json", body: JSON.stringify({ error: { message: "Incorrect API key provided" } }) }).catch(() => {});
+  route.fulfill({ status: 200, headers: { ...cors, "content-type": "text/event-stream" }, body: answer }).catch(() => {});   // the page may have stopped waiting
+});
+
+// The person has the router's own page open, and no account yet.
 const home = await ctx.newPage();
 await home.goto(base("router") + "/");
-await home.click("#add summary");
-await home.fill("#label", "Work key");
-await home.fill("#key", KEY);
-await home.click("#form button");
-await home.waitForSelector("#accounts li[data-id]");
-check("an account is saved at the router", /Work key/.test(await home.locator("#accounts").innerText()));
-await home.click("#accounts [data-test]");
-await home.locator("#accounts", { hasText: "It answered" }).waitFor();   // not waitForFunction: the router pages forbid eval
-check("the router's home page can test the key", /Dear Ada/.test(await home.locator("#accounts").innerText()));
+await home.locator("#accounts li").first().waitFor();
+check("the router's page offers no model of its own", !/practice/i.test(await home.locator("#main").innerText()) && /None yet/.test(await home.locator("#accounts").innerText()));
 
 // Everything the florist page receives from anywhere is recorded, to look for the key afterwards.
 const florist = await ctx.newPage();
@@ -56,11 +67,42 @@ await florist.goto(base("florist") + "/card/");
 await florist.waitForSelector("#choose:not([disabled])");
 check("a site with no grant has no model", /No model yet/.test(await florist.locator("#state").innerText()) && (await florist.locator("#write").isDisabled()));
 
-// Don't allow: nothing changes.
+// With no account there is nothing to choose, and the router window says so.
 let popup = await popupFrom(florist, () => florist.click("#choose"));
 await popup.waitForSelector("#no");
 check("the router window names the site that asked", (await popup.locator(".origin").innerText()) === base("florist"));
-check("the router window lists the account and the practice model", /Work key · claude-sonnet-5-5/.test(await popup.locator("#choices").innerText()) && /Practice/.test(await popup.locator("#choices").innerText()));
+if ((await popup.locator("#yes").count()) === 0) {
+  check("with no account, the router window has nothing to allow and says to add one", /no account/.test(await popup.locator("#main").innerText())
+    && (await popup.locator("input[name=choice]").count()) === 0 && (await popup.locator('#main a[href="/"]').count()) === 1, (await popup.locator("#main").innerText()).replace(/\n+/g, " | "));
+} else console.log("note this browser has a built-in model, so the router window had something to offer before any account was added");
+
+// The person adds an account at the router's own address, while that window is open.
+await home.click("#add summary");
+await home.fill("#label", "Work key");
+await home.fill("#key", KEY);
+await home.click("#form button");
+await home.waitForSelector("#accounts li[data-id]");
+check("an account is saved at the router", /Work key/.test(await home.locator("#accounts").innerText()));
+await home.click("#accounts [data-test]");
+await home.locator("#accounts", { hasText: "It answered" }).waitFor();   // not waitForFunction: the router pages forbid eval
+check("the router's home page can test the key", /Dear Ada/.test(await home.locator("#accounts").innerText()));
+
+// And a second account, with another provider.
+await home.click("#add summary");
+await home.selectOption("#provider", "openai");
+await home.fill("#label", "Spare key");
+await home.fill("#key", KEY2);
+await home.click("#form button");
+await home.locator("#accounts li[data-id]").nth(1).waitFor();
+await home.locator("#accounts li", { hasText: "Spare key" }).locator("[data-test]").click();
+await home.locator("#accounts li", { hasText: "Spare key" }).locator("text=It answered").waitFor();
+check("the home page can test the second account, and the call goes to its provider from the page for that provider", /A note from the stand-in/.test(await home.locator("#accounts li", { hasText: "Spare key" }).innerText())
+  && seenOpenAI.at(-1).from === base("router") + "/call.html?provider=openai" && seenOpenAI.at(-1).path === "/v1/chat/completions" && seenOpenAI.at(-1).body.model === "gpt-6.2-sol" && seenOpenAI.at(-1).body.stream === true, seenOpenAI.at(-1) && seenOpenAI.at(-1).from);
+
+// The window that was open shows the accounts as soon as they are saved. Don't allow: nothing changes.
+await popup.locator("#choices", { hasText: "Spare key" }).waitFor();
+const offered = await popup.locator("#choices").innerText();
+check("the router window lists both accounts, and nothing that is not an account", /Work key · claude-sonnet-5-5/.test(offered) && /Spare key · gpt-6\.2-sol/.test(offered) && !/practice|not a real model/i.test(await popup.locator("#main").innerText()));
 await popup.click("#no");
 await florist.waitForFunction(() => /closed without a grant/.test(document.querySelector("#log").textContent));
 check("refusing leaves the site with no model", /No model yet/.test(await florist.locator("#state").innerText()));
@@ -70,8 +112,8 @@ popup = await popupFrom(florist, () => florist.click("#choose"));
 await popup.waitForSelector("#yes");
 await popup.selectOption("#requests", "5");
 check("the router window says where the prompts can go", /prompts to api\.anthropic\.com\./.test(await popup.locator("#lock").innerText()), await popup.locator("#lock").innerText());
-await popup.locator("#choices label", { hasText: "Practice" }).click();
-check("the router window says the practice model sends nothing", /not sent anywhere/.test(await popup.locator("#lock").innerText()));
+await popup.locator("#choices label", { hasText: "Spare key · gpt-6.2-sol" }).click();
+check("and says so for the other account when that one is ticked", /prompts to api\.openai\.com\./.test(await popup.locator("#lock").innerText()) && !/anthropic/.test(await popup.locator("#lock").innerText()), await popup.locator("#lock").innerText());
 await popup.locator("#choices label", { hasText: "Work key · claude-sonnet-5-5" }).click();
 await Promise.all([popup.waitForEvent("close"), popup.click("#yes")]);
 await florist.waitForSelector("#write:not([disabled])");
@@ -163,16 +205,22 @@ await library.waitForSelector("#choose:not([disabled])");
 check("a second site does not inherit the first site's grant", /No model yet/.test(await library.locator("#state").innerText()));
 popup = await popupFrom(library, () => library.click("#choose"));
 await popup.waitForSelector("#yes");
-await popup.check('input[value="practice"]');
+await popup.locator("#choices label", { hasText: "Spare key · gpt-6.2-sol" }).click();
 await Promise.all([popup.waitForEvent("close"), popup.click("#yes")]);
 await library.waitForSelector("#run:not([disabled])");
-check("the second site was given the practice model", /Using Practice model · not a real model/.test(await library.locator("#state").innerText()));
+check("the second site was given the other account", /Using Spare key · gpt-6\.2-sol/.test(await library.locator("#state").innerText()), await library.locator("#state").innerText());
+const anthropicCalls = seen.length, openaiCalls = seenOpenAI.length;
 
 // A worker is handed a port and does the work.
 await library.click("#run");
 await library.waitForFunction(() => /worker finished/.test(document.querySelector("#log").textContent), null, { timeout: 60000 });
 const notes = await library.locator("#notes p").allInnerTexts();
-check("a worker holding a port wrote a note for all four books", notes.length === 4 && notes.every((n) => /practice model/.test(n) && /would arrive here/.test(n)));
+check("a worker holding a port wrote a note for all four books", notes.length === 4 && notes.every((n) => /A note from the stand-in\./.test(n)), notes[0]);
+const libraryCalls = seenOpenAI.slice(openaiCalls);
+check("the second site's prompts went to its provider and not to the first site's", libraryCalls.length === 4 && seen.length === anthropicCalls
+  && libraryCalls.every((c) => c.from === base("router") + "/call.html?provider=openai" && c.key === "Bearer " + KEY2 && c.body.model === "gpt-6.2-sol"), libraryCalls[0] && libraryCalls[0].from);
+const libraryFrame = library.frames().find((f) => f.url().includes("/call.html"));
+check("the second site's call page cannot connect to the first site's provider", (await tryFetch(libraryFrame, "https://api.anthropic.com/v1/messages")) === "blocked" && seen.length === anthropicCalls);
 
 // A port lent for 3 requests stops at 3.
 await library.click("#lend");
@@ -181,7 +229,7 @@ for (let i = 1; i <= 4; i++) {
   await library.waitForFunction((n) => new RegExp(`Request ${n}(:| was refused)`).test(document.querySelector("#lent").textContent) && !/Request \d+: sent\./.test(document.querySelector("#lent").textContent), i, { timeout: 30000 });
 }
 const lent = await library.locator("#lent").innerText();
-check("a port lent for 3 requests answers 3", /Request 3: This is the practice model/.test(lent));
+check("a port lent for 3 requests answers 3", /Request 3: A note from the stand-in\./.test(lent));
 check("and refuses the fourth", /Request 4 was refused: This port was lent/.test(lent), lent.split("\n")[0]);
 
 // Chat Completions on the second site: a whole answer, a refusal, a lent port and a stop.
@@ -190,7 +238,7 @@ const plain = await library.evaluate(async (router) => {
   const ai = await connect();
   const caught = async (work) => { try { await work(); return null; } catch (e) { return { name: e.name, message: e.message, code: e.code, status: e.status, param: e.param, type: e.type }; } };
   const hello = [{ role: "user", content: "Hello there" }];
-  const answer = await ai.chat.completions.create({ messages: hello });
+  const answer = await ai.chat.completions.create({ messages: hello, temperature: 0.4, top_p: 0.5, stop: ["X", "Y"], max_completion_tokens: 123 });
   const refused = await caught(() => ai.chat.completions.create({ messages: hello, tools: [{ type: "function", function: { name: "f" } }] }));
   const lent = fromPort(await ai.lend({ requests: 1 }));
   await lent.started;
@@ -198,13 +246,16 @@ const plain = await library.evaluate(async (router) => {
   const second = await caught(() => lent.chat.completions.create({ messages: hello }));
   const stop = new AbortController();
   setTimeout(() => stop.abort(), 300);
-  const stopped = await caught(() => ai.chat.completions.create({ messages: hello }, { signal: stop.signal }));
+  const stopped = await caught(() => ai.chat.completions.create({ messages: [{ role: "user", content: "Answer slowly" }] }, { signal: stop.signal }));
   return { answer, refused, first: first.choices[0].message.content, second, stopped };
 }, base("router"));
-check("without stream, the site gets a whole chat.completion object", plain.answer.object === "chat.completion" && plain.answer.model === "not a real model" && plain.answer.choices[0].message.role === "assistant"
-  && /practice model/.test(plain.answer.choices[0].message.content) && /Hello there/.test(plain.answer.choices[0].message.content) && plain.answer.choices[0].finish_reason === "stop" && plain.answer.usage.total_tokens > 0, JSON.stringify(plain.answer).slice(0, 100));
+check("without stream, the site gets a whole chat.completion object", plain.answer.object === "chat.completion" && plain.answer.model === "gpt-6.2-sol" && plain.answer.choices[0].message.role === "assistant"
+  && plain.answer.choices[0].message.content === "A note from the stand-in." && plain.answer.choices[0].finish_reason === "stop" && plain.answer.usage.prompt_tokens === 12 && plain.answer.usage.total_tokens === 18, JSON.stringify(plain.answer).slice(0, 100));
+const tuned = seenOpenAI.find((c) => c.body.temperature === 0.4);
+check("the site's settings reached a provider that speaks Chat Completions", !!tuned && tuned.body.top_p === 0.5 && JSON.stringify(tuned.body.stop) === '["X","Y"]' && tuned.body.max_completion_tokens === 123
+  && JSON.stringify(tuned.body.messages) === JSON.stringify([{ role: "user", content: "Hello there" }]), tuned && JSON.stringify(tuned.body));
 check("a request for tools is refused by name, as an error the site can read", plain.refused && plain.refused.code === "unsupported" && plain.refused.status === 400 && plain.refused.param === "tools" && plain.refused.type === "invalid_request_error", JSON.stringify(plain.refused));
-check("a lent port speaks it too, and still stops at its limit", /practice model/.test(plain.first) && plain.second && plain.second.code === "limit" && plain.second.status === 429, JSON.stringify(plain.second));
+check("a lent port speaks it too, and still stops at its limit", plain.first === "A note from the stand-in." && plain.second && plain.second.code === "limit" && plain.second.status === 429, JSON.stringify(plain.second));
 check("a site can stop a request with an AbortSignal", plain.stopped && plain.stopped.name === "AbortError", JSON.stringify(plain.stopped));
 
 // The main site is another site. Whether the browser gives the frame separate
@@ -216,16 +267,19 @@ await main.waitForSelector("#choose:not([disabled])");
 popup = await popupFrom(main, () => main.click("#choose"));
 await popup.waitForSelector("#yes");
 check("the explainer page is named in the router window", (await popup.locator(".origin").innerText()) === base("hub"));
-await popup.check('input[value="practice"]');
+await popup.locator("#choices label", { hasText: "Spare key · gpt-6.2-sol" }).click();
 await Promise.all([popup.waitForEvent("close"), popup.click("#yes")]);
 await main.waitForSelector("#send:not([disabled])");
 await main.click("#send");
 await main.waitForFunction(() => /pieces/.test(document.querySelector("#log").textContent), null, { timeout: 30000 });
-check("the explainer page's own demo gets an answer", /practice model/.test(await main.locator("#answer").innerText()));
+check("the explainer page's own demo gets an answer", /A note from the stand-in\./.test(await main.locator("#answer").innerText()));
 const mainFrame = main.frames().find((f) => f.url().includes("/frame.html"));
 const mainKept = await mainFrame.evaluate(() => Object.keys(localStorage).join(" "));
 console.log(`note in this browser the frame inside ${base("hub")} ${/router\\.accounts/.test(mainKept) ? "can see the storage of the router's own pages" : "has storage of its own"}`);
 await main.close();
+
+// Neither key reached a site, in anything the three sites were sent.
+check("no site was sent the second key either", !JSON.stringify(plain).includes(KEY2) && !(await library.evaluate((key) => JSON.stringify({ ...localStorage }).includes(key), KEY2)));
 
 // The router's home page shows both sites and what they used.
 await home.bringToFront();

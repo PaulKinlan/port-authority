@@ -24,8 +24,8 @@ let caller = null;  // { provider, close }: the page that may call this grant's 
 const worker = new Worker("/frame-worker.js", { type: "module" });
 
 // Open the page for the grant's provider, and close the one for the provider
-// before it. The built-in model and the practice model make no network call,
-// so they get no such page.
+// before it. The browser's built-in model makes no network call, so it gets no
+// such page.
 async function lock(next) {
   const provider = next && PROVIDERS[next.provider] && PROVIDERS[next.provider].kind ? next.provider : null;
   if ((caller ? caller.provider : null) === provider) return;
@@ -70,6 +70,8 @@ addEventListener("message", (event) => {
     KEY = "router.grant:" + site;
     try { grant = JSON.parse(localStorage.getItem(KEY)); } catch { /* none */ }
     if (grant && grant.site !== site) grant = null;
+    // A grant for a model the router no longer has is dropped, and the site asks again.
+    if (grant && !Object.hasOwn(PROVIDERS, grant.provider)) { grant = null; try { localStorage.removeItem(KEY); } catch { /* third-party storage blocked */ } }
     worker.postMessage({ t: "init", site, grant }, [event.ports[0], local.port2]);
     lock(grant);
     return;

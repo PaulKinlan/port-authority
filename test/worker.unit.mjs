@@ -66,16 +66,16 @@ test("Router allows more than 200 lifetime grants when old ones are revoked or r
   })).then((r) => r.json());
 
   // Weak secret must not revoke an existing active grant for the same site.
-  const first = await call("grant", { owner, secret, site: "https://a.example", label: "k", provider: "practice", model: "m" });
+  const first = await call("grant", { owner, secret, site: "https://a.example", label: "k", provider: "anthropic", model: "m" });
   assert.equal(first.ok, true);
-  const weak = await call("grant", { owner, secret: "short", site: "https://a.example", label: "k", provider: "practice", model: "m" });
+  const weak = await call("grant", { owner, secret: "short", site: "https://a.example", label: "k", provider: "anthropic", model: "m" });
   assert.equal(weak.ok, false);
   const stillActive = await call("status", { id: first.id, secret });
   assert.equal(stillActive.ok, true);
 
   // Create 205 grants by replacing/revoking; inactive history is pruned so it never locks out.
   for (let i = 0; i < 205; i++) {
-    const made = await call("grant", { owner, secret, site: `https://site-${i}.example`, label: "k", provider: "practice", model: "m" });
+    const made = await call("grant", { owner, secret, site: `https://site-${i}.example`, label: "k", provider: "anthropic", model: "m" });
     assert.equal(made.ok, true, `grant ${i} failed: ${made.why}`);
     if (i < 200) {
       const rev = await call("revoke", { owner, id: made.id });

@@ -11,7 +11,6 @@
 // the first one is what Test uses. They go out of date. Last checked against
 // each provider on 2026-11-24.
 export const PROVIDERS = {
-  practice: { name: "Practice model", needsKey: false, models: ["not a real model"], note: "Not a real model. It needs no key and makes no network call, so you can try the whole flow." },
   builtin: { name: "This browser's built-in model", needsKey: false, models: ["built-in"], note: "Runs on this device. Only offered when the browser has the Prompt API and the model is downloaded." },
   anthropic: { name: "Anthropic", needsKey: true, kind: "anthropic", baseUrl: "https://api.anthropic.com/v1", models: ["claude-sonnet-5-5", "claude-haiku-5-5", "claude-opus-5-5", "claude-fable-5-2"], note: "Your key from console.anthropic.com." },
   openai: { name: "OpenAI", needsKey: true, kind: "chat", baseUrl: "https://api.openai.com/v1", models: ["gpt-6.2-sol", "gpt-6-luna", "gpt-6.1-terra", "gpt-6.2-astra"], note: "Your key from platform.openai.com. Change the model names to the ones you use." },
@@ -59,11 +58,6 @@ async function refuse(response, who) {
   return error;
 }
 
-const wait = (ms, signal) => new Promise((resolve, reject) => {
-  const timer = setTimeout(resolve, ms);
-  signal?.addEventListener("abort", () => { clearTimeout(timer); reject(signal.reason); }, { once: true });
-});
-
 // account: { provider, key, model }
 // ask:     { system, messages: [{ role: "user" | "assistant", content: "text" }], maxTokens,
 //            temperature, topP, stop: ["text"] }   the last three are optional
@@ -74,19 +68,10 @@ export async function* generate(account, ask, signal) {
   const maxTokens = Math.min(Math.max(Number(ask.maxTokens) || 600, 1), 4000);
   const usage = { tokensIn: 0, tokensOut: 0 };
   // Settings a site may set. They are sent to the provider only when the site
-  // set them. The practice model and the built-in model take no notice of them.
+  // set them. The browser's built-in model takes no notice of them.
   const temperature = Number.isFinite(ask.temperature) ? Math.min(Math.max(ask.temperature, 0), 2) : null;
   const topP = Number.isFinite(ask.topP) ? Math.min(Math.max(ask.topP, 0), 1) : null;
   const stop = Array.isArray(ask.stop) ? ask.stop.filter((s) => typeof s === "string" && s).slice(0, 4) : [];
-
-  if (account.provider === "practice") {
-    const last = messages.at(-1)?.content || "";
-    const reply = `This is the practice model. It is not an AI and it did not send your words anywhere. You asked: "${last.slice(0, 160)}". With a real account chosen in the router window, a model's answer would arrive here, a few words at a time, exactly like this.`;
-    for (const word of reply.split(" ")) { await wait(45, signal); yield word + " "; }
-    usage.tokensIn = Math.ceil((system.length + messages.reduce((n, m) => n + m.content.length, 0)) / 4);
-    usage.tokensOut = Math.ceil(reply.length / 4);
-    return usage;
-  }
 
   if (account.provider === "builtin") {
     if (!(await hasBuiltin())) { const e = new Error("This browser has no built-in model ready to use."); e.code = "provider"; throw e; }

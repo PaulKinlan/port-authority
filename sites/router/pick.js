@@ -47,7 +47,18 @@ if (!found) {
 
   const draw = async () => {
     const list = await choices();
-    const real = list.some((c) => c.secretKey);
+    // Nothing to choose from: say so, and say where to add an account. The
+    // window draws again as soon as one is saved.
+    if (!list.length) {
+      document.title = "Add an account first | AI router";
+      main.innerHTML = `
+        <p class="origin">${esc(site)}</p>
+        <h1 tabindex="-1">This site wants to use an AI model</h1>
+        <p>You have no account for it to use yet. Add one in your router. This window will show it as soon as it is saved.</p>
+        <div class="actions"><a class="button accent" href="/" target="_blank" rel="noopener">Add an account</a><button class="quiet" id="no">Close</button></div>`;
+      document.getElementById("no").onclick = cancel;
+      return;
+    }
     const currentIndex = current ? list.findIndex((c) => c.label === current.label && c.model === current.model) : -1;
     const selectedIndex = currentIndex >= 0 ? currentIndex : 0;
     document.title = `Choose a model | AI router`;
@@ -61,7 +72,6 @@ if (!found) {
         ${list.map((c, i) => `<label><input type="radio" name="choice" value="${esc(c.key)}" ${i === selectedIndex ? "checked" : ""}><span><strong>${esc(c.label)} · ${esc(c.model)}</strong><span class="muted small">${esc(c.note || c.providerName)}</span></span></label>`).join("")}
       </fieldset>
       <p class="note small" id="lock" aria-live="polite"></p>
-      ${real ? "" : `<p class="small muted">You have not added an account with a key yet. <a href="/" target="_blank" rel="noopener">Add one in your router</a>, then come back to this window.</p>`}
       <div class="limits">
         <div><label for="requests">Stop after</label><select id="requests"><option value="5">5 requests</option><option value="20" selected>20 requests</option><option value="100">100 requests</option><option value="1000">1,000 requests</option></select></div>
         <div><label for="days">Or after</label><select id="days"><option value="1">1 day</option><option value="7" selected>7 days</option><option value="30">30 days</option></select></div>
@@ -76,7 +86,7 @@ if (!found) {
       const address = PROVIDERS[picked.provider] && PROVIDERS[picked.provider].baseUrl;
       document.getElementById("lock").textContent = address
         ? `With this choice the router sends this site's prompts to ${new URL(address).host}. Your browser lets the router connect there and to the router's own server, and nowhere else.`
-        : "With this choice your prompts are not sent anywhere.";
+        : "With this choice your prompts stay on this device.";
     };
     document.getElementById("choices").addEventListener("change", lock);
     lock();
