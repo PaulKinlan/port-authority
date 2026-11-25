@@ -200,14 +200,18 @@ test("a domain nobody named is the main site, which is why ROUTER_HOST is needed
 
 // What each router page may connect to. The header is read the way a browser
 // gets it: by asking the Worker for the page.
+const assetsAsked = [];
+const routerEnv = () => ({
+  MAIN_HOST: "port-authority.dev", DEMO_SUFFIX: ".kinlan-test.workers.dev", ROUTER_HOST: "llmchannel.dev",
+  ASSETS: { fetch: async (request) => { assetsAsked.push(new URL(request.url).pathname); return new Response("<!doctype html>"); } },
+});
 const policy = async (path) => {
-  const env = { MAIN_HOST: "port-authority.dev", DEMO_SUFFIX: ".kinlan-test.workers.dev", ROUTER_HOST: "llmchannel.dev", ASSETS: { fetch: async () => new Response("<!doctype html>") } };
-  const header = (await worker.fetch(new Request("https://llmchannel.dev" + path), env)).headers.get("content-security-policy") || "";
+  const header = (await worker.fetch(new Request("https://llmchannel.dev" + path), routerEnv())).headers.get("content-security-policy") || "";
   return Object.fromEntries(header.split("; ").map((part) => [part.split(" ")[0], part.split(" ").slice(1).join(" ")]));
 };
 
 test("a router page may connect to the router and to nothing else", async () => {
-  for (const path of ["/", "/frame.html", "/pick.html", "/frame-worker.js", "/call.js"]) {
+  for (const path of ["/", "/frame.html", "/pick.html", "/frame-worker.js", "/call.js", "/caller.js", "/providers.js"]) {
     const rules = await policy(path);
     assert.equal(rules["connect-src"], "'self'", path);
     assert.equal(rules["default-src"], "'none'", path);
@@ -215,27 +219,47 @@ test("a router page may connect to the router and to nothing else", async () => 
   }
 });
 
-test("the page that calls a provider may connect to that one provider and to nothing else", async () => {
-  const { PROVIDERS } = await import("../sites/router/providers.js");
+test("the page that calls a provider may connect to that provider's one chat address and to nothing else", async () => {
+  const { PROVIDERS, endpointOf } = await import("../sites/router/providers.js");
   const network = Object.entries(PROVIDERS).filter(([, provider]) => provider.kind);
   assert.ok(network.length >= 5);
-  for (const [id, provider] of network) {
-    // One address, and it is the address providers.js calls.
-    assert.equal((await policy("/call.html?provider=" + id))["connect-src"], new URL(provider.baseUrl).origin, id);
+  for (const [id] of network) {
+    // One address, with its path, and it is the address providers.js calls.
+    const allowed = (await policy("/call/" + id))["connect-src"];
+    assert.equal(allowed, endpointOf(id), id);
+    assert.match(allowed, /^https?:\/\/[^/ ]+\/.+(\/messages|\/chat\/completions)$/, id);
+    assert.ok(!allowed.includes(" ") && !allowed.endsWith("/"), id);
   }
+  assert.equal((await policy("/call/anthropic"))["connect-src"], "https://api.anthropic.com/v1/messages");
+  assert.equal((await policy("/call/openai"))["connect-src"], "https://api.openai.com/v1/chat/completions");
+  // A model with no network call has no address.
+  assert.equal(endpointOf("builtin"), null);
+  assert.equal(endpointOf("constructor"), null);
+});
+
+test("every /call/<provider> is the one call page, served with the policy for the provider in its address", async () => {
+  assetsAsked.length = 0;
+  const response = await worker.fetch(new Request("https://llmchannel.dev/call/anthropic"), routerEnv());
+  assert.equal(response.status, 200);
+  assert.match(response.headers.get("content-type"), /^text\/html/);
+  assert.deepEqual(assetsAsked, ["/router/call.html"]);
+  // Only the router has such pages.
+  const elsewhere = await worker.fetch(new Request("https://port-authority.dev/call/anthropic"), { ...routerEnv(), ASSETS: { fetch: async () => new Response("no", { status: 404 }) } });
+  assert.equal(elsewhere.status, 404);
 });
 
 test("a call page that names no provider, or one that is not listed, may connect to nothing", async () => {
-  for (const query of ["", "?provider=", "?provider=practice", "?provider=builtin", "?provider=example.com", "?provider=https://example.com", "?provider=anthropic%20https://example.com", "?provider=__proto__", "?provider=constructor", "?provider=toString"]) {
-    assert.equal((await policy("/call.html" + query))["connect-src"], "'none'", query);
+  for (const path of ["/call.html", "/call.html?provider=anthropic", "/call/builtin", "/call/example.com", "/call/https:%2F%2Fexample.com", "/call/anthropic%20https:%2F%2Fexample.com", "/call/__proto__", "/call/constructor", "/call/toString", "/call/ANTHROPIC", "/call/anthropic.html"]) {
+    assert.equal((await policy(path))["connect-src"], "'none'", path);
   }
-  // Only the first provider in the address counts.
-  assert.equal((await policy("/call.html?provider=anthropic&provider=openai"))["connect-src"], "https://api.anthropic.com");
+  // A query cannot name a provider or add to the policy.
+  assert.equal((await policy("/call/anthropic?provider=openai"))["connect-src"], "https://api.anthropic.com/v1/messages");
+  assert.equal((await policy("/call/nothing?provider=anthropic"))["connect-src"], "'none'");
 });
 
 test("only the frame and the call page can be put inside another page", async () => {
   assert.equal((await policy("/"))["frame-ancestors"], "'none'");
   assert.equal((await policy("/pick.html"))["frame-ancestors"], "'none'");
   assert.equal((await policy("/frame.html"))["frame-ancestors"], undefined);
-  assert.equal((await policy("/call.html?provider=anthropic"))["frame-ancestors"], undefined);
+  assert.equal((await policy("/call/anthropic"))["frame-ancestors"], undefined);
 });

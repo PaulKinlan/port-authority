@@ -2,7 +2,7 @@
 // text. This file runs in pages served from the router's own address: the
 // router frame inside a site, and the router's home page when it tests a key.
 
-// A provider is only ever called from /call.html, which is served with a
+// A provider is only ever called from /call/<provider>, which is served with a
 // Content-Security-Policy that lets it connect to the one provider named in
 // its address. So this list is fixed. Adding a provider means adding it here
 // and to ROUTER_PROVIDERS in src/worker.js.
@@ -58,6 +58,15 @@ async function refuse(response, who) {
   return error;
 }
 
+// The one address the router calls at a provider. The page that makes the call
+// is served with a rule that allows this address and no other, so it has to be
+// the same as ROUTER_ENDPOINTS in src/worker.js. A unit test checks that it is.
+export function endpointOf(id) {
+  const provider = Object.hasOwn(PROVIDERS, id) ? PROVIDERS[id] : null;
+  if (!provider || !provider.kind) return null;
+  return provider.baseUrl + (provider.kind === "anthropic" ? "/messages" : "/chat/completions");
+}
+
 // account: { provider, key, model }
 // ask:     { system, messages: [{ role: "user" | "assistant", content: "text" }], maxTokens,
 //            temperature, topP, stop: ["text"] }   the last three are optional
@@ -84,7 +93,7 @@ export async function* generate(account, ask, signal) {
 
   const kind = PROVIDERS[account.provider]?.kind;
   if (kind === "anthropic") {
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
+    const response = await fetch(endpointOf(account.provider), {
       method: "POST", signal,
       headers: { "content-type": "application/json", "x-api-key": account.key, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
       body: JSON.stringify({
@@ -106,7 +115,7 @@ export async function* generate(account, ask, signal) {
   if (kind === "chat") {
     const base = PROVIDERS[account.provider].baseUrl;
     const limit = base.includes("api.openai.com") ? { max_completion_tokens: maxTokens } : { max_tokens: maxTokens };
-    const response = await fetch(base + "/chat/completions", {
+    const response = await fetch(endpointOf(account.provider), {
       method: "POST", signal,
       headers: { "content-type": "application/json", ...(account.key ? { authorization: "Bearer " + account.key } : {}) },
       body: JSON.stringify({

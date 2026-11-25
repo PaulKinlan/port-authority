@@ -99,7 +99,7 @@ await home.locator("#accounts li[data-id]").nth(1).waitFor();
 await home.locator("#accounts li", { hasText: "Spare key" }).locator("[data-test]").click();
 await home.locator("#accounts li", { hasText: "Spare key" }).locator("text=It answered").waitFor();
 check("the home page can test the second account, and the call goes to its provider from the page for that provider", /A note from the stand-in/.test(await home.locator("#accounts li", { hasText: "Spare key" }).innerText())
-  && seenOpenAI.at(-1).from === base("router") + "/call.html?provider=openai" && seenOpenAI.at(-1).path === "/v1/chat/completions" && seenOpenAI.at(-1).body.model === "gpt-6.2-sol" && seenOpenAI.at(-1).body.stream === true, seenOpenAI.at(-1) && seenOpenAI.at(-1).from);
+  && seenOpenAI.at(-1).from === base("router") + "/call/openai" && seenOpenAI.at(-1).path === "/v1/chat/completions" && seenOpenAI.at(-1).body.model === "gpt-6.2-sol" && seenOpenAI.at(-1).body.stream === true, seenOpenAI.at(-1) && seenOpenAI.at(-1).from);
 
 // The window that was open shows the accounts as soon as they are saved. Don't allow: nothing changes.
 await popup.locator("#choices", { hasText: "Spare key" }).waitFor();
@@ -125,7 +125,7 @@ await florist.click("#write");
 await florist.waitForFunction(() => /pieces/.test(document.querySelector("#log").textContent));
 check("the answer streams into the site", (await florist.locator("#card").innerText()) === "Dear Ada, well done on passing.");
 check("the provider was called with the person's key", seen.at(-1).key === KEY && seen.at(-1).body.model === "claude-sonnet-5-5" && seen.at(-1).body.stream === true);
-check("the call was made by the router's page for that one provider, not by the site", seen.at(-1).from === base("router") + "/call.html?provider=anthropic", seen.at(-1).from);
+check("the call was made by the router's page for that one provider, not by the site", seen.at(-1).from === base("router") + "/call/anthropic", seen.at(-1).from);
 check("the site saw how many requests are left", /4 requests left/.test(await florist.locator("#state").innerText()));
 
 // The site cannot get at the key: not in any message, not in its storage, not by reaching into the frame.
@@ -151,15 +151,17 @@ const connect = (csp) => (csp.split("; ").find((part) => part.startsWith("connec
 const csp = await header("/frame.html");
 check("the router frame is served with a content security policy", /default-src 'none'/.test(csp) && !/unsafe/.test(csp), csp.slice(0, 60));
 check("the router frame may connect only to the router", connect(csp) === "'self'", connect(csp));
-check("the page that calls Anthropic may connect only to Anthropic", connect(await header("/call.html?provider=anthropic")) === "https://api.anthropic.com", connect(await header("/call.html?provider=anthropic")));
-check("the page that calls OpenAI may connect only to OpenAI", connect(await header("/call.html?provider=openai")) === "https://api.openai.com");
-check("a call page for an unknown provider may connect to nothing", connect(await header("/call.html?provider=example.com")) === "'none'" && connect(await header("/call.html")) === "'none'");
+check("the page that calls Anthropic may connect to Anthropic's one chat address and nothing else", connect(await header("/call/anthropic")) === "https://api.anthropic.com/v1/messages", connect(await header("/call/anthropic")));
+check("the page that calls OpenAI may connect to OpenAI's one chat address and nothing else", connect(await header("/call/openai")) === "https://api.openai.com/v1/chat/completions");
+check("a call page for an unknown provider, or at the old address, may connect to nothing", connect(await header("/call/example.com")) === "'none'" && connect(await header("/call.html")) === "'none'" && connect(await header("/call.html?provider=anthropic")) === "'none'");
 const tryFetch = (where, address) => where.evaluate((a) => fetch(a, { mode: "no-cors" }).then(() => "allowed", () => "blocked"), address);
 const before = seen.length;
 check("the router frame cannot connect to another address", (await tryFetch(frame, "https://example.com/")) === "blocked");
 check("the router frame cannot connect to the provider itself", (await tryFetch(frame, "https://api.anthropic.com/v1/messages")) === "blocked" && seen.length === before);
-const callPage = florist.frames().find((f) => f.url().includes("/call.html"));
-check("the page that calls the provider is inside the router frame", !!callPage && callPage.parentFrame() === frame && callPage.url() === base("router") + "/call.html?provider=anthropic", callPage && callPage.url());
+const callPage = florist.frames().find((f) => f.url().includes("/call/"));
+check("the page that calls the provider is inside the router frame", !!callPage && callPage.parentFrame() === frame && callPage.url() === base("router") + "/call/anthropic", callPage && callPage.url());
+check("the page that calls the provider cannot connect to any other address at that provider", (await tryFetch(callPage, "https://api.anthropic.com/v1/models")) === "blocked" && (await tryFetch(callPage, "https://api.anthropic.com/v1/messages/batches")) === "blocked"
+  && (await tryFetch(callPage, "https://api.anthropic.com/")) === "blocked" && seen.length === before);
 check("the page that calls the provider cannot connect to another provider", (await tryFetch(callPage, "https://api.openai.com/v1/models")) === "blocked");
 check("the page that calls the provider cannot connect to another address", (await tryFetch(callPage, "https://example.com/")) === "blocked");
 check("the page that calls the provider cannot connect to the router's server", (await tryFetch(callPage, "/_sites.js")) === "blocked");
@@ -198,7 +200,7 @@ check("the chunks name the model the person chose, and the last one carries the 
 const sent = seen.at(-1);
 check("the request reached the provider with the site's settings", sent.body.model === "claude-sonnet-5-5" && sent.body.system === "You write cards." && sent.body.temperature === 0.2 && sent.body.max_tokens === 99
   && JSON.stringify(sent.body.stop_sequences) === '["END"]' && JSON.stringify(sent.body.messages) === JSON.stringify([{ role: "user", content: "A card for Ada" }]), JSON.stringify(sent.body));
-check("that call was also made by the page for the one provider, with the key the site never sees", sent.from === base("router") + "/call.html?provider=anthropic" && sent.key === KEY && !JSON.stringify(routed).includes(KEY));
+check("that call was also made by the page for the one provider, with the key the site never sees", sent.from === base("router") + "/call/anthropic" && sent.key === KEY && !JSON.stringify(routed).includes(KEY));
 
 // Another site has no grant, even though the same frame is used.
 const library = await ctx.newPage();
@@ -220,8 +222,8 @@ const notes = await library.locator("#notes p").allInnerTexts();
 check("a worker holding a port wrote a note for all four books", notes.length === 4 && notes.every((n) => /A note from the stand-in\./.test(n)), notes[0]);
 const libraryCalls = seenOpenAI.slice(openaiCalls);
 check("the second site's prompts went to its provider and not to the first site's", libraryCalls.length === 4 && seen.length === anthropicCalls
-  && libraryCalls.every((c) => c.from === base("router") + "/call.html?provider=openai" && c.key === "Bearer " + KEY2 && c.body.model === "gpt-6.2-sol"), libraryCalls[0] && libraryCalls[0].from);
-const libraryFrame = library.frames().find((f) => f.url().includes("/call.html"));
+  && libraryCalls.every((c) => c.from === base("router") + "/call/openai" && c.key === "Bearer " + KEY2 && c.body.model === "gpt-6.2-sol"), libraryCalls[0] && libraryCalls[0].from);
+const libraryFrame = library.frames().find((f) => f.url().includes("/call/"));
 check("the second site's call page cannot connect to the first site's provider", (await tryFetch(libraryFrame, "https://api.anthropic.com/v1/messages")) === "blocked" && seen.length === anthropicCalls);
 
 // A port lent for 3 requests stops at 3.

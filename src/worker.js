@@ -23,23 +23,35 @@ const TYPES = {
   png: "image/png", ico: "image/x-icon", md: "text/markdown; charset=utf-8",
 };
 
-// The address of each model provider. Keep this the same as PROVIDERS in
-// sites/router/providers.js.
-const ROUTER_PROVIDERS = {
-  anthropic: "https://api.anthropic.com", openai: "https://api.openai.com", openrouter: "https://openrouter.ai",
-  gemini: "https://generativelanguage.googleapis.com", ollama: "http://localhost:11434",
+// The one address the router calls at each model provider. Keep this the same
+// as endpointOf() in sites/router/providers.js. A unit test checks that it is.
+const ROUTER_ENDPOINTS = {
+  anthropic: "https://api.anthropic.com/v1/messages",
+  openai: "https://api.openai.com/v1/chat/completions",
+  openrouter: "https://openrouter.ai/api/v1/chat/completions",
+  gemini: "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+  ollama: "http://localhost:11434/v1/chat/completions",
 };
+// The page that calls a model provider is at /call/<provider>, as in
+// /call/anthropic. Returns the provider named, "" for a call page that names
+// none, and null for any other page.
+function callPageFor(path) {
+  if (path === "/call.html" || path === "/call") return "";
+  // Anything under /call/ counts as a call page. A name with a slash in it is
+  // not a provider, so it is sent with a policy that allows nothing.
+  return path.startsWith("/call/") ? path.slice(6) : null;
+}
 // The Content-Security-Policy for a router page. Every page may connect to the
-// router's own server and to nothing else. The one exception is /call.html,
-// the page that calls a model provider: it may connect to the single provider
-// named in its address, and not even to the router. So a prompt and an API key
-// can only leave for the provider the person chose.
-// /frame.html is put inside other sites, and /call.html inside /frame.html, so
-// those two cannot say which pages may frame them. The rest cannot be framed.
-function routerCsp(path, search) {
-  const call = path === "/call.html";
-  const provider = call ? new URLSearchParams(search).get("provider") : null;
-  const connect = !call ? "'self'" : Object.hasOwn(ROUTER_PROVIDERS, provider) ? ROUTER_PROVIDERS[provider] : "'none'";
+// router's own server and to nothing else. The one exception is the call page.
+// It may connect to one address: the chat endpoint of the provider named in
+// its own address. Not the rest of that provider, and not the router. So a
+// prompt and an API key can only leave for the provider the person chose.
+// /frame.html is put inside other sites, and the call page inside /frame.html,
+// so those two cannot say which pages may frame them. The rest cannot be framed.
+function routerCsp(path) {
+  const provider = callPageFor(path);
+  const call = provider !== null;
+  const connect = !call ? "'self'" : Object.hasOwn(ROUTER_ENDPOINTS, provider) ? ROUTER_ENDPOINTS[provider] : "'none'";
   return [
     "default-src 'none'", "script-src 'self'", "worker-src 'self'", "frame-src 'self'", "style-src 'self' https://fonts.googleapis.com", "font-src https://fonts.gstatic.com",
     "img-src 'self' data:", "connect-src " + connect, "base-uri 'none'", "form-action 'none'",
@@ -79,11 +91,14 @@ async function readAsset(env, key) {
   return res.ok ? res.body : null;
 }
 
-async function serve(env, site, pathname, search = "") {
+async function serve(env, site, pathname) {
   let path = decodeURIComponent(pathname);
   if (path.includes("..")) return null;
   if (path.endsWith("/")) path += "index.html";
-  const candidates = [site + path, "shared" + path];
+  let candidates = [site + path, "shared" + path];
+  // Every /call/<provider> on the router is the same page. What differs is the
+  // policy it is sent with, which is made from the address below.
+  if (site === "router" && /^\/call\/[^/]+$/.test(path)) candidates = ["router/call.html"];
   if (!/\.[a-z0-9]+$/i.test(path)) candidates.push(site + path + "/index.html");
   // Each pattern has a page of its own, all drawn by one file.
   if (site === "main" && /^\/patterns\/[a-z0-9-]+\/index\.html$/.test(path) && !path.startsWith("/patterns/served/")) candidates.push("main/patterns/_page.html");
@@ -115,7 +130,7 @@ async function serve(env, site, pathname, search = "") {
       // The router's pages handle API keys. They may run only their own
       // scripts and may connect only to the router and the listed providers.
       if (site === "router") {
-        headers["content-security-policy"] = routerCsp(path, search);
+        headers["content-security-policy"] = routerCsp(path);
         headers["referrer-policy"] = "no-referrer";
       }
       return new Response(body, { headers });
@@ -217,7 +232,7 @@ export default {
     if (site === "main" && /^\/patterns\/[a-z0-9-]+$/.test(url.pathname) && url.pathname !== "/patterns/served") {
       return Response.redirect(url.origin + url.pathname + "/" + url.search, 301);
     }
-    return (await serve(env, site, url.pathname, url.search)) || new Response("Not found", { status: 404, headers: { "content-type": TYPES.txt } });
+    return (await serve(env, site, url.pathname)) || new Response("Not found", { status: 404, headers: { "content-type": TYPES.txt } });
   },
 };
 

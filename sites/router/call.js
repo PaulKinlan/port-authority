@@ -1,7 +1,7 @@
 // The one router page that talks to a model provider.
 //
 // A router page puts this page in a hidden iframe, with the provider in the
-// address: /call.html?provider=anthropic. The server sends this page with a
+// address: /call/anthropic. The server sends this page with a
 // Content-Security-Policy whose connect-src is that one provider. So the API
 // key is unlocked here, in a page the browser will not let connect anywhere
 // else. The frame and the worker around it cannot reach any provider at all.
@@ -12,7 +12,8 @@
 import { generate, PROVIDERS } from "/providers.js";
 import { unseal } from "/seal.js";
 
-const provider = new URLSearchParams(location.search).get("provider");
+const named = /^\/call\/([^/]+)$/.exec(location.pathname);
+const provider = named ? decodeURIComponent(named[1]) : null;
 
 function serve(port) {
   port.onmessage = async (event) => {

@@ -5,7 +5,7 @@ export function openCaller(provider) {
     const frame = document.createElement("iframe");
     frame.hidden = true;
     frame.title = "The call to the model provider";
-    frame.src = "/call.html?provider=" + encodeURIComponent(provider);
+    frame.src = "/call/" + encodeURIComponent(provider);
     frame.addEventListener("load", () => {
       const line = new MessageChannel();
       frame.contentWindow.postMessage({ router: "caller" }, location.origin, [line.port2]);

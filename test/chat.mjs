@@ -79,7 +79,7 @@ await Promise.all([popup.waitForEvent("close"), allow(popup)]);
 await chat.locator(".msg.assistant .msg-actions").waitFor();
 check("after the person allows it, the message is sent and the answer arrives", (await chat.locator(".msg.user .bubble").innerText()) === "Write a card for Ada" && (await chat.locator(".msg.assistant .md").innerText()) === "Dear Ada, well done on passing.");
 check("the answer is labelled with the model the person chose", (await chat.locator(".msg.assistant .who").innerText()).toLowerCase() === "claude-sonnet-5-5" && /Work key · claude-sonnet-5-5/.test(await chat.locator("#model-text").innerText()));
-check("the call was made by the router's page for that provider, with the key", seen.at(-1).from === base("router") + "/call.html?provider=anthropic" && seen.at(-1).key === KEY && seen.at(-1).body.max_tokens === 4000);
+check("the call was made by the router's page for that provider, with the key", seen.at(-1).from === base("router") + "/call/anthropic" && seen.at(-1).key === KEY && seen.at(-1).body.max_tokens === 4000);
 check("the conversation is named after the first message and listed", (await chat.locator("#title").innerText()) === "Write a card for Ada" && (await chat.locator("#list a.conv").count()) === 1 && /^#c=/.test(new URL(chat.url()).hash));
 
 // A second message carries the conversation so far.
@@ -126,10 +126,10 @@ await chat.fill("#prompt", "Now with the other one");
 await chat.press("#prompt", "Enter");
 await chat.locator(".msg.assistant").nth(3).locator(".msg-actions").waitFor();
 check("after the change the app's next message goes to the new provider, with the conversation so far", (await chat.locator(".msg.assistant .md").nth(3).innerText()) === "A note from the stand-in." && seen.length === anthropicBefore
-  && seenOpenAI.at(-1).from === base("router") + "/call.html?provider=openai" && seenOpenAI.at(-1).key === "Bearer " + KEY2 && seenOpenAI.at(-1).body.model === "gpt-6.2-sol" && seenOpenAI.at(-1).body.messages.length === 8, JSON.stringify(seenOpenAI.at(-1) && seenOpenAI.at(-1).body.messages.length));
-const callPages = chat.frames().filter((f) => f.url().includes("/call.html")).map((f) => f.url());
-check("the page for the old provider is gone, and there is one page, for the new provider", callPages.join() === base("router") + "/call.html?provider=openai", callPages.join());
-const newCall = chat.frames().find((f) => f.url().includes("/call.html"));
+  && seenOpenAI.at(-1).from === base("router") + "/call/openai" && seenOpenAI.at(-1).key === "Bearer " + KEY2 && seenOpenAI.at(-1).body.model === "gpt-6.2-sol" && seenOpenAI.at(-1).body.messages.length === 8, JSON.stringify(seenOpenAI.at(-1) && seenOpenAI.at(-1).body.messages.length));
+const callPages = chat.frames().filter((f) => f.url().includes("/call/")).map((f) => f.url());
+check("the page for the old provider is gone, and there is one page, for the new provider", callPages.join() === base("router") + "/call/openai", callPages.join());
+const newCall = chat.frames().find((f) => f.url().includes("/call/"));
 const reach = (address) => newCall.evaluate((a) => fetch(a, { mode: "no-cors" }).then(() => "allowed", () => "blocked"), address);
 check("the new page cannot connect to the old provider", (await reach("https://api.anthropic.com/v1/messages")) === "blocked" && seen.length === anthropicBefore);
 check("the answer is labelled with the model that wrote it, and the earlier ones keep theirs", (await chat.locator(".msg.assistant .who").allInnerTexts()).map((t) => t.toLowerCase()).join() === "claude-sonnet-5-5,claude-sonnet-5-5,claude-sonnet-5-5,gpt-6.2-sol");
@@ -141,9 +141,9 @@ await popup.locator("#choices label", { hasText: "Work key · claude-sonnet-5-5"
 await Promise.all([popup.waitForEvent("close"), popup.click("#yes")]);
 await chat.locator("#model-text", { hasText: "Work key · claude-sonnet-5-5" }).waitFor();
 // The frame opens the page for the provider as soon as it has the grant. Give it a moment to load.
-const callPagesNow = () => chat.frames().filter((f) => f.url().includes("/call.html")).map((f) => f.url()).join();
-for (let i = 0; i < 50 && callPagesNow() !== base("router") + "/call.html?provider=anthropic"; i++) await chat.waitForTimeout(100);
-check("the model can be changed back, and the page for the other provider is closed again", callPagesNow() === base("router") + "/call.html?provider=anthropic", callPagesNow());
+const callPagesNow = () => chat.frames().filter((f) => f.url().includes("/call/")).map((f) => f.url()).join();
+for (let i = 0; i < 50 && callPagesNow() !== base("router") + "/call/anthropic"; i++) await chat.waitForTimeout(100);
+check("the model can be changed back, and the page for the other provider is closed again", callPagesNow() === base("router") + "/call/anthropic", callPagesNow());
 
 // What the model writes is shown as Markdown, and none of it runs.
 await chat.click("#new-chat");
@@ -233,7 +233,7 @@ const through = await locked.evaluate(async () => {
   return { chat: answer.choices[0].message.content, model: answer.model, prompt: text };
 });
 check("the site's requests are answered through the window, both ways of asking", through.chat === "Dear Ada, well done on passing." && through.prompt === "Dear Ada, well done on passing." && through.model === "claude-sonnet-5-5");
-check("the call is made by the page for the one provider, inside the router window", seen.at(-1).from === base("router") + "/call.html?provider=anthropic" && seen.at(-1).parent === base("router") + "/pick.html#window" && seen.at(-1).key === KEY, seen.at(-1).parent);
+check("the call is made by the page for the one provider, inside the router window", seen.at(-1).from === base("router") + "/call/anthropic" && seen.at(-1).parent === base("router") + "/pick.html#window" && seen.at(-1).key === KEY, seen.at(-1).parent);
 await popup.locator("#left", { hasText: "18 requests left" }).waitFor();
 check("the window shows how many requests are left", true);
 check("the site holds no frame and no key", locked.frames().length === 1 && !(await locked.evaluate((key) => JSON.stringify({ ...localStorage }).includes(key), KEY)));

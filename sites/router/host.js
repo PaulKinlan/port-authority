@@ -16,7 +16,7 @@
 //
 // After that, prompts go from the site to the worker over the port. This page
 // and its worker can connect to the router's own server and to nothing else.
-// The call to the provider is made by /call.html, which the browser lets
+// The call to the provider is made by /call/<provider>, which the browser lets
 // connect to that one provider only. The API key is unlocked there and nowhere
 // else. See call.js.
 
