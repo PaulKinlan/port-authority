@@ -112,7 +112,7 @@ ${data.groups.map((g) => `            <li><a href="#${esc(g.id)}">${esc(g.title)
       </div>
 ${data.groups.map(group).join("\n")}
     </main>
-    <footer class="small muted" style="padding-block:2rem 4rem">Port Authority, by <a href="https://paul.kinlan.me">Paul Kinlan</a>. The list on this page is also available as <a href="/reading/links.json">links.json</a>.</footer>
+    <footer class="small muted" style="padding-block:2rem 4rem">Port Authority, by <a href="https://paul.kinlan.me">Paul Kinlan</a>. <a href="/about/">About this site</a>. The list on this page is also available as <a href="/reading/links.json">links.json</a>.</footer>
   </div>
   <script type="module">
     const input = document.getElementById("reading-filter");

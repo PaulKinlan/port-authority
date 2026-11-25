@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>About this site | Port Authority</title>
+  <meta name="description" content="Who made Port Authority and why: from Web Intents in 2011, to a middle-man that returns a MessagePort in 2017, to AI agents and API keys now.">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <meta property="og:title" content="About this site | Port Authority">
+  <meta property="og:description" content="Who made Port Authority and why: from Web Intents in 2011, to a middle-man that returns a MessagePort in 2017, to AI agents and API keys now.">
+  <meta property="og:type" content="website">
+  <meta name="twitter:card" content="summary">
+  <link rel="stylesheet" href="/base.css">
+  <script src="/nav.js"></script>
+  <script src="/errors.js"></script>
+  <style>
+    main { display: grid; grid-template-columns: minmax(0, 1fr); gap: clamp(2rem, 5vw, 3.2rem); padding-block: 1rem 4rem; }
+    main section { display: grid; gap: 1rem; border-top: 2px solid var(--ink); padding-top: clamp(1.2rem, 3vw, 2rem); grid-template-columns: minmax(0, 1fr); }
+    main h1 { font-size: var(--step-3); }
+    main h2 { font-size: var(--step-2); }
+    main section > p, .hero p { margin: 0; max-width: 66ch; }
+    .hero { display: grid; gap: 1.1rem; padding-top: 1.5rem; }
+    .hero .lead { font-size: var(--step-1); line-height: 1.4; max-width: 44ch; }
+    .years { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; max-width: 66ch; }
+    .years li { display: grid; grid-template-columns: 4.2rem minmax(0, 1fr); gap: 0.8rem; padding: 0.7rem 0; border-top: 1px solid var(--line); }
+    .years li:first-child { border-top: 0; }
+    .years time { font: 800 var(--step-0)/1.5 var(--display); }
+    .cards { list-style: none; margin: 0; padding: 0; display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr)); }
+    .cards li { background: var(--panel); border-radius: 16px; padding: 1.1rem 1.2rem; display: grid; gap: 0.4rem; align-content: start; box-shadow: 0 1px 0 color-mix(in srgb, var(--ink) 10%, transparent); }
+    .cards h3 { font-size: var(--step-1); }
+    .cards p { font-size: var(--step--1); max-width: none; }
+    .facts { margin: 0; display: grid; grid-template-columns: minmax(0, 1fr); max-width: 76ch; }
+    .facts div { display: grid; grid-template-columns: 11rem minmax(0, 1fr); gap: 0.3rem 1rem; padding: 0.7rem 0; border-top: 1px solid var(--line); }
+    .facts div:first-child { border-top: 0; }
+    .facts dt { font-weight: 700; }
+    .facts dd { margin: 0; overflow-wrap: anywhere; }
+    .facts dd span { display: block; }
+    @media (max-width: 34rem) { .facts div { grid-template-columns: minmax(0, 1fr); } }
+  </style>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <div class="wrap">
+    <header class="site-bar">
+      <a class="wordmark" href="/">Port Authority</a>
+      <nav aria-label="Primary"><a href="/">Experiments</a><a href="/guide/">The guide</a><a href="/patterns/">Port patterns</a><a href="/comlink/">Comlink today</a><a href="/ai-router/">AI router</a><a href="/lab/">The lab</a><a href="/missing/">What is missing</a><a href="/reading/">Further reading</a><a href="/hub/">Your hub</a></nav>
+    </header>
+    <main id="main">
+      <div class="hero">
+        <h1>About this site</h1>
+        <p class="lead">This site started with an idea I have not been able to put down since 2011: sites should be able to link to each other's functionality the way they link to each other's pages.</p>
+        <p>It turned into a set of experiments in what a <code>MessagePort</code> can do, and where it stops.</p>
+      </div>
+
+      <section id="started">
+        <h2>How it started</h2>
+        <p>In 2011 I worked on <a href="https://github.com/PaulKinlan/WebIntents">Web Intents</a> with Greg Billock and James Hawkins. It was a way for a site to say “I want to do this, which site can help?”, and for you to pick the site. Share, edit, pick, save for later. It was Android Intents for the web.</p>
+        <p>It got pulled. The user interface is what killed it, most of all on desktop. The way we had designed the API meant we could not fix the interface without changing the API underneath, and by the time we understood that, it was too late. It was my first big project failure, and it hurt. I wrote down <a href="https://paul.kinlan.me/what-happened-to-web-intents/">what happened</a>.</p>
+        <p>I never got over it. I still think there is a real problem on the web. We build silos that keep you on one site. We have links that take you to another page, but we do not link our services the way we link our pages.</p>
+      </section>
+
+      <section id="port">
+        <h2>A middle-man that returns a port</h2>
+        <p>In 2017 Surma, on my team, and Ian Kilpatrick were working on a polyfill for the Tasklets API. Buried inside it was a tidy way to call code in a worker without writing any <code>postMessage</code> code. I asked Surma if he could pull that part out. A couple of hours later he had <a href="https://github.com/GoogleChromeLabs/comlink">Comlink</a>.</p>
+        <p>Comlink passes transferable objects across where it can, and a <code>MessagePort</code> is transferable. That gave me the idea this whole site is built on. A site in the middle keeps a list of services and where they live. You ask it for a service, and it hands you back a port. You do not care where the port came from, and the site in the middle does not have to stay.</p>
+        <p>I wrote that up as <a href="https://paul.kinlan.me/reinventing-web-intents/">Reinventing Web Intents</a>. It was an experiment, not a solution.</p>
+      </section>
+
+      <section id="now">
+        <h2>Why I came back to it</h2>
+        <p>I made this site while exploring where the web meets AI. Two things brought the old idea back.</p>
+        <p>The first was API keys. A page that calls a model has to hold a key, and anything in that page can read it. In 2025 I wrote that <a href="https://aifoc.us/dangerous/">calling APIs from the browser shouldn't mean exposing keys</a>. I wanted to call a model from a page without leaking a key. A port is one answer. The page that holds the key and the page that uses the model do not have to be the same page. That became the <a href="/ai-router/">AI router</a>.</p>
+        <p>The second was WebMCP. A site can list the tools it has, and an agent can find them and call them. With Web Intents, getting sites to say what they could do was hard, and we solved that part too late. WebMCP gives sites a way to say it, and someone, ideally you, can keep the index. I wrote <a href="https://aifoc.us/webmcp-is-the-new-web-intents/">WebMCP is the new Web Intents ... maybe</a>, built <a href="https://github.com/PaulKinlan/webmcp-relay">webmcp-relay</a> to keep a registry of the tools pages offer, and then wrote <a href="https://aifoc.us/i-think-ive-got-it-web-intents/">I think I've got it</a>.</p>
+        <ol class="years">
+          <li><time>2011</time><span><a href="https://github.com/PaulKinlan/WebIntents">Web Intents</a>, service discovery for the web</span></li>
+          <li><time>2017</time><span><a href="https://paul.kinlan.me/reinventing-web-intents/">Reinventing Web Intents</a>, a middle-man that returns a port</span></li>
+          <li><time>2025</time><span><a href="https://aifoc.us/dangerous/">Calling APIs from the browser shouldn't mean exposing keys</a></span></li>
+          <li><time>2026</time><span><a href="https://aifoc.us/webmcp-is-the-new-web-intents/">WebMCP is the new Web Intents ... maybe</a>, <a href="https://aifoc.us/i-think-ive-got-it-web-intents/">I think I've got it</a>, <a href="https://aifoc.us/extensible-web-apps/">Extensible web apps</a>, and this site</span></li>
+        </ol>
+      </section>
+
+      <section id="grew">
+        <h2>From one hub to the rest of the site</h2>
+        <p>The first thing I built here was <a href="/hub/">the hub</a>. It is Web Intents with a port at the end, one registry of every site's tools, and a way to use your own agent on any website.</p>
+        <p>Then I kept asking what else a port could do. Can it carry <a href="/patterns/canvas/">a canvas</a>, <a href="/patterns/pipeline/">a stream</a> or <a href="/patterns/keycopy/">a key</a>? Can it outlive <a href="/patterns/introduce/">the site that made the introduction</a>, or <a href="/patterns/reload/">its own page reloading</a>? Can it reach <a href="/patterns/mounted/">a service worker</a>, <a href="/patterns/audio/">the audio thread</a> or <a href="/patterns/far/">another device</a>? What can be sent where, and <a href="/lab/">in which browser</a>?</p>
+        <p>The answers became the <a href="/patterns/">port patterns</a>, each with a demo you can run and code you can copy. <a href="/guide/">The guide</a> explains ports from the start. <a href="/comlink/">Comlink today</a> looks at what a library like Comlink can do on the platform as it is now, with a rewrite I call Hawser. <a href="/missing/">What is missing</a> is my list for browser vendors, each item with evidence.</p>
+        <p>The AI router grew the most. It has an address of its own, <a id="router-link" href="https://llmchannel.dev">llmchannel.dev</a>, a <a href="/chat/">chat app</a> that uses it, and <a href="/ai-router/#how">the whole pattern written down</a>, one step at a time.</p>
+        <p>Every experiment here is to find out what ports can do. That includes the places where they break.</p>
+      </section>
+
+      <section id="take">
+        <h2>Things you can take</h2>
+        <p>There is no build step anywhere on this site, so what you read is what runs. The scripts are served so that another site can load them.</p>
+        <ul class="cards">
+          <li><h3><a href="/patterns/">Port patterns</a></h3><p>Each pattern has a page of its own: a demo you can run, how it works, the code, and the traps.</p></li>
+          <li><h3><a href="/comlink/">Hawser</a></h3><p>Remote objects over a <code>MessagePort</code>, in one file with no dependencies: <code>/hawser.js</code>. Calls fail when the other side goes away, and a port can be narrowed before it is handed on.</p></li>
+          <li><h3><a href="/ai-router/">The AI router</a></h3><p>One script gives a site a model on the visitor's own account. The site sends prompts down a port and never sees a key.</p></li>
+          <li><h3><a href="/hub/">The hub</a></h3><p><code>/hub.js</code> is the client library: <code>serve()</code>, <code>pick()</code>, <code>registry()</code>, <code>agent()</code> and <code>intentLinks()</code>.</p></li>
+          <li><h3><a href="/guide/">The guide</a></h3><p>Ports from the beginning, with diagrams you step through. Start here if a <code>MessageChannel</code> is new to you.</p></li>
+          <li><h3><a href="/reading/">Further reading</a></h3><p>Everything I found on message channels and ports: reference pages, specifications, articles, libraries and talks.</p></li>
+        </ul>
+      </section>
+
+      <section id="who">
+        <h2>Who built it and how it works</h2>
+        <p>I'm <a href="https://paul.kinlan.me/">Paul Kinlan</a>. I lead the Chrome and Open Web Developer Relations team at Google, and I have been working on the web for a long time. This is my own playground of experiments and demos. It is not official Chrome documentation.</p>
+        <p>I write about the web at <a href="https://paul.kinlan.me/">paul.kinlan.me</a>, and about the web and AI at <a href="https://aifoc.us">aifoc.us</a>.</p>
+        <p>There is no framework and no bundler. Every page is hand-written HTML and ES modules. Where a demo says “site”, it means a site that really is separate: this one, a florist, a library, a planner and the router, each at an address of its own. The same Cloudflare Worker code serves all of them. The server keeps what has to be seen from everywhere, such as the hub's registry and the router's list of grants.</p>
+        <p>When something did not work, or worked in one browser and not in another, I wrote it down. It is in <a href="/lab/results/">what browsers reported</a> to the lab, and in <a href="/missing/">What is missing</a>.</p>
+      </section>
+
+      <section id="browsers">
+        <h2>Browser support</h2>
+        <p><code>MessageChannel</code> and <code>MessagePort</code> are in every browser, and have been for years. Many experiments here go further and use newer things, and not every browser has them. <a href="/lab/">The lab</a> runs each check in your own browser, and its <a href="/lab/results/">results page</a> shows what other browsers reported.</p>
+      </section>
+
+      <section id="links">
+        <h2>Project links</h2>
+        <dl class="facts">
+          <div><dt>Source code</dt><dd><a href="https://github.com/PaulKinlan/port-authority">github.com/PaulKinlan/port-authority</a></dd></div>
+          <div><dt>The AI router</dt><dd><a href="https://llmchannel.dev">llmchannel.dev</a>, and <a href="/ai-router/">how it works</a></dd></div>
+          <div><dt>Web Intents</dt><dd><span><a href="https://github.com/PaulKinlan/WebIntents">github.com/PaulKinlan/WebIntents</a></span><span><a href="https://paul.kinlan.me/what-happened-to-web-intents/">What happened to Web Intents?</a></span><span><a href="https://paul.kinlan.me/reinventing-web-intents/">Reinventing Web Intents</a></span></dd></div>
+          <div><dt>WebMCP and agents</dt><dd><span><a href="https://aifoc.us/webmcp-is-the-new-web-intents/">WebMCP is the new Web Intents ... maybe</a></span><span><a href="https://aifoc.us/i-think-ive-got-it-web-intents/">I think I've got it</a></span><span><a href="https://github.com/PaulKinlan/webmcp-relay">github.com/PaulKinlan/webmcp-relay</a></span><span><a href="https://aifoc.us/extensible-web-apps/">Extensible web apps</a></span></dd></div>
+          <div><dt>API keys</dt><dd><a href="https://aifoc.us/dangerous/">Calling APIs from the browser shouldn't mean exposing keys</a></dd></div>
+          <div><dt>Comlink</dt><dd><a href="https://github.com/GoogleChromeLabs/comlink">github.com/GoogleChromeLabs/comlink</a>, by Surma</dd></div>
+          <div><dt>Something wrong?</dt><dd><a href="https://github.com/PaulKinlan/port-authority/issues">Open an issue</a></dd></div>
+          <div><dt>Author</dt><dd><a href="https://paul.kinlan.me/">Paul Kinlan</a> (<a href="https://github.com/PaulKinlan">@PaulKinlan</a>)</dd></div>
+        </dl>
+      </section>
+    </main>
+    <footer class="small muted" style="padding-block:2rem 4rem">Port Authority, by <a href="https://paul.kinlan.me">Paul Kinlan</a>.</footer>
+  </div>
+  <script type="module">
+    // The router has an address of its own. Use the one this deployment was given.
+    import { sites } from "/_sites.js";
+    if (sites.router) document.getElementById("router-link").href = sites.router + "/";
+  </script>
+</body>
+</html>

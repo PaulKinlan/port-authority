@@ -11,6 +11,7 @@ Live: https://port-authority.dev
 | Path | What it is |
 | --- | --- |
 | `sites/main/` | The experiments homepage, the port patterns page, and the hub |
+| `sites/main/about/` | Who made the site and how it came to be, from Web Intents in 2011 to now. Every page's footer links to it |
 | `sites/main/hub.js` | Client library: `serve()`, `pick()`, `registry()`, `agent()`, `intentLinks()` |
 | `sites/main/hub/popup.html` | The window sites open to ask the user (the picker) |
 | `sites/main/bridge.mjs` | Run beside an ACP agent; connects it to the hub and gives it the registry as an MCP server |
