@@ -236,8 +236,18 @@ for await (const chunk of stream) {
         </ol>
         <h3>Where the ports end up</h3>
         <p>Every port leads to the same worker. The site's page holds one. A worker the site starts can hold another, and so can an iframe from a third site that the page chooses to lend to. None of them can open the router window, and none holds a key. The browser's built-in model cannot be used from a worker, so for that one the frame lends the worker a port and answers on it.</p>
+        <h3>When a site cannot have the frame</h3>
+        <p>Some sites cannot put a frame from another address in their pages. Their own Content-Security-Policy forbids it. For those, the router window does the frame's job.</p>
+        <ol>
+          <li><code>connect()</code> adds the frame as usual. The frame says it is there the moment it loads. If the browser reports that the site's policy blocked it, or nothing answers, <code>connect()</code> gives up on the frame and sets <code>ai.mode</code> to <code>"window"</code>.</li>
+          <li>On a click, the site opens the router window. The window says it is ready, and the site posts it one end of a <code>MessageChannel</code>, with the router's address as the only address allowed to receive it.</li>
+          <li>The window learns which site this is from the browser, as the frame would have. It starts the same worker, opens the same call page, and stays open. Prompts go from the site to the worker inside the window.</li>
+          <li>Closing the window disconnects the site. A request that was waiting fails with an error the site can read. The grant is kept in the window's own storage, so the next time the site opens the window it connects at once, with nothing to choose.</li>
+        </ol>
+        <p>The frame is better when a site can have it. Nothing has to stay open, and a reload needs no click. The <a href="/chat/">chat app</a> can be switched to either way, so you can see both.</p>
+        <p>The site never makes the line between the window and the frame. In the usual way, the window finds the frame itself, by posting to each frame of the page that opened it and naming the router's address as the target. A site that made that line could keep one end of it, and be handed the grant.</p>
         <h3>After a reload</h3>
-        <p>The frame stored the grant under the site's address, so the site has its model again with no window. If you pressed Stop in the router, the server has deleted the unlock key. The encrypted key left inside that site can no longer be opened, and the frame deletes it the next time it checks.</p>
+        <p>The frame stored the grant under the site's address, so the site has its model again with no window. A browser gives a frame inside another site storage of its own, so the frame cannot read the accounts you saved at the router's address. That is why a window has to hand it the grant. If you pressed Stop in the router, the server has deleted the unlock key. The encrypted key left inside that site can no longer be opened, and the frame deletes it the next time it checks.</p>
       </section>
 
       <section id="who">
@@ -316,6 +326,7 @@ button.onclick = async () =&gt; {
 ai.model   <span class="c">// { provider: "Anthropic", name: "claude-sonnet-5-5", account: "Work key" }</span>
 ai.left    <span class="c">// requests left on this site's grant</span>`;
     $("sites").innerHTML = [
+      [location.origin + "/chat/", "Chat", "A whole chat app with no AI account of its own. It keeps your conversations in your browser and asks your router for the model."],
       [sites.florist + "/card/", "Stem and Petal, a florist", "Writes the message for the card that goes with a bouquet, and streams it in. Lends a 2-request port to an iframe from a third site."],
       [sites.library + "/digest/", "Harbour Street Library", "Gives its port to a worker that writes a note for each book. Lends a port that stops after 3 requests."],
       [sites.router + "/", "Your router", "Add an account, see which sites you allowed and what they used, and stop any of them."],

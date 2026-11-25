@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content">
+  <title>Chat | Port Authority</title>
+  <meta name="description" content="A chat app with no AI account of its own. It talks to the model you choose in your AI router, over a MessagePort, and keeps your conversations in this browser.">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <meta property="og:title" content="Chat | Port Authority">
+  <meta property="og:description" content="A chat app with no AI account of its own. It talks to the model you choose in your AI router, and keeps your conversations in this browser.">
+  <meta property="og:type" content="website">
+  <meta name="twitter:card" content="summary">
+  <meta name="color-scheme" content="light dark">
+  <link rel="stylesheet" href="/base.css">
+  <link rel="stylesheet" href="/chat/chat.css">
+  <script type="module" src="/chat/app.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#prompt">Skip to the message box</a>
+  <div class="app" id="app">
+
+    <aside class="side" id="side" aria-label="Conversations">
+      <div class="side-head">
+        <h1 class="brand"><span class="jack on" aria-hidden="true"></span>Chat</h1>
+        <button type="button" class="icon quiet side-close" id="side-close" aria-label="Close the list of conversations">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        </button>
+      </div>
+      <button type="button" class="accent new" id="new-chat">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>New chat
+      </button>
+      <label class="visually-hidden" for="search">Search your conversations</label>
+      <input type="search" id="search" placeholder="Search" autocomplete="off">
+      <nav class="list" id="list" aria-label="Saved conversations"></nav>
+      <div class="side-foot">
+        <p class="small muted">Conversations are kept in this browser and nowhere else.</p>
+        <div class="foot-actions">
+          <button type="button" class="tiny quiet" id="export-all">Export all</button>
+          <button type="button" class="tiny quiet" id="import">Import</button>
+          <input type="file" id="import-file" accept="application/json,.json" hidden>
+        </div>
+        <p class="small links"><a href="/ai-router/">How this works</a><a id="router-link" href="#">Your router</a><a href="/">Port Authority</a></p>
+      </div>
+    </aside>
+    <div class="scrim" id="scrim" hidden></div>
+
+    <main class="main" id="main">
+      <header class="top">
+        <button type="button" class="icon quiet side-open" id="side-open" aria-label="Show the list of conversations" aria-controls="side" aria-expanded="false">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+        </button>
+        <h2 class="title" id="title">New chat</h2>
+        <button type="button" class="model" id="model" aria-haspopup="dialog">
+          <span class="jack" id="model-jack" aria-hidden="true"></span><span id="model-text">Connecting</span>
+        </button>
+        <button type="button" class="icon quiet" id="more" popovertarget="menu" aria-label="More for this conversation">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>
+        </button>
+        <div class="menu" id="menu" popover>
+          <button type="button" class="quiet" id="menu-instructions">Instructions</button>
+          <button type="button" class="quiet" id="menu-rename">Rename</button>
+          <button type="button" class="quiet" id="menu-export">Export as Markdown</button>
+          <button type="button" class="quiet danger" id="menu-delete">Delete</button>
+          <button type="button" class="quiet rule" id="menu-connection">Model and router</button>
+        </div>
+      </header>
+
+      <div class="scroller" id="scroller">
+        <div class="thread" id="thread" role="log" aria-label="Messages" aria-live="off"></div>
+      </div>
+
+      <div class="dock">
+        <p class="notice small" id="notice" role="status" hidden></p>
+        <form class="composer" id="composer">
+          <label class="visually-hidden" for="prompt">Message</label>
+          <textarea id="prompt" rows="1" placeholder="Ask anything" autocomplete="off" enterkeyhint="send"></textarea>
+          <button type="submit" class="icon send" id="send" aria-label="Send">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+          </button>
+          <button type="button" class="icon send stop" id="stop" aria-label="Stop the answer" hidden>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="7" width="10" height="10" rx="1.5"/></svg>
+          </button>
+        </form>
+        <p class="hint small muted" id="hint">Enter sends. Shift and Enter starts a new line.</p>
+      </div>
+    </main>
+  </div>
+
+  <dialog id="rename-dialog" aria-labelledby="rename-h">
+    <form method="dialog" class="stack">
+      <h2 id="rename-h">Rename this conversation</h2>
+      <div><label for="rename-input">Title</label><input type="text" id="rename-input" maxlength="120" autocomplete="off" required></div>
+      <div class="actions"><button type="submit" class="accent" value="save">Save</button><button type="submit" class="quiet" value="cancel" formnovalidate>Cancel</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="delete-dialog" aria-labelledby="delete-h">
+    <form method="dialog" class="stack">
+      <h2 id="delete-h">Delete this conversation?</h2>
+      <p><strong id="delete-name"></strong> is kept only in this browser. Once it is deleted it cannot be brought back.</p>
+      <div class="actions"><button type="submit" class="danger-fill" value="delete">Delete</button><button type="submit" class="quiet" value="cancel" autofocus>Keep it</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="instructions-dialog" aria-labelledby="instructions-h">
+    <form method="dialog" class="stack">
+      <h2 id="instructions-h">Instructions for this conversation</h2>
+      <p class="small muted">Sent to the model before your messages, every time. Say how you want it to answer: who it is writing for, how long, what to avoid.</p>
+      <div><label for="instructions-input">Instructions</label><textarea id="instructions-input" rows="6" maxlength="20000" placeholder="Answer briefly, in plain English."></textarea></div>
+      <div class="actions"><button type="submit" class="accent" value="save">Save</button><button type="submit" class="quiet" value="cancel">Cancel</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="connection-dialog" aria-labelledby="connection-h">
+    <div class="stack">
+      <h2 id="connection-h">The model this app uses</h2>
+      <p id="connection-state"></p>
+      <div class="actions">
+        <button type="button" class="accent" id="connection-choose">Choose a model</button>
+        <button type="button" class="quiet" id="connection-forget" hidden>Forget it on this site</button>
+      </div>
+      <p class="small muted">This app has no AI account and no key. It asks <a id="connection-router" href="#">your router</a> for a model. You choose one of your own accounts there, and this app gets a port to send your messages on. It never sees your API key.</p>
+      <fieldset class="via" id="via">
+        <legend>How this app holds the router</legend>
+        <label><input type="radio" name="via" value="frame"><span><strong>In a hidden frame</strong><span class="small muted">The router window opens only while you choose. Your choice is still there after a reload.</span></span></label>
+        <label><input type="radio" name="via" value="window"><span><strong>Through the router window</strong><span class="small muted">For a site that cannot have the frame. The window stays open while you chat, and closing it disconnects this app.</span></span></label>
+      </fieldset>
+      <p class="small muted" id="via-note"></p>
+      <form method="dialog" class="actions"><button type="submit" class="quiet">Close</button></form>
+    </div>
+  </dialog>
+</body>
+</html>
