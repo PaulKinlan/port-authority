@@ -216,7 +216,7 @@ output.textContent = answer.choices[0].message.content;</pre>
         <h3 id="handover">Why the key is handed over on a port</h3>
         <p>The window has your key and the frame needs it. The window sends it on a <code>MessagePort</code> that it opens straight to the frame. There are two reasons.</p>
         <ol>
-          <li><strong>The site must never see it.</strong> The frame is inside the site's page, but a site cannot read into a frame from another address, and it cannot listen to a port it does not hold. The window makes the channel itself. It posts one end to the frame, and names the router's address as the only address allowed to receive it. The site embedded the frame and opened the window, and that is all it did. It never holds either end.</li>
+          <li><strong>The site must never see it.</strong> The frame is inside the site's page, but a site cannot read into a frame from another address, and it cannot listen to a port it does not hold. The window makes the channel itself. It posts one end to the frame, and names the router's address as the only address allowed to receive it. The site embedded the frame and opened the window, and that is all it did. It never holds either end. <a href="#relay">What happens when a site tries to get in between</a> is further down.</li>
           <li><strong>There is nowhere shared to leave it.</strong> You might expect the window to save the key and the frame to read it. Storage partitioning rules that out. For a frame inside another site, <code>localStorage</code>, <code>IndexedDB</code>, the Cache API, a <code>SharedWorker</code> and a <code>BroadcastChannel</code> are all kept apart by the site the frame is inside. Chrome has done this since version 115, and Firefox and Safari partition storage too. It is sometimes called double-keying, because the storage is found by two keys: the frame's own address, and the site at the top of the page. A message is not storage, so it is not partitioned. A window can still post to a frame of its own address inside another site, and a port gives the two a private line.</li>
         </ol>
         <p>What crosses is not the key in the clear. The window encrypts it first, with an unlock key that the router's server keeps. The copy the frame keeps is in the part of the browser's storage set aside for that site, where the router's own pages cannot reach it to delete it. So it is made useless by itself. It opens only while the server agrees, and Stop ends that from anywhere. The server keeps the unlock key and a record of the grant. It is never sent your API key, in the clear or encrypted.</p>
@@ -267,6 +267,7 @@ output.textContent = answer.choices[0].message.content;</pre>
             <li data-step="16">The answer comes back the same way, a few words at a time: from the provider to the call page, to the worker, and down the reply port to the site.</li>
           </ol>
         </div>
+        <p>Step 4 is the odd one. A window posts into a page it cannot read, and reaches a frame it cannot see. <a href="#find">How the window finds the frame</a> says why a browser allows it, and why the site cannot get in the way.</p>
 
         <h3 id="window">When a site cannot have the frame</h3>
         <p>Some sites cannot put a frame from another address in their pages. Their own Content-Security-Policy forbids it. For those, the router window does the frame's job, and it has to stay open. The frame is better when a site can have it: nothing has to stay open, and a reload needs no click. The <a href="/chat/">chat app</a> can be switched to either way, so you can see both.</p>
@@ -327,7 +328,7 @@ output.textContent = answer.choices[0].message.content;</pre>
         <p>The frame around it is sent with almost as little. It may run the router's scripts, start its worker, hold the call page, and connect to the router's server. It may not hold a frame from anywhere else, so the call page cannot be sent off to another site either.</p>
 
         <h3 id="checks">What each check is for</h3>
-        <p>The site is not trusted, and it sits between you and the router the whole time. Each of these stops one thing a site could try.</p>
+        <p>The site is not trusted, and it sits between you and the router the whole time. Each of these stops one thing a site could try. The longer account, with what is still open, is in <a href="#security">Security: the site is in the middle</a>.</p>
         <div class="scroll"><table>
           <thead><tr><th>The check</th><th>Who makes it</th><th>What it stops</th></tr></thead>
           <tbody>
@@ -388,6 +389,137 @@ output.textContent = answer.choices[0].message.content;</pre>
           <li>The window as the way through, for a site that cannot have the frame.</li>
         </ol>
         <p>It is built from port patterns described elsewhere on this site: <a href="/patterns/introduce/">introducing two parties and stepping away</a>, and <a href="/patterns/attenuate/">handing on a port that can do less</a>. The code is short enough to read: <code>router.js</code> is what a site loads, <code>host.js</code> is the job the frame and the window both do, and <code>pick.js</code> is the window.</p>
+      </section>
+
+      <section id="security">
+        <h2>Security: the site is in the middle</h2>
+        <p>The hard part of this pattern is not the model. It is the page in the middle. The site embeds the router's frame. The site opens the router's window. The site writes the script that does both, and it does not have to use the router's script to do it. So the router assumes the site is hostile, and that it will try everything a page can try.</p>
+        <p>These are the things a hostile site wants, most wanted first.</p>
+        <ol>
+          <li>Your API key.</li>
+          <li>To read or change what passes between the window and the frame.</li>
+          <li>To be allowed under another site's name.</li>
+          <li>To use more than you allowed, or to go on after you press Stop.</li>
+        </ol>
+        <p>This section says how each is stopped, which part is the browser's work and which is the router's, and what is still open.</p>
+
+        <h3 id="relay">The relay a hostile site would try</h3>
+        <p>The window and the frame have to talk, and the site stands between them. So this is the obvious attack. The site makes a <code>MessageChannel</code> and gives one end to the window. It makes another and gives one end to the frame. It keeps the other two ends, passes each message across, and reads every one. The window and the frame each think they are talking to the other.</p>
+        <p>That is a relay, or a man in the middle. It looks like the Two Generals problem, and it is not. Two Generals is about messages that are lost. This is about messages that are read.</p>
+        <p>The site can do the first half. It can make both channels, and it can offer both ports. But a port from a site is taken as a port from a site. Nothing secret is ever put on a port that a site supplied. The key travels on a third line, and the site did not make it.</p>
+        <div class="scroll"><table>
+          <thead><tr><th>The line</th><th>Who makes it</th><th>Who holds the ends</th><th>What travels on it</th></tr></thead>
+          <tbody>
+            <tr><td>A. Site to frame</td><td>The site</td><td>The site, and the router's worker inside the frame</td><td>Prompts and answers</td></tr>
+            <tr><td>B. Site to window</td><td>The site</td><td>The site, and the router's worker inside the window</td><td>Prompts and answers. Only when the site has no frame. When there is a frame, the window takes no port from the site at all</td></tr>
+            <tr><td>C. Window to frame</td><td>The window</td><td>The window and the frame</td><td>The grant and the encrypted key, once</td></tr>
+          </tbody>
+        </table></div>
+        <figure>
+          <svg viewBox="0 0 960 340" role="img" aria-labelledby="f3-title f3-desc" xmlns="http://www.w3.org/2000/svg"><title id="f3-title">The three lines, and who made each</title><desc id="f3-desc">A hostile site's page contains the router's hidden frame. A router window is open beside it. Line A runs from the site to the frame and line B from the site to the window. The site made both and holds an end of each. Line C runs from the router window straight to the router frame. The window made it, and the site holds neither end. The grant and the encrypted key travel only on line C.</desc><rect class="win" x="10" y="10" width="440" height="320" rx="10"/><path class="bar" d="M10 46V20a10 10 0 0 1 10-10h420a10 10 0 0 1 10 10v26z"/><circle cx="28" cy="28" r="5" fill="var(--red)"/><circle cx="44" cy="28" r="5" fill="var(--yellow)"/><circle cx="60" cy="28" r="5" fill="var(--teal)"/><rect class="addr" x="76" y="17" width="364" height="22" rx="11"/><text class="url" x="86" y="31">a-hostile-site.example</text><text x="28" y="74" font-size="16" font-weight="700">A hostile site's page</text><text x="28" y="94" font-size="13">Wrote its own script. Holds an end of A and of B.</text><rect class="frame" x="44" y="186" width="390" height="126" rx="6"/><text x="58" y="209" font-size="15" font-weight="700">Hidden iframe: the router frame</text><text x="58" y="230" font-size="13">Takes A as a site's port: prompts and answers.</text><text x="58" y="247" font-size="13">Takes C only from a page at the router's address.</text><text class="url" x="58" y="266" data-url="frame" data-max="300"></text><rect class="win" x="530" y="10" width="420" height="320" rx="10"/><path class="bar" d="M530 46V20a10 10 0 0 1 10-10h400a10 10 0 0 1 10 10v26z"/><circle cx="548" cy="28" r="5" fill="var(--red)"/><circle cx="564" cy="28" r="5" fill="var(--yellow)"/><circle cx="580" cy="28" r="5" fill="var(--teal)"/><rect class="addr" x="596" y="17" width="344" height="22" rx="11"/><text class="url" x="606" y="31" data-url="pick" data-max="326"></text><text x="548" y="74" font-size="16" font-weight="700">Popup window: the router window</text><text x="548" y="94" font-size="13">Holds your accounts and your keys.</text><path class="wire" d="M120 110V184"/><circle class="num" cx="144" cy="134" r="11"/><text class="numt" x="144" y="138" text-anchor="middle">A</text><text x="164" y="131" font-size="13" font-weight="700">Made by the site.</text><text x="164" y="148" font-size="13">Prompts and answers. The site can</text><text x="164" y="165" font-size="13">read all of it. It wrote the prompts.</text><path class="wire" d="M450 66H528" stroke-dasharray="6 4"/><circle class="num" cx="489" cy="46" r="11"/><text class="numt" x="489" y="50" text-anchor="middle">B</text><text x="548" y="134" font-size="13" font-weight="700">B: made by the site.</text><text x="548" y="151" font-size="13">Taken only when the site has no frame,</text><text x="548" y="168" font-size="13">and only for prompts and answers.</text><path class="wire" d="M530 286H436" style="stroke-width:4.5"/><circle class="num" cx="490" cy="264" r="11"/><text class="numt" x="490" y="268" text-anchor="middle">C</text><text x="548" y="218" font-size="13" font-weight="700">C: made by this window.</text><text x="548" y="235" font-size="13">Posted straight to the frame, with the router's</text><text x="548" y="252" font-size="13">address as the only one that may receive it.</text><text x="548" y="269" font-size="13">The grant and the encrypted key travel on it.</text><text x="548" y="286" font-size="13">The site holds neither end.</text></svg>
+          <figcaption>The site made A and B, so it can read both. It did not make C and holds no end of it. On the drawing, C crosses the site's page to reach the frame. In the browser it does not pass through the site's script.</figcaption>
+        </figure>
+        <p>To relay, the site would have to get the window to send the key on one of the site's ports, or get the frame to accept one. Neither happens.</p>
+        <ul>
+          <li><strong>The window uses only the port it made.</strong> It never takes the key line from the page that opened it.</li>
+          <li><strong>The frame takes that port only from a page at the router's address.</strong> The site can post the frame the same message with a port of its own. The browser marks that message with the site's address, and the frame ignores it. A page cannot choose the address its messages are marked with.</li>
+        </ul>
+
+        <h3 id="find">How the window finds the frame, across a page it does not trust</h3>
+        <p>The window is at the router's address. The page that opened it is not. You would expect the window to be able to do nothing with that page. It can do a few things. A browser allows a short, fixed list of things on a window from another address, and the list is the same in every browser.</p>
+        <div class="scroll"><table>
+          <thead><tr><th>Allowed on a window from another address</th><th>Not allowed</th></tr></thead>
+          <tbody>
+            <tr><td><code>w.postMessage()</code></td><td><code>w.document</code>, and anything on the page</td></tr>
+            <tr><td><code>w.length</code>: how many frames it has</td><td><code>w.localStorage</code>, and any other storage</td></tr>
+            <tr><td><code>w[0]</code>, <code>w[1]</code>: a handle to each of those frames</td><td>Reading <code>w.location.href</code></td></tr>
+            <tr><td><code>w.opener</code>, <code>w.parent</code>, <code>w.top</code></td><td>Listening for the messages it receives</td></tr>
+            <tr><td><code>w.closed</code>, <code>w.close()</code>, <code>w.focus()</code></td><td>Any variable or function in it</td></tr>
+          </tbody>
+        </table></div>
+        <p>The window uses three of them. <code>opener</code> is its handle to the site's page. <code>opener.length</code> is how many frames that page has. <code>opener[i]</code> is a handle to each one. The window does not know which frame is the router's, or whether any is, and it does not try to work that out. It makes a new channel for every frame, posts one end to each, and names the router's address as the only address that may receive it.</p>
+<pre><span class="c">// in the router window</span>
+for (let i = 0; i &lt; opener.length; i++) {
+  const line = new MessageChannel();
+  line.port1.onmessage = (event) =&gt; { <span class="c">/* a router frame answered. This is the line. */</span> };
+  opener[i].postMessage({ router: "picker" }, location.origin, [line.port2]);
+}</pre>
+        <p>The browser does the sorting.</p>
+        <ul>
+          <li><strong>A frame that is not a router page</strong> gets nothing. That is an advert, a video, or a frame the site planted. The browser drops the message, because the address does not match. The frame never sees the message or the port.</li>
+          <li><strong>The router frame</strong> gets the message. It checks that the sender is a router page, and answers on the port with the address of the site it is inside. Now the window knows which line reached the real frame.</li>
+          <li><strong>If nothing answers</strong> in two and a half seconds, the window decides there is no frame. It does the frame's job itself, and the key never leaves the window.</li>
+        </ul>
+        <p>The message goes from the window to the frame. The frame is inside the site's page, but the message does not pass through the site's script. A page cannot listen for messages sent to a frame from another address.</p>
+        <p>The site can change the frames, and it does not help it.</p>
+        <ul>
+          <li>It can add frames, or put its own first. Position does not matter. Each frame gets its own line, and only a router page can answer on one.</li>
+          <li>It can embed the router frame twice. Both are the router's real code, with the same storage. A router frame that the site has not said hello to closes the port without a word.</li>
+          <li>It can put the router frame inside another frame. The window reaches only the page's own frames, and the frame refuses to work unless the page it is in is the page in the tab.</li>
+          <li>It can leave the frame out. Then the window keeps the key, as above.</li>
+        </ul>
+
+        <h3 id="once">Why the address is checked once</h3>
+        <p>A message between windows is marked with the address it came from. The receiver reads it in <code>event.origin</code>. A message on a port is not marked. There, <code>event.origin</code> is an empty string. So nothing can be checked once the two are talking on the port. The check is made once, on the message that delivers the port. After that, holding the port is the proof.</p>
+        <p>That is safe because a port cannot be copied. Posting a port moves it, and the sender no longer has it. A channel has two ends and never a third. One end never left the window. The browser put the other in a router page, and nowhere else. And that page checked that it came from a router page.</p>
+
+        <h3 id="still">What a hostile site can still do</h3>
+        <ul>
+          <li><strong>Stop it working.</strong> It can remove the frame or send it to another address. Nothing is delivered to a frame that is no longer a router page.</li>
+          <li><strong>Use what you allowed, for anything.</strong> It can send any prompt. It can pass your model on to other people through its own server. That lasts until the limit runs out or you press Stop. The limit is in requests and days, not money.</li>
+          <li><strong>Read every answer.</strong> It asked for them.</li>
+          <li><strong>Send the window somewhere else.</strong> The site opened the window, so it can point it at a page of its own that looks the same. The address bar is the only thing that tells you. That is why the real window never asks for a key: a window that does is not the router.</li>
+          <li><strong>Say anything on its own page.</strong> The router cannot stop a site telling you to paste a key into it.</li>
+        </ul>
+
+        <h3 id="risks">Each risk, what is done about it, and what is left</h3>
+        <div class="scroll"><table>
+          <thead><tr><th>The risk</th><th>What is done about it</th><th>What is left</th></tr></thead>
+          <tbody>
+            <tr><td>The site reads the key out of the frame or the window</td><td>The browser does not let a page read a window or a frame from another address. And the router has no message that gives the key back</td><td>Nothing known</td></tr>
+            <tr><td>The site relays between the window and the frame</td><td>The window makes the line. The browser delivers it only to a router page. The frame takes it only from a router page</td><td>Nothing known</td></tr>
+            <tr><td>The site hands the frame a grant it wrote itself</td><td>The frame takes a grant only on that line</td><td>Nothing known</td></tr>
+            <tr><td>The site claims to be another site</td><td>The site's address is read from the browser, never from what the site wrote. The window shows it to you before you choose</td><td>You have to read it</td></tr>
+            <tr><td>A hostile page shows a site you trust inside itself, to be allowed by the trusted name</td><td>The frame answers only the page in the tab itself. The window refuses a page that is inside another page</td><td>Nothing known</td></tr>
+            <tr><td>The site draws over the window to get your click</td><td>The window cannot be put inside any page. The browser enforces that, from <code>frame-ancestors 'none'</code></td><td>Nothing known</td></tr>
+            <tr><td>A look-alike window asks for your key</td><td>The real window never asks for one. A key is typed at the router's own page and nowhere else</td><td>No browser stops a look-alike. You have to check the address bar</td></tr>
+            <tr><td>A copy of your key is left in each site's storage, where the router's own page cannot reach it</td><td>The copy is encrypted. The server holds what opens it, hands it over for one request at a time, and deletes it when you press Stop</td><td>A request that has already started will finish. And it takes a server</td></tr>
+            <tr><td>A router script is changed, or a script is injected into a router page</td><td>A <code>Content-Security-Policy</code> on every router page. Only the router's own script files run. The call page can connect to one address at the provider. Every other page can connect only to the router</td><td>The server that sends the rule also sends the scripts. If it were taken over it could send other scripts and another rule. And the rule does not stop a router script sending something to the router's own server</td></tr>
+            <tr><td>Someone calls the router's server from another website</td><td>The server refuses a request that does not come from a router page. The browser says where a request comes from, and a page cannot change that</td><td>Nothing known</td></tr>
+            <tr><td>Someone calls the router's server with a program that is not a browser</td><td>A program can claim to come from anywhere, so every call also needs a secret. To list, make or stop grants it is a key that only your browser has. To use a grant it is that grant's own secret. What the server gives back is the unlock key, and that opens nothing without the encrypted copy, which stays in your browser</td><td>Someone with a grant's id and secret could use up its requests. Nothing limits how often the server can be asked. Requests are not signed</td></tr>
+            <tr><td>The server learns about you</td><td>It is sent no keys, no prompts and no answers. You have no login and it has no name or email for you. You are a random id made in your browser</td><td>It does hold the address of each site you allowed, the name you gave the account, the model and the counts. And it sees your network address, as any server does</td></tr>
+            <tr><td>Your keys where they are kept, at the router's address</td><td>They are in the browser's storage for that address, which no other site can read. Router pages run only the router's own scripts</td><td>They are not encrypted there. Anything that can read your browser's files on your computer can read them</td></tr>
+            <tr><td>A message is lost</td><td>The window does not close until the frame says it stored the grant. If it hears nothing in five seconds it tells you. The server counts a request before it hands over the unlock key</td><td>If the server's answer is lost, a request is counted that was never made. If a report of tokens is lost, that count is low</td></tr>
+            <tr><td>A site that cuts itself off from the windows it opens, with <code>Cross-Origin-Opener-Policy</code></td><td>Nothing</td><td>Not tried. The window would have no handle to the site, so it could not find the frame or be given a port</td></tr>
+          </tbody>
+        </table></div>
+
+        <h3 id="tested">How it is tested</h3>
+        <p>There is a test that plays the hostile site. It is <code>test/hostile.mjs</code>. Its page does these things.</p>
+        <ul>
+          <li>It records every message its window receives, every port it ever sees, and every message on those ports. It replaces <code>MessageChannel</code> and <code>postMessage</code> in its own page to do it.</li>
+          <li>It plants three frames of its own where the window will look: one at its own address, one with no address, and the router frame's address inside a sandbox.</li>
+          <li>It tries to read the real frame's page and storage, to listen on its window, and to replace its <code>postMessage</code>. It tries to read the router window's page and storage too.</li>
+          <li>It posts the frame a forged message from "the window", with a port of its own, and a grant it wrote.</li>
+          <li>It says hello to the frame a second time, for a second line in.</li>
+          <li>It posts forged messages and a port at the window while you choose.</li>
+        </ul>
+        <p>Then a person allows it, and it sends a prompt and gets its answer. At the end, everything it collected is searched for the API key, the encrypted key, and the grant's id and secret. None of them is there. It saw no message between the window and the frame. Its planted frames were sent nothing. The frame did not answer the forged window or take the forged grant. The browser refused every reach into the frame and the window.</p>
+        <p>It is one test, in Chrome, on one computer, against a stand-in for the provider. Storage partitioning is on, as it is in your browser. Firefox and Safari have not been tried.</p>
+
+        <h3 id="rests">What all of it rests on</h3>
+        <p>Two things.</p>
+        <ul>
+          <li><strong>The browser's rules about addresses.</strong> A page cannot read a window or a frame from another address. A message goes only to the address the sender named. A message is marked with the address it really came from. A port cannot be copied. If a browser got one of these wrong, this would fail. So would much else: the same rules keep one site from reading your mail in another tab.</li>
+          <li><strong>The router's own code.</strong> The frame, the window and the call page handle your key. You are trusting them, and the server that sends them.</li>
+        </ul>
+        <p>These would make it harder still, and are not built.</p>
+        <ul>
+          <li>A limit on how often the server can be asked.</li>
+          <li>Requests to the server signed with a key that cannot be copied out of the browser, so that a grant's id and secret are no use to a program.</li>
+          <li>Keys encrypted where they are kept, at the router's address.</li>
+          <li>A server that is told less: an id, the counts and the unlock key, with the names kept in your browser.</li>
+        </ul>
       </section>
 
       <section id="who">
