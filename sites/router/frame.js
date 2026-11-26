@@ -10,6 +10,7 @@
 // and one from the router window when the person chooses.
 
 import { startHost } from "/host.js";
+import "/keep.js";
 
 let site = null;    // the origin of the page this frame is inside
 let host = null;

@@ -14,6 +14,7 @@ import { choices, random, remember, sighting, stopped } from "/store.js";
 import { seal } from "/seal.js";
 import { PROVIDERS } from "/providers.js";
 import { startHost } from "/host.js";
+import "/keep.js";
 const main = document.getElementById("main");
 // A site opens this window, so this window never takes a key. A key is typed
 // in one place only: the router's own page, in a tab the person opened. Then a

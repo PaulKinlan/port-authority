@@ -56,8 +56,8 @@ function callPageFor(path) {
 // start its worker and hold the call page. It may connect to nothing.
 //
 // Every other page, and the worker, may connect to nothing either. The router
-// has no server to talk to: a grant is kept in the browser. So the call page is
-// the only router page that can send anything anywhere.
+// has no server to talk to: a grant is kept in the browser. The service worker
+// may fetch the router's own files, to keep a copy of them, and nothing else.
 // /frame.html is put inside other sites, and the call page inside /frame.html,
 // so those two cannot say which pages may frame them. The rest cannot be framed.
 function routerCsp(path) {
@@ -69,6 +69,10 @@ function routerCsp(path) {
   if (path === "/frame.html") {
     return ["default-src 'none'", "script-src 'self'", "worker-src 'self'", "frame-src 'self'", "connect-src 'none'", "base-uri 'none'", "form-action 'none'"].join("; ");
   }
+  // The service worker keeps a copy of the router's own files, so it has to be
+  // able to ask for them. It may connect to the router's address and nowhere
+  // else: not to a provider, and not to any other site.
+  if (path === "/sw.js") return ["default-src 'none'", "connect-src 'self'"].join("; ");
   return [
     "default-src 'none'", "script-src 'self'", "worker-src 'self'", "frame-src 'self'", "style-src 'self' https://fonts.googleapis.com", "font-src https://fonts.gstatic.com",
     "img-src 'self' data:", "connect-src 'none'", "base-uri 'none'", "form-action 'none'", "frame-ancestors 'none'",

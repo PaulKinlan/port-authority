@@ -195,6 +195,25 @@ test("the router has no server: the address that kept grants answers that it has
   assert.equal(reached, false);
 });
 
+test("the service worker may fetch the router's own files, and nothing else", async () => {
+  assert.deepEqual(await policy("/sw.js"), { "default-src": "'none'", "connect-src": "'self'" });
+});
+
+test("the service worker keeps a copy of every file a router page can ask for", async () => {
+  const { readdir, readFile } = await import("node:fs/promises");
+  const { PROVIDERS } = await import("../sites/router/providers.js");
+  const source = await readFile(new URL("../sites/router/sw.js", import.meta.url), "utf8");
+  const listed = JSON.parse(/const FILES = (\[[^\]]*\]);/.exec(source)[1].replace(/,\s*\]/, "]"));
+  const files = (await readdir(new URL("../sites/router/", import.meta.url))).filter((name) => !["sw.js", "call.html", "index.html"].includes(name)).map((name) => "/" + name);
+  const calls = Object.entries(PROVIDERS).filter(([, provider]) => provider.kind).map(([id]) => "/call/" + id);
+  // What the pages ask for that is not a file in that folder: the home page, shared files, and the list of sites.
+  const others = ["/", "/base.css", "/favicon.svg", "/hawser.js", "/_sites.js"];
+  assert.deepEqual([...listed].sort(), [...files, ...calls, ...others].sort());
+  // Each of them is something the pages really ask for, by that address.
+  const pages = (await Promise.all(["index.html", "frame.html", "pick.html", "call.html", "home.js", "pick.js", "frame.js", "host.js", "frame-worker.js"].map((name) => readFile(new URL("../sites/router/" + name, import.meta.url), "utf8")))).join("\n");
+  for (const path of others.slice(1)) assert.ok(pages.includes('"' + path + '"'), path + " is asked for by a router page");
+});
+
 test("a router page, and the router's worker, may connect to nothing at all", async () => {
   for (const path of ["/", "/frame.html", "/pick.html", "/frame-worker.js", "/grants.js", "/call.js", "/caller.js", "/providers.js"]) {
     const rules = await policy(path);

@@ -7,6 +7,7 @@ import { askOver } from "/line.js";
 import { accounts, removeAccount, allowed, stopped } from "/store.js";
 import { all as keptHere, remove as deleteHere, stateOf } from "/grants.js";
 import { accountForm } from "/account-form.js";
+import "/keep.js";
 const $ = (id) => document.getElementById(id);
 const esc = (text) => String(text).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 $("main-link").href = sites.main + "/ai-router/";
