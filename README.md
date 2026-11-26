@@ -93,6 +93,7 @@ node --test test/chat.unit.mjs test/markdown.unit.mjs        # the Chat Completi
 node --test test/providers.unit.mjs                          # what is sent to each provider and what is made of its stream: text, images, tool calls
 NODE_PATH=$(npm root -g) node test/airouter.mjs              # the AI router end to end, against stand-in providers
 NODE_PATH=$(npm root -g) node test/chat.mjs                  # the chat app, and a site that cannot have the router's frame
+NODE_PATH=$(npm root -g) node test/hostile.mjs               # a hostile site that taps, forges and reaches for the key, and gets none of it
 NODE_PATH=$(npm root -g) node test/hawser.mjs <screenshot-dir>   # the /comlink/ demos, 24 checks
 ```
 
