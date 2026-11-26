@@ -27,7 +27,8 @@ function serve(port) {
       if (!account || account.provider !== provider || !PROVIDERS[provider] || !PROVIDERS[provider].kind) {
         throw Object.assign(new Error("This page can only call the provider named in its address."), { code: "provider" });
       }
-      const key = account.sealed ? await unseal(account.wrap, account.sealed) : account.key || "";
+      // From a site's grant the key arrives encrypted, with the key that opens it. It is opened here and nowhere else.
+      const key = account.sealed ? await unseal(account.opens, account.sealed) : account.key || "";
       const pieces = generate({ provider, model: account.model, key }, ask, stop.signal);
       for (;;) {
         const { value, done } = await pieces.next();

@@ -33,20 +33,21 @@ addEventListener("message", (event) => {
     return;
   }
 
-  // The picker window found this frame and wants to hand over a grant. The
-  // browser only delivers this message if the sender named the router's
-  // address as the target, and event.origin proves the sender is a router page.
+  // The router window found this frame. It may hand over a grant, or stop the
+  // one this site has. The browser only delivers this message if the sender
+  // named the router's address as the target, and event.origin proves the
+  // sender is a router page. Nothing on this line comes from the site.
   if (message.router === "picker" && event.origin === location.origin && event.ports[0]) {
     const line = event.ports[0];
     if (!host) return line.close();
-    line.onmessage = (answer) => {
+    const mine = host;
+    line.onmessage = async (answer) => {
       const data = answer.data || {};
-      if (data.t === "grant" && data.grant && data.grant.site === site) {
-        host.setGrant(data.grant, data.info);
-        line.postMessage({ t: "stored" });
-      }
-      line.close();
+      if (data.t === "grant" && data.grant && data.grant.site === site) line.postMessage({ t: (await mine.setGrant(data.grant)) ? "stored" : "failed" });
+      else if (data.t === "stop") { await mine.stop(); line.postMessage({ t: "stopped" }); }
     };
-    line.postMessage({ t: "site", site, current: host.current() });
+    // Which site this is, what it has now, and the public half of a key made
+    // for this handover. The window encrypts the API key to it.
+    Promise.all([mine.current(), mine.offer()]).then(([current, pub]) => line.postMessage({ t: "site", site, current, pub }));
   }
 });

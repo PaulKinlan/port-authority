@@ -329,14 +329,20 @@ await popup.locator("h1", { hasText: "Keep this window open" }).waitFor();
 await locked.locator("#out", { hasText: "chose: false" }).waitFor();
 check("and keeping what it has leaves the site connected", (await locked.evaluate(() => window.ai.ready)) === true);
 
-// Stop at the router: the next request is refused and the window closes.
+// This site uses the router window, so its grant is kept at the router's own address, and the
+// router's own page can stop it. The window is told at once, tells the site, and closes.
 await home.bringToFront();
 await home.evaluate(() => dispatchEvent(new Event("focus")));
-await home.locator("#grants li", { hasText: "planner" }).locator("[data-revoke]").click();
-await home.locator("#grants li", { hasText: "planner" }).locator("text=Stopped").waitFor();
+const row = home.locator("#grants li", { hasText: "planner" });
+await row.locator("[data-revoke]").waitFor();
+check("the router's page shows this site's use exactly, because the grant is kept at its own address", /\d+ of 20 requests used/.test(await row.innerText()) && /Kept at this address/.test(await row.innerText()), (await row.innerText()).replace(/\n/g, " | "));
 const calls = seen.length;
-const stopped = await Promise.all([popup.waitForEvent("close"), locked.evaluate(() => window.ai.chat.completions.create({ messages: [{ role: "user", content: "hi" }] }).then(() => null, (e) => ({ code: e.code, status: e.status, message: e.message })))]);
-check("after Stop at the router, the next request is refused and the window closes", stopped[1] && stopped[1].code === "no-grant" && /revoked/.test(stopped[1].message) && seen.length === calls, JSON.stringify(stopped[1]));
+const windowClosed = popup.waitForEvent("close");
+await row.locator("[data-revoke]").click();
+await row.locator("text=Stopped").waitFor();
+await windowClosed;
+const stopped = await locked.evaluate(async () => ({ ready: window.ai.ready, error: await window.ai.chat.completions.create({ messages: [{ role: "user", content: "hi" }] }).then(() => null, (e) => ({ code: e.code, status: e.status, message: e.message })) }));
+check("after Stop at the router's page, the window closes, the site is told, and its next request is refused", stopped.ready === false && stopped.error && (stopped.error.code === "no-grant" || stopped.error.code === "closed") && seen.length === calls, JSON.stringify(stopped));
 
 // When the site's page goes away, so does the window.
 popup = await popupFrom(locked, () => locked.click("#go"));

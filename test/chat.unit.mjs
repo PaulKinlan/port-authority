@@ -168,7 +168,7 @@ test("a function or an object sent by reference is never called, only refused", 
 });
 
 test("a failure is returned in the API's error shape, with the status that API would use", async () => {
-  for (const [code, status, type] of [["no-grant", 401, "authentication_error"], ["limit", 429, "rate_limit_error"], ["offline", 503, "api_error"], ["provider", 502, "api_error"], ["key-refused", 401, "authentication_error"]]) {
+  for (const [code, status, type] of [["no-grant", 401, "authentication_error"], ["limit", 429, "rate_limit_error"], ["storage", 503, "api_error"], ["provider", 502, "api_error"], ["key-refused", 401, "authentication_error"]]) {
     const { api } = model({ fail: { code, message: "No: " + code } });
     assert.deepEqual(await api.chat.completions.create({ messages: hello }), { error: { message: "No: " + code, type, param: null, code, status } });
     // In a stream, the refusal is the only thing sent.

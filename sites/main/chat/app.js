@@ -165,7 +165,7 @@ function explain(error) {
   if (error.code === "no-grant") return "This app has no model to ask. " + (error.message || "");
   if (error.code === "limit") return "This app has used all the requests you gave it. Choose a model again to give it more.";
   if (error.code === "closed") return "The router window was closed before the answer finished.";
-  if (error.code === "offline") return "The router's server could not be reached. Check your connection.";
+  if (error.code === "storage") return "The router could not read what you allowed from this browser's storage. Choose a model again.";
   if (error.code === "key-refused") return "The provider refused the API key for this account. " + (error.message || "");
   if (error.code === "unsupported") return (error.message || "This model cannot take that.") + " Use the model button to choose another.";
   return error.message || "The model did not answer.";

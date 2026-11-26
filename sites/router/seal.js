@@ -1,16 +1,46 @@
-// Used by the picker window (seal) and by the page that calls the provider (unseal).
+// How the API key gets from the router window to the router frame, and how it
+// is kept there. No server takes part.
+//
+// The frame makes a key pair and sends the public half to the window. The
+// window encrypts the API key so that only the holder of the private half can
+// open it, and sends that. The private half never leaves the frame, and the
+// browser will not export it. So what crosses between the window and the frame
+// is the encrypted key and nothing that opens it.
+//
+// The frame turns its private half into one key that can decrypt and do
+// nothing else, and keeps that beside the encrypted API key. The page that
+// calls the provider is handed both, and opens the API key in memory.
+//
+//   frame     const mine = await offer();          mine.pub goes to the window
+//   window    const sealed = await seal(pub, apiKey);
+//   frame     const key = await mine.open(sealed.from);
+//   call page const apiKey = await unseal(key, sealed);
 
-// Encrypt the API key so that the copy kept inside a site can only be read
-// with the unlock key the server hands out while the grant is good.
-const bytes = (text) => Uint8Array.from(atob(text.replace(/-/g, "+").replace(/_/g, "/")), (c) => c.charCodeAt(0));
-const text64 = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf)));
-const aes = (wrap) => crypto.subtle.importKey("raw", bytes(wrap).slice(0, 32), "AES-GCM", false, ["encrypt", "decrypt"]);
-export async function seal(wrap, secret) {
-  const iv = crypto.getRandomValues(new Uint8Array(12));
-  const data = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, await aes(wrap), new TextEncoder().encode(secret));
-  return { iv: text64(iv), data: text64(data) };
+const CURVE = { name: "ECDH", namedCurve: "P-256" };
+const AES = { name: "AES-GCM", length: 256 };
+const text64 = (buffer) => btoa(String.fromCharCode(...new Uint8Array(buffer)));
+const bytes = (text) => Uint8Array.from(atob(text), (c) => c.charCodeAt(0));
+const theirs = (jwk) => crypto.subtle.importKey("jwk", jwk, CURVE, false, []);
+
+// The frame's half. `pub` can be posted anywhere. `open(from)` takes the
+// window's public half and returns the key that decrypts what the window sealed.
+export async function offer() {
+  const pair = await crypto.subtle.generateKey(CURVE, false, ["deriveKey"]);
+  return {
+    pub: await crypto.subtle.exportKey("jwk", pair.publicKey),
+    open: async (from) => crypto.subtle.deriveKey({ name: "ECDH", public: await theirs(from) }, pair.privateKey, AES, false, ["decrypt"]),
+  };
 }
-export async function unseal(wrap, sealed) {
-  const data = await crypto.subtle.decrypt({ name: "AES-GCM", iv: bytes(sealed.iv) }, await aes(wrap), bytes(sealed.data));
-  return new TextDecoder().decode(data);
+
+// The window's half: encrypt `secret` for the holder of the private half of `pub`.
+export async function seal(pub, secret) {
+  const pair = await crypto.subtle.generateKey(CURVE, false, ["deriveKey"]);
+  const key = await crypto.subtle.deriveKey({ name: "ECDH", public: await theirs(pub) }, pair.privateKey, AES, false, ["encrypt"]);
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const data = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, new TextEncoder().encode(secret));
+  return { from: await crypto.subtle.exportKey("jwk", pair.publicKey), iv: text64(iv), data: text64(data) };
+}
+
+export async function unseal(key, sealed) {
+  return new TextDecoder().decode(await crypto.subtle.decrypt({ name: "AES-GCM", iv: bytes(sealed.iv) }, key, bytes(sealed.data)));
 }

@@ -210,10 +210,20 @@ const policy = async (path) => {
   return Object.fromEntries(header.split("; ").map((part) => [part.split(" ")[0], part.split(" ").slice(1).join(" ")]));
 };
 
-test("a router page may connect to the router and to nothing else", async () => {
-  for (const path of ["/", "/frame.html", "/pick.html", "/frame-worker.js", "/call.js", "/caller.js", "/providers.js"]) {
+test("the router has no server: the address that kept grants answers that it has gone", async () => {
+  let reached = false;
+  const env = { ...routerEnv(), ROUTER: { idFromName: () => "id", get: () => ({ fetch: async () => { reached = true; return new Response("{}"); } }) } };
+  for (const action of ["grant", "list", "use", "status", "report", "revoke"]) {
+    const response = await worker.fetch(new Request("https://llmchannel.dev/r/person1234567890abcd/" + action, { method: "POST", headers: { origin: "https://llmchannel.dev", "content-type": "application/json" }, body: "{}" }), env);
+    assert.equal(response.status, 410, action);
+  }
+  assert.equal(reached, false);
+});
+
+test("a router page, and the router's worker, may connect to nothing at all", async () => {
+  for (const path of ["/", "/frame.html", "/pick.html", "/frame-worker.js", "/grants.js", "/call.js", "/caller.js", "/providers.js"]) {
     const rules = await policy(path);
-    assert.equal(rules["connect-src"], "'self'", path);
+    assert.equal(rules["connect-src"], "'none'", path);
     assert.equal(rules["default-src"], "'none'", path);
     assert.equal(rules["script-src"], "'self'", path);
   }
@@ -262,9 +272,9 @@ test("the call page and the frame are sent with the least a page can have", asyn
   assert.deepEqual(await policy("/call/anthropic"), {
     "default-src": "'none'", "script-src": "'self'", "connect-src": "https://api.anthropic.com/v1/messages", "base-uri": "'none'", "form-action": "'none'",
   });
-  // The frame: its own scripts, its worker, the call page, and the router's server.
+  // The frame: its own scripts, its worker and the call page. No connection to anything.
   assert.deepEqual(await policy("/frame.html"), {
-    "default-src": "'none'", "script-src": "'self'", "worker-src": "'self'", "frame-src": "'self'", "connect-src": "'self'", "base-uri": "'none'", "form-action": "'none'",
+    "default-src": "'none'", "script-src": "'self'", "worker-src": "'self'", "frame-src": "'self'", "connect-src": "'none'", "base-uri": "'none'", "form-action": "'none'",
   });
   // No policy on any router page lets code in by another way.
   for (const path of ["/", "/pick.html", "/frame.html", "/call/anthropic", "/call/nope", "/call.html"]) {

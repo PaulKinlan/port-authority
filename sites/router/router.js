@@ -225,6 +225,7 @@ function openFrame(link) {
     frame.hidden = true;
     frame.title = "AI router";
     frame.allow = "language-model";    // lets the frame use the browser's built-in model, where there is one
+    frame.referrerPolicy = "no-referrer";    // the router's server is not told which site the frame is for
     const line = new MessageChannel();
     let settled = false;
     let timer = setTimeout(() => finish(false), 10000);    // it never loaded at all

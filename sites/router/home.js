@@ -4,7 +4,8 @@ import { sites } from "/_sites.js";
 import { PROVIDERS, generate } from "/providers.js";
 import { openCaller } from "/caller.js";
 import { askOver } from "/line.js";
-import { accounts, removeAccount, server } from "/store.js";
+import { accounts, removeAccount, allowed, stopped } from "/store.js";
+import { all as keptHere, remove as deleteHere, stateOf } from "/grants.js";
 import { accountForm } from "/account-form.js";
 const $ = (id) => document.getElementById(id);
 const esc = (text) => String(text).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
@@ -27,8 +28,6 @@ accountForm($("form"), () => { $("add").open = false; drawAccounts(); });
 // The router window sends people here to add an account, with the form already open.
 if (location.hash === "#add") { $("add").open = true; $("label").focus(); }
 
-let latestGrants = [];
-
 function drawAccounts() {
   const all = accounts();
   $("accounts").innerHTML = all.length ? all.map((a) => `<li data-id="${esc(a.id)}">
@@ -43,25 +42,13 @@ $("accounts").onclick = async (event) => {
   const account = accounts().find((a) => a.id === row.dataset.id);
   if (!account) return;
   if (event.target.matches("[data-remove]")) {
-    const active = latestGrants.filter((g) => g.state === "active" && g.label === account.label && (!g.provider || g.provider === account.provider));
-    if (active.length) {
-      if (!confirm(`Remove "${account.label}"? ${active.length} active site grant(s) still use this account, and removing it does not automatically stop them.`)) return;
-      removeAccount(account.id);
-      drawAccounts();
-      if (confirm(`Also stop the ${active.length} active site grant(s) using "${account.label}"?`)) {
-        try {
-          await Promise.all(active.map((g) => server("revoke", { id: g.id })));
-          drawGrants(true);
-        } catch (error) {
-          $("grants-error").textContent = "Could not stop every grant: " + error.message;
-          $("grants-error").hidden = false;
-        }
-      }
-    } else {
-      if (!confirm(`Remove "${account.label}" from this browser?`)) return;
-      removeAccount(account.id);
-      drawAccounts();
-    }
+    // Removing an account here does not reach a site that was already allowed to use it.
+    // That site keeps an encrypted copy of the key until its grant runs out or is stopped.
+    const using = allowed().filter((a) => !a.stopped && !a.gone && Date.now() < a.expires && a.label === account.label && a.provider === account.provider);
+    const warning = using.length ? ` ${using.length === 1 ? "One site you allowed" : using.length + " sites you allowed"} may still be using it: ${using.map((a) => a.site.replace(/^https?:\/\//, "")).join(", ")}. Removing it here does not stop them. They stop when their limit runs out, or when you stop them from the site, or when you cancel the key at the provider.` : "";
+    if (!confirm(`Remove "${account.label}" from this browser?${warning}`)) return;
+    removeAccount(account.id);
+    drawAccounts();
     return;
   }
   if (event.target.matches("[data-test]")) {
@@ -93,30 +80,36 @@ $("accounts").onclick = async (event) => {
   }
 };
 
-// ---- grants
+// ---- sites you have allowed
+// There is no server, so this page has no list of grants to ask for. It shows
+// the note the router window made each time you allowed a site (store.js).
+// A grant kept inside a site cannot be read or stopped from here. A grant for
+// a site that uses the router window is kept at this address, so this page can
+// read it and stop it.
 const day = (ms) => new Date(ms).toLocaleDateString(undefined, { day: "numeric", month: "short" });
-let lastGrantsKey = null;
+const plural = (n, word) => `${n} ${n === 1 ? word : word + "s"}`;
+let lastKey = null;
 async function drawGrants(force = false) {
-  let answer;
-  try {
-    answer = await server("list");
-  } catch (error) {
-    lastGrantsKey = null;
-    $("grants").innerHTML = `<li class="error">The router server could not be reached: ${esc(error.message)}</li>`;
-    return;
-  }
-  const grants = answer.grants || [];
-  latestGrants = grants;
-  const key = JSON.stringify(grants);
-  if (!force && key === lastGrantsKey) return;
-  lastGrantsKey = key;
-  $("grants-error").hidden = true;
-  $("grants-error").textContent = "";
-  $("grants").innerHTML = grants.length ? grants.map((g) => `<li data-id="${esc(g.id)}">
-    <span><strong>${esc(g.site.replace(/^https?:\/\//, ""))}</strong><br>
-    <span class="small muted"><span class="model-name">${esc(g.model)}</span>, from ${esc(g.label)} · ${g.used} of ${g.requests} requests used${g.tokensIn + g.tokensOut ? ` · ${g.tokensIn} tokens in, ${g.tokensOut} out` : ""} · ${g.state === "active" ? "until " + day(g.expires) : "allowed " + day(g.made)}</span></span>
-    <span class="actions"><span class="tag ${g.state === "active" ? "active" : "off"}">${g.state === "active" ? "Allowed" : g.state === "revoked" ? "Stopped" : g.state === "expired" ? "Expired" : "Used up"}</span>${g.state === "active" ? `<button class="tiny quiet" data-revoke>Stop</button>` : ""}</span></li>`).join("")
-    : `<li class="muted">No site has asked yet. Try one of the sites below.</li>`;
+  let here = [];
+  try { here = await keptHere(); } catch { /* this browser gives the page no storage */ }
+  const live = new Map(here.map((g) => [g.id, g]));
+  const notes = allowed().sort((a, b) => b.made - a.made);
+  const key = JSON.stringify([notes, here.map((g) => [g.id, g.used, g.tokensIn, g.tokensOut])]);
+  if (!force && key === lastKey) return;
+  lastKey = key;
+  const now = Date.now();
+  $("grants").innerHTML = notes.length ? notes.map((a) => {
+    const kept = live.get(a.id);     // kept at this address: the numbers are exact, and Stop works from here
+    const state = a.stopped ? "Stopped" : kept ? ({ active: "Allowed", expired: "Expired", "used up": "Used up" })[stateOf(kept, now)] : a.gone ? "Ended" : now > a.expires ? "Expired" : "Allowed";
+    const on = state === "Allowed";
+    const used = kept ? `${kept.used} of ${plural(kept.requests, "request")} used${kept.tokensIn + kept.tokensOut ? `, ${kept.tokensIn} tokens in and ${kept.tokensOut} out` : ""}`
+      : `up to ${plural(a.requests, "request")}. ${a.used} used when you last opened the router window from this site, on ${day(a.seen)}`;
+    const where = kept ? "Kept at this address, because this site uses the router window." : on ? "Kept inside that site. To see what it has used since, or to stop it, open the site and choose again." : "";
+    return `<li data-id="${esc(a.id)}" data-site="${esc(a.site)}">
+      <span><strong><a href="${esc(a.site)}">${esc(a.site.replace(/^https?:\/\//, ""))}</a></strong><br>
+      <span class="small muted"><span class="model-name">${esc(a.model)}</span>, from ${esc(a.label)} · ${used} · ${on ? "until " + day(a.expires) : "allowed " + day(a.made)}</span>${where ? `<br><span class="small muted">${where}</span>` : ""}</span>
+      <span class="actions"><span class="tag ${on ? "active" : "off"}">${state}</span>${on && kept ? `<button class="tiny quiet" data-revoke>Stop</button>` : ""}</span></li>`;
+  }).join("") : `<li class="muted">No site has asked yet. Try one of the sites below.</li>`;
 }
 $("grants").onclick = async (event) => {
   const row = event.target.closest("li[data-id]");
@@ -126,17 +119,17 @@ $("grants").onclick = async (event) => {
   btn.textContent = "Stopping...";
   $("grants-error").hidden = true;
   try {
-    await server("revoke", { id: row.dataset.id });
+    await deleteHere(row.dataset.site);    // the grant and the key that opens your API key are deleted. The open window notices at the site's next request
+    stopped(row.dataset.site);
+    try { const tell = new BroadcastChannel("router.grant:" + row.dataset.site); tell.postMessage("changed"); tell.close(); } catch { /* the window finds out at the next request */ }
     await drawGrants(true);
   } catch (error) {
     $("grants-error").textContent = "Could not stop that site: " + error.message;
     $("grants-error").hidden = false;
-    if (btn.isConnected) {
-      btn.disabled = false;
-      btn.textContent = "Stop";
-    }
+    if (btn.isConnected) { btn.disabled = false; btn.textContent = "Stop"; }
   }
 };
 drawGrants(true);
 addEventListener("focus", () => drawGrants());
-setInterval(() => { if (!document.hidden) drawGrants(); }, 5000);
+addEventListener("storage", () => drawGrants());
+setInterval(() => { if (!document.hidden) drawGrants(); }, 3000);

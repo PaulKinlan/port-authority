@@ -194,7 +194,7 @@ export function readRequest(body) {
 
 // A failure, as the body the Chat Completions API would send. `status` is the
 // HTTP status that API would have used, for code that looks at it.
-const STATUS = { invalid: 400, unsupported: 400, "no-grant": 401, "key-refused": 401, limit: 429, cancelled: 499, offline: 503 };
+const STATUS = { invalid: 400, unsupported: 400, "no-grant": 401, "key-refused": 401, limit: 429, cancelled: 499, storage: 503 };
 const TYPE = { 400: "invalid_request_error", 401: "authentication_error", 429: "rate_limit_error" };
 export function errorBody(error) {
   const code = error && error.name === "AbortError" ? "cancelled" : (error && typeof error.code === "string" && error.code) || "provider";

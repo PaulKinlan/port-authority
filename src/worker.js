@@ -53,9 +53,11 @@ function callPageFor(path) {
 // nothing a site or a provider says can become code in that page.
 //
 // The frame has nothing to look at either. It may run the router's scripts,
-// start its worker, hold the call page, and connect to the router's server.
+// start its worker and hold the call page. It may connect to nothing.
 //
-// Every other page may connect to the router's own server and to nothing else.
+// Every other page, and the worker, may connect to nothing either. The router
+// has no server to talk to: a grant is kept in the browser. So the call page is
+// the only router page that can send anything anywhere.
 // /frame.html is put inside other sites, and the call page inside /frame.html,
 // so those two cannot say which pages may frame them. The rest cannot be framed.
 function routerCsp(path) {
@@ -65,11 +67,11 @@ function routerCsp(path) {
     return ["default-src 'none'", "script-src 'self'", "connect-src " + connect, "base-uri 'none'", "form-action 'none'"].join("; ");
   }
   if (path === "/frame.html") {
-    return ["default-src 'none'", "script-src 'self'", "worker-src 'self'", "frame-src 'self'", "connect-src 'self'", "base-uri 'none'", "form-action 'none'"].join("; ");
+    return ["default-src 'none'", "script-src 'self'", "worker-src 'self'", "frame-src 'self'", "connect-src 'none'", "base-uri 'none'", "form-action 'none'"].join("; ");
   }
   return [
     "default-src 'none'", "script-src 'self'", "worker-src 'self'", "frame-src 'self'", "style-src 'self' https://fonts.googleapis.com", "font-src https://fonts.gstatic.com",
-    "img-src 'self' data:", "connect-src 'self'", "base-uri 'none'", "form-action 'none'", "frame-ancestors 'none'",
+    "img-src 'self' data:", "connect-src 'none'", "base-uri 'none'", "form-action 'none'", "frame-ancestors 'none'",
   ].join("; ");
 }
 
@@ -219,15 +221,11 @@ export default {
       return env.MEET.get(env.MEET.idFromName(code)).fetch(request);
     }
 
-    // /r/<person id>/<action>: the AI router's list of grants. Only pages served
-    // from the router's own address may call it, and only that site has it.
+    // /r/ was the AI router's list of grants, kept on this server. The router
+    // no longer has a server: a grant is kept in the person's browser, and
+    // nothing is asked here. The address answers that it has gone.
     if (url.pathname.startsWith("/r/") && site === "router") {
-      if (!env.ROUTER) return new Response("the router store is off", { status: 404 });
-      const [, , id, action] = url.pathname.split("/");
-      if (!/^[A-Za-z0-9_-]{16,64}$/.test(id || "") || !/^[a-z]{3,12}$/.test(action || "")) return new Response("bad address", { status: 400 });
-      if (request.method !== "POST") return new Response("expected POST", { status: 405 });
-      if (request.headers.get("origin") !== url.origin) return new Response("wrong origin", { status: 403 });
-      return env.ROUTER.get(env.ROUTER.idFromName(id)).fetch(request);
+      return new Response("The AI router no longer keeps anything on a server.", { status: 410, headers: { "content-type": TYPES.txt, "cache-control": "no-store" } });
     }
 
     // The lab's results: every browser that runs the lab reports what it saw.
@@ -936,12 +934,19 @@ export class Meet {
 
 // ------------------------------------------------------------ the AI router
 
-// One per person. It holds the list of grants: which site may use which of the
-// person's accounts, how much it has used, and when that stops. It never holds
-// an API key and never sees a prompt. For each grant it keeps an unlock key.
-// The router frame inside a site stores the API key encrypted with it, and has
-// to ask for it again on every request. Revoking a grant deletes the unlock
-// key, so the copy stored inside that site can no longer be read.
+// NOT USED ANY MORE. Nothing reaches this class: /r/ answers 410 above, and the
+// router's pages are not allowed to connect to this server at all. A grant is
+// now kept in the person's browser (sites/router/grants.js).
+//
+// The class is still here because Cloudflare keeps what it stored until the
+// class is deleted by a migration, and deleting it cannot be undone. What it
+// stored, for each person who used the router before: the list of sites they
+// allowed, the account and model names, the counts, and an unlock key for each
+// grant. It never held an API key or a prompt.
+//
+// What it did: one per person. It held the list of grants. For each grant it
+// kept an unlock key. The router frame inside a site stored the API key
+// encrypted with it, and had to ask for it again on every request.
 export class Router {
   constructor(state) { this.storage = state.storage; }
 

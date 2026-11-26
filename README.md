@@ -17,7 +17,7 @@ Live: https://port-authority.dev
 | `sites/main/bridge.mjs` | Run beside an ACP agent; connects it to the hub and gives it the registry as an MCP server |
 | `sites/florist`, `library`, `planner` | Three demo sites, each served on its own origin |
 | `sites/main/chat/` | A chat app with no AI account of its own. It asks the AI router for a model and speaks the Chat Completions API over the port. Conversations are kept in IndexedDB (`db.js`), with any images sent in them. Answers are drawn by `markdown.js`, which trusts nothing a model writes and never loads an image |
-| `sites/router/` | The AI router, on its own origin. `router.js` is what a site loads (`connect()`, `fromPort()`, and `ai.chat.completions.create()` in the shape of the Chat Completions API, which `chat.js` answers over Hawser), `frame.html` is the hidden frame that holds a site's grant (`host.js` is the job it does, which `pick.js` also does for a site whose own Content-Security-Policy forbids the frame: the router window then stays open and `ai.mode` is `"window"`), `call.html` is the page inside it that calls the model provider. It is served at `/call/<provider>`, with a `connect-src` of that provider's one chat endpoint and nothing else (`routerCsp()` in `src/worker.js`), `pick.html` is the window where the person chooses an account, `index.html` lists accounts and grants. Explained at `sites/main/ai-router/`; used by `sites/florist/card/` and `sites/library/digest/` |
+| `sites/router/` | The AI router, on its own origin. `router.js` is what a site loads (`connect()`, `fromPort()`, and `ai.chat.completions.create()` in the shape of the Chat Completions API, which `chat.js` answers over Hawser), `frame.html` is the hidden frame that holds a site's grant (`host.js` is the job it does, which `pick.js` also does for a site whose own Content-Security-Policy forbids the frame: the router window then stays open and `ai.mode` is `"window"`), `call.html` is the page inside it that calls the model provider. It is served at `/call/<provider>`, with a `connect-src` of that provider's one chat endpoint and nothing else (`routerCsp()` in `src/worker.js`), `pick.html` is the window where the person chooses an account, sees what a site has used and can stop it, `index.html` lists accounts and the sites that were allowed. The router keeps nothing on a server: a grant is kept in the browser's IndexedDB for the router's address inside that site (`grants.js`), where the worker counts each request against its limit, and the API key crosses from the window to the frame encrypted to a key only the frame holds (`seal.js`). No router page except the call page may connect to anything. Explained at `sites/main/ai-router/`; used by `sites/florist/card/` and `sites/library/digest/` |
 | `sites/shared/hawser.js` | Hawser (working name): Comlink's idea rebuilt on today's platform. One file, no dependencies, served on every origin |
 | `sites/main/missing/` | What the web platform is missing: the list of things for browser vendors to build or fix, each with evidence and links to the spec issue or bug. `probes.js` and `more-probes.js` run each gap as a check in the reader's browser, using the lab's `kinds.js`. `effects-demo.js` and `demos.js` are the running demos, which talk to `sites/shared/effects.html` and `sites/shared/missing-peer.html` on another origin. `census.js` is the wide table of what can be copied, moved and sent to another origin. `test/missing.mjs` covers it |
 | `sites/main/reading/` | Further reading: links to reference pages, specifications, articles, libraries, talks and papers. Edit `links.json`, then run `node scripts/reading.mjs` to rebuild `index.html`. `node scripts/reading.mjs --check` fetches every link |
@@ -95,6 +95,7 @@ NODE_PATH=$(npm root -g) node test/airouter.mjs              # the AI router end
 NODE_PATH=$(npm root -g) node test/chat.mjs                  # the chat app, and a site that cannot have the router's frame
 NODE_PATH=$(npm root -g) node test/hostile.mjs               # a hostile site that taps, forges and reaches for the key, and gets none of it
 NODE_PATH=$(npm root -g) node test/site-headers.mjs          # a site under each header that changes what it may embed or open: COOP, COEP, CSP, sandbox
+NODE_PATH=$(npm root -g) node test/attacks.mjs               # the attack lab page (/ai-router/attacks/): every attack pressed, and its verdicts checked against the key
 NODE_PATH=$(npm root -g) node test/hawser.mjs <screenshot-dir>   # the /comlink/ demos, 24 checks
 ```
 
@@ -131,7 +132,9 @@ repository and runs one deploy per Worker on every push to `main`:
 All five run `src/worker.js` and carry the whole `sites/` folder as static
 assets; the script picks the folder by hostname. The three demo sites use the
 main Worker's Durable Objects (hub, lab, meeting point), so `portauthority`
-has to exist before they deploy. `pa-router` has a Router class of its own.
+has to exist before they deploy. `pa-router` still has a Router class of its own from
+when the router kept grants on the server. Nothing reaches it now (`/r/` answers 410).
+It is kept only because deleting the class deletes what it stored, for good.
 
 A build's log is in the Cloudflare dashboard under the Worker, in Deployments.
 A new Worker name needs a file in `deploy/` and a build trigger on Cloudflare.

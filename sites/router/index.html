@@ -32,7 +32,7 @@
       </div>
 
       <aside class="notice stack" aria-label="Before you add an API key">
-        <p class="small muted"><strong>Experimental &amp; local storage note:</strong> API keys added here are stored in plaintext in this browser's <code>localStorage</code> for this origin (never sent to the router's server). This is an experiment—if you test with a real provider key, use a low-limit or easily revocable key.</p>
+        <p class="small muted"><strong>Experimental &amp; local storage note:</strong> API keys added here are stored in plaintext in this browser's <code>localStorage</code> for this origin. They are not sent to a server: the router has none. This is an experiment—if you test with a real provider key, use a low-limit or easily revocable key.</p>
       </aside>
 
       <section class="panel stack">
@@ -47,7 +47,7 @@
 
       <section class="panel stack">
         <h2>Sites you have allowed</h2>
-        <p class="small muted">This list is kept on the router's server so that it can be checked on every request. Stopping a site takes effect on its next request.</p>
+        <p class="small muted">This list is a note kept in this browser. The router has no server. What you allow is kept inside each site, in this browser, and it stops by itself at the limit you set. This page cannot reach inside a site, so it shows what a site had used when you last opened the router window from it. To stop a site sooner, open the site, choose again, and press Stop.</p>
         <p class="small error" id="grants-error" role="alert" hidden></p>
         <ul class="rows" id="grants"><li class="muted">Loading.</li></ul>
       </section>
@@ -64,7 +64,7 @@
         <ul>
           <li><strong>You use the accounts you already have.</strong> There is nothing to sign up for here and nothing to buy. Your prompts go from your browser to your provider, on your own account.</li>
           <li><strong>You decide, one site at a time.</strong> When a site asks, you see its address, pick an account and a model, and set a limit in requests and days.</li>
-          <li><strong>You can see it and stop it.</strong> This page lists every site you allowed and what it has used. Stop takes effect on that site's next request.</li>
+          <li><strong>It stops by itself, and you can stop it sooner.</strong> Every site you allow gets a limit in requests and days. The router window shows what a site has used and has a Stop button. This page lists every site you allowed.</li>
           <li><strong>Any site can ask.</strong> A site adds one script to its page. It needs no account with the router and no key of its own. A site that already speaks the Chat Completions API can call the router in that shape.</li>
         </ul>
         <p class="small muted">The router is an experiment by <a href="https://paul.kinlan.me">Paul Kinlan</a>, and part of <a id="about-pa-link" href="#">Port Authority</a>, a site about what the web can do when pages hand each other message ports.</p>
@@ -77,31 +77,32 @@
           <li>The site adds a hidden frame from this address to its page and gives it one end of a <code>MessageChannel</code>. The site keeps the other end. That end is its port.</li>
           <li>When you press the site's button, a small window from this address opens. Only pages from this address can read the accounts you saved here, so the window can list them and the site cannot.</li>
           <li>The frame tells the window which site it is inside. It learned that from the browser, not from anything the site wrote, and the window shows you that address.</li>
-          <li>You choose an account, a model and a limit. The window never asks for a key. Accounts are added on this page only. The window records your choice on the router's server and gets back an unlock key. It encrypts your API key with that, gives the encrypted copy to the frame, and closes.</li>
+          <li>You choose an account, a model and a limit. The window never asks for a key. Accounts are added on this page only. The frame makes a key pair and gives the window the public half. The window encrypts your API key to it, gives the encrypted copy to the frame, and closes. Only the frame can open that copy. No server is told.</li>
         </ol>
         <h3>When the site sends a prompt</h3>
         <ol>
           <li>The prompt goes down the site's port to a worker inside the frame.</li>
-          <li>The worker asks the router's server whether your permission still stands. The server counts the request and returns the unlock key, or refuses.</li>
-          <li>The worker hands the prompt, the encrypted key and the unlock key to one more hidden page inside the frame. That page is served with a rule that lets it connect to the provider you chose and to nothing else, not even the router.</li>
+          <li>The worker reads what you allowed from the browser's storage for that site. If the limit is not used up and the days have not run out, it counts the request. If not, it deletes what it kept and refuses.</li>
+          <li>The worker hands the prompt, the encrypted key and the key that opens it to one more hidden page inside the frame. That page is served with a rule that lets it connect to the provider you chose and to nothing else, not even the router.</li>
           <li>That page decrypts your API key in memory and calls the provider straight from your browser. The answer comes back down the port a few words at a time.</li>
         </ol>
         <h3>When a site cannot have the frame</h3>
         <p>A site whose own rules forbid frames from other addresses passes its port to the window instead. The window then does the frame's job, and stays open while the site uses the model. Closing it disconnects the site.</p>
         <h3>When you press Stop</h3>
-        <p>The server deletes the unlock key. The encrypted copy of your API key that was left with that site can no longer be opened, and the frame deletes it the next time it checks.</p>
+        <p>Stop is in the router window, which a site opens. The window tells the frame inside that site to delete what it kept: the record of what you allowed, the encrypted copy of your API key, and the key that opens it. This page cannot do that for you, because a browser keeps the storage inside each site apart from this page's own. If you cannot open the site, the limit you set still ends it. To end it at once, cancel the key at the provider.</p>
         <h3>Who can see what</h3>
         <ul>
           <li><strong>The site</strong> sees your prompts and the answers, because it wrote the first and asked for the second. It never sees your API key.</li>
-          <li><strong>The router's server</strong> keeps one record for each site you allowed: the site's address, the names of the account and the model, counts of requests and tokens, and the unlock key. It holds no API keys and sees no prompts or answers.</li>
+          <li><strong>The router's server</strong> sends the router's pages and scripts, and that is all it does. It keeps nothing about you. No router page is allowed to send it anything.</li>
           <li><strong>Your provider</strong> sees your prompts and answers, and the API key it issued to you.</li>
-          <li><strong>This browser</strong> holds your accounts, in its storage for this address.</li>
+          <li><strong>This browser</strong> holds your accounts, in its storage for this address. For each site you allowed it holds a record of that, with an encrypted copy of one API key, in its storage for that site.</li>
         </ul>
         <h3>What you are trusting</h3>
         <ul>
           <li>You are trusting the router's code. The frame and the window are pages from this address, and they handle your API key. A site is kept away from the key by the browser's rule that a page cannot read a frame from another origin.</li>
-          <li>The router's pages can run only the router's own scripts. The page that holds your key in the clear can connect to one address: the one where the provider you chose for that site takes prompts. Every other router page can connect only to the router's own server. If you chose Anthropic, no router page can reach OpenAI, or any other address. The rule is a <code>Content-Security-Policy</code> header, and your browser enforces it, not the router's code. The same rule lets that page run only the router's own script files, so nothing a site sends or a model answers can become code in it.</li>
-          <li>That rule does not cover the router's own server. The router's code sends it no prompts and no keys, and you are trusting the code for that.</li>
+          <li>The router's pages can run only the router's own scripts. The page that holds your key in the clear can connect to one address: the one where the provider you chose for that site takes prompts. No other router page can connect to anything at all. If you chose Anthropic, no router page can reach OpenAI, or any other address. The rule is a <code>Content-Security-Policy</code> header, and your browser enforces it, not the router's code. The same rule lets that page run only the router's own script files, so nothing a site sends or a model answers can become code in it.</li>
+          <li>The server that sends that rule also sends the scripts. You are trusting it to send the same ones to everybody.</li>
+          <li>A site you allowed keeps an encrypted copy of your key, inside this browser, until its limit runs out or you stop it. Removing an account from this page does not take that copy back.</li>
           <li>Limits are counted in requests and days, not money. A site with 20 requests can still send 20 long prompts.</li>
         </ul>
         <p class="small muted">There is a longer version with diagrams you can step through, the code a site writes and <a id="limits-link" href="#">what does not work yet</a> in <a id="explainer-link" href="#">the full explanation on Port Authority</a>.</p>

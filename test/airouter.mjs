@@ -3,7 +3,7 @@
 // Needs `npx wrangler dev --port 8787` running (PORT=<n> for another port), or LIVE=<workers.dev subdomain>.
 import { createRequire } from "node:module";
 const { chromium } = createRequire(import.meta.url)("playwright");
-import { launchWithPartitioning } from "./real-browser.mjs";
+import { launchWithPartitioning, keptGrant } from "./real-browser.mjs";
 const LIVE = process.env.LIVE;
 const base = (name) => LIVE ? (name === "hub" && process.env.LIVE_MAIN) || `https://${name === "hub" ? "portauthority" : "pa-" + name}.${LIVE}` : `http://${name}.localhost:${process.env.PORT || 8787}`;
 // Storage partitioning has to be on, as it is in a person's own browser. Playwright switches it off.
@@ -167,24 +167,36 @@ const heard = await florist.evaluate(() => {
 check("the site heard nothing of the handover between the window and the frame", heard.handover === 0 && heard.kinds.includes("router:frame-ready") && heard.kinds.includes("t:state") && heard.kinds.includes("t:text"), "it heard only: " + heard.kinds.join(", "));
 check("the site cannot read the frame's storage", leak.reach === "blocked");
 const frame = florist.frames().find((f) => f.url().includes("/frame.html"));
-const kept = await frame.evaluate(() => JSON.stringify({ ...localStorage }));
-if (process.env.DEBUG) console.log(kept);
-const stored = JSON.parse(kept)["router.grant:" + base("florist")] || "";
-check("the frame's stored copy of the key is encrypted", !stored.includes(KEY) && /sealed/.test(stored));
+const stored = await keptGrant(frame, base("florist"));
+if (process.env.DEBUG) console.log(stored);
+check("the frame keeps the grant in its own storage for this site, with the key encrypted", !!stored && !stored.text.includes(KEY) && !!stored.grant.sealed && !!stored.grant.sealed.data && !("from" in stored.grant.sealed), stored ? stored.fields.join(",") : "no grant kept");
+check("what opens the key is a key the browser will not export, and it can only decrypt", !!stored && stored.key === "secret AES-GCM extractable=false usages=decrypt" && stored.exported === "refused", stored && stored.key + ", export " + stored.exported);
+check("the frame keeps nothing that came from a server: no id for the person, and no secret to show one", !!stored && !stored.fields.some((f) => /person|secret|wrap|owner/.test(f)) && (await frame.evaluate(() => Object.keys(localStorage).length)) === 0, stored && stored.fields.join(","));
 
-// The router's pages may connect only to the router. The one page that calls
+// The router's pages may connect to nothing at all. The one page that calls
 // a provider may connect only to the provider named in its address.
-const header = (path) => home.evaluate(async (p) => (await fetch(p)).headers.get("content-security-policy") || "", path);
+// The router's own pages can no longer fetch anything, so the test asks for the headers itself.
+// Node does not look up names under .localhost, so locally it asks the loopback address by that name.
+const header = async (path) => {
+  if (LIVE) return (await fetch(base("router") + path)).headers.get("content-security-policy") || "";
+  const { default: http } = await import("node:http");
+  const at = new URL(base("router"));
+  return new Promise((resolve, reject) => http.get({ host: "127.0.0.1", port: at.port, path, headers: { host: at.host } }, (response) => { response.resume(); resolve(response.headers["content-security-policy"] || ""); }).on("error", reject));
+};
 const connect = (csp) => (csp.split("; ").find((part) => part.startsWith("connect-src ")) || "").slice(12);
 const csp = await header("/frame.html");
 check("the router frame is served with a content security policy", /default-src 'none'/.test(csp) && !/unsafe/.test(csp), csp.slice(0, 60));
-check("the router frame may connect only to the router", connect(csp) === "'self'", connect(csp));
+check("the router frame may connect to nothing", connect(csp) === "'none'", connect(csp));
+check("nor may the router's own page, the router window, or the worker", connect(await header("/")) === "'none'" && connect(await header("/pick.html")) === "'none'" && connect(await header("/frame-worker.js")) === "'none'");
 check("the page that calls Anthropic may connect to Anthropic's one chat address and nothing else", connect(await header("/call/anthropic")) === "https://api.anthropic.com/v1/messages", connect(await header("/call/anthropic")));
 check("the page that calls OpenAI may connect to OpenAI's one chat address and nothing else", connect(await header("/call/openai")) === "https://api.openai.com/v1/chat/completions");
 check("a call page for an unknown provider, or at the old address, may connect to nothing", connect(await header("/call/example.com")) === "'none'" && connect(await header("/call.html")) === "'none'" && connect(await header("/call.html?provider=anthropic")) === "'none'");
 const tryFetch = (where, address) => where.evaluate((a) => fetch(a, { mode: "no-cors" }).then(() => "allowed", () => "blocked"), address);
 const before = seen.length;
 check("the router frame cannot connect to another address", (await tryFetch(frame, "https://example.com/")) === "blocked");
+check("the router frame cannot connect to the router's own server either", (await tryFetch(frame, "/_sites.js")) === "blocked" && (await tryFetch(frame, "/r/aaaaaaaaaaaaaaaaaaaaaaaa/list")) === "blocked");
+const frameWorker = florist.workers().find((w) => w.url().endsWith("/frame-worker.js"));
+check("the worker inside the frame cannot connect to anything", !!frameWorker && (await tryFetch(frameWorker, "/_sites.js")) === "blocked" && (await tryFetch(frameWorker, "https://example.com/")) === "blocked" && (await tryFetch(frameWorker, "https://api.anthropic.com/v1/messages")) === "blocked" && seen.length === before);
 check("the router frame cannot connect to the provider itself", (await tryFetch(frame, "https://api.anthropic.com/v1/messages")) === "blocked" && seen.length === before);
 const callPage = florist.frames().find((f) => f.url().includes("/call/"));
 check("the page that calls the provider is inside the router frame", !!callPage && callPage.parentFrame() === frame && callPage.url() === base("router") + "/call/anthropic", callPage && callPage.url());
@@ -364,7 +376,7 @@ check("the router frame inside a site has storage of its own, and cannot read th
 
 // The two diagrams on the explainer: every numbered arrow has a step written under it, and
 // the diagram can be stepped through one arrow at a time. Nothing moves until it is asked to.
-for (const [id, count] of [["frame-steps", 16], ["window-steps", 15]]) {
+for (const [id, count] of [["frame-steps", 13], ["window-steps", 12]]) {
   const figure = main.locator(`figure[data-flow][data-steps="${id}"]`);
   const hops = await figure.locator(".hop").evaluateAll((all) => all.map((hop) => Number(hop.dataset.step)));
   const steps = await main.locator(`#${id} li[data-step]`).evaluateAll((all) => all.map((li) => Number(li.dataset.step)));
@@ -385,28 +397,71 @@ await main.close();
 // Neither key reached a site, in anything the three sites were sent.
 check("no site was sent the second key either", !JSON.stringify(plain).includes(KEY2) && !(await library.evaluate((key) => JSON.stringify({ ...localStorage }).includes(key), KEY2)));
 
-// The router's home page shows both sites and what they used.
+// The router's own page lists the sites that were allowed. It is a note kept at the router's
+// address. The grants are inside the sites, where this page cannot reach, so it has no Stop for them.
 await home.bringToFront();
 await home.evaluate(() => dispatchEvent(new Event("focus")));
 await home.locator("#grants li[data-id]").nth(2).waitFor();
-const grants = await home.locator("#grants").innerText();
-check("the router lists both sites with their usage", /florist/.test(grants) && /4 of 5 requests used/.test(grants) && /84 tokens in, 36 out/.test(grants) && /library/.test(grants) && /13 of 20 requests used/.test(grants), grants.replace(/\n/g, " | "));
+let grants = await home.locator("#grants").innerText();
+check("the router's page lists the sites that were allowed, from a note in this browser", /florist/.test(grants) && /library/.test(grants) && /up to 5 requests/.test(grants) && /up to 20 requests/.test(grants) && /Kept inside that site/.test(grants), grants.replace(/\n/g, " | "));
+check("it cannot stop a site from there, and does not pretend to", (await home.locator("#grants [data-revoke]").count()) === 0);
 
-// Stop the florist. Its next request is refused, and its stored copy of the key cannot be opened.
-await home.locator("#grants li", { hasText: "florist" }).locator("[data-revoke]").click();
-await home.locator("#grants", { hasText: "Stopped" }).waitFor();
-const calls = seen.length;
+// The router window, opened from the site, is where a site's use is seen and where it is stopped.
 await florist.bringToFront();
-await florist.click("#write");
-await florist.waitForFunction(() => /refused or failed/.test(document.querySelector("#log").textContent));
-check("after Stop, the site's next request is refused", /revoked/.test(await florist.locator("#meta").innerText()) && seen.length === calls, await florist.locator("#meta").innerText());
-check("and the site is back to having no model", /No model yet/.test(await florist.locator("#state").innerText()));
+popup = await popupFrom(florist, () => florist.click("#choose"));
+await popup.waitForSelector("#stop");
+const usedNow = await popup.locator("#now").innerText();
+check("the router window, opened from the site, shows what the site has used", /claude-sonnet-5-5/.test(usedNow) && /Work key/.test(usedNow) && /4 of 5 requests used, 84 tokens in and 36 out\. It stops on /.test(usedNow), usedNow);
+const seenAtHome = await home.locator("#grants li", { hasText: "florist" }).filter({ hasText: "4 used when you last opened the router window" }).waitFor({ timeout: 8000 }).then(() => true, () => false);
+check("and the router's page now shows that number, with the day it was seen", seenAtHome, (await home.locator("#grants li", { hasText: "florist" }).innerText()).replace(/\n/g, " | "));
 
-// A page that is not the router cannot use the server's grant list.
-const outside = await florist.evaluate(async (router) => {
-  try { const r = await fetch(router + "/r/aaaaaaaaaaaaaaaaaaaaaaaa/list", { method: "POST", body: "{}" }); return r.status; } catch { return "blocked"; }
+// Stop. The frame deletes the grant and the key that opens the API key. Nothing is left to refuse later: it is gone now.
+const beforeStop = await keptGrant(florist.frames().find((f) => f.url().includes("/frame.html")), base("florist"));
+await popup.click("#stop");
+await popup.locator("#stopped").waitFor();
+check("Stop is in the router window, and says when it is done", /Stopped\. This site can no longer use your account/.test(await popup.locator("#stopped").innerText()) && (await popup.locator("#stop").count()) === 0);
+const afterStop = await keptGrant(florist.frames().find((f) => f.url().includes("/frame.html")), base("florist"));
+check("after Stop the frame keeps nothing for this site: no grant, no encrypted key, no key to open it", !!beforeStop && afterStop === null, JSON.stringify(afterStop));
+await florist.locator("#state", { hasText: "No model yet" }).waitFor();
+check("the site is told at once that it has no model", /No model yet/.test(await florist.locator("#state").innerText()));
+await popup.close();
+const calls = seen.length;
+const refusedAfterStop = await florist.evaluate(async (router) => {
+  const { connect } = await import(router + "/router.js");
+  const ai = await connect();
+  try { await ai.prompt("One more card").text(); return "answered"; } catch (error) { return error.code; }
 }, base("router"));
-check("another origin cannot call the router's grant list", outside === "blocked" || outside === 403, String(outside));
+check("after Stop, the site's next request is refused, and no provider is called", refusedAfterStop === "no-grant" && seen.length === calls, refusedAfterStop);
+const stoppedAtHome = await home.locator("#grants li", { hasText: "florist" }).filter({ hasText: "Stopped" }).waitFor({ timeout: 8000 }).then(() => true, () => false);
+check("the router's page shows the site as stopped", stoppedAtHome, (await home.locator("#grants li", { hasText: "florist" }).innerText()).replace(/\n/g, " | "));
+
+// A grant ends by itself. Put the library's past its last day, as the calendar would.
+const libraryRouter = library.frames().find((f) => f.url().includes("/frame.html"));
+await library.evaluate(async (router) => { const { connect } = await import(router + "/router.js"); window.__second = await connect(); }, base("router"));   // connected while the grant is still good
+await libraryRouter.evaluate(async (site) => {
+  const db = await new Promise((resolve) => { const request = indexedDB.open("router"); request.onsuccess = () => resolve(request.result); });
+  await new Promise((resolve) => { const step = db.transaction("grants", "readwrite"); const store = step.objectStore("grants"); const get = store.get(site); get.onsuccess = () => { get.result.expires = Date.now() - 1000; store.put(get.result); }; step.oncomplete = resolve; });
+  db.close();
+}, base("library"));
+const openaiBefore = seenOpenAI.length;
+const afterExpiry = await library.evaluate(async () => {
+  const ai = window.__second;
+  const was = ai.ready;
+  try { await ai.prompt("One more note").text(); return { was, got: "answered" }; } catch (error) { await new Promise((r) => setTimeout(r, 200)); return { was, got: error.code, message: error.message, now: ai.ready }; }
+});
+check("a grant that has run out is refused at the next request, with no provider called, and the site is told", afterExpiry.was === true && afterExpiry.got === "no-grant" && /expired/.test(afterExpiry.message) && afterExpiry.now === false && seenOpenAI.length === openaiBefore, JSON.stringify(afterExpiry));
+check("and it is deleted where it was kept, with its key", (await keptGrant(libraryRouter, base("library"))) === null);
+const reloaded = await ctx.newPage();
+await reloaded.goto(base("library") + "/digest/");
+await reloaded.waitForSelector("#choose:not([disabled])");
+check("a page of that site loaded afterwards has no model", /No model yet/.test(await reloaded.locator("#state").innerText()));
+await reloaded.close();
+
+// There is no grant list on a server any more. The address that had it answers that it has gone.
+const outside = await florist.evaluate(async (router) => {
+  try { const r = await fetch(router + "/r/aaaaaaaaaaaaaaaaaaaaaaaa/list?from-the-test", { method: "POST", body: "{}" }); return r.status; } catch { return "blocked"; }
+}, base("router"));
+check("the server keeps no list of grants: the address that had one answers that it has gone", outside === "blocked" || outside === 410, String(outside));
 
 // A site shown inside another site's page gets nothing: the router answers only the page in the tab itself.
 const outer = await ctx.newPage();
@@ -421,8 +476,12 @@ check("and the router window refuses it, with nothing to allow", (await popup.lo
 await popup.close();
 await outer.close();
 
-const serverCalls = toServer.filter((line) => line.includes("/r/"));
-check("the router's server was never sent an API key, in the clear or encrypted", serverCalls.length > 20 && !toServer.some((line) => line.includes(KEY) || line.includes(KEY2) || /sealed|"key"|"iv"/.test(line)), `${serverCalls.length} requests to the server checked, of ${toServer.length} to the router's address`);
+// Everything that went to the router's address, from every page in the whole run. The router's pages
+// ask it for pages and scripts and send it nothing. (The one POST above was the test's own, from a site.)
+const toRouter = toServer.filter((line) => !line.includes("?from-the-test"));
+const notGets = toRouter.filter((line) => !/^(GET|HEAD) /.test(line) || / .+ .+/.test(line.slice(line.indexOf(" ") + 1)));
+check("no router page sent the router's server anything: every request to it was for a page or a script", toRouter.length > 40 && notGets.length === 0 && !toRouter.some((line) => line.includes("/r/")), `${toRouter.length} requests to the router's address checked` + (notGets.length ? ", not plain: " + notGets.slice(0, 3).join(" | ") : ""));
+check("nothing that went to the router's address contains an API key, in the clear or encrypted", !toServer.some((line) => line.includes(KEY) || line.includes(KEY2) || /sealed|"key"|"iv"/.test(line)));
 check("no page threw an error", errors.length === 0, errors.join(" ; "));
 await browser.close();
 console.log(failed ? `\n${failed} failed` : "\nall passed");

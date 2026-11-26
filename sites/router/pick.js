@@ -1,14 +1,17 @@
-// The router window: the person chooses which account a site may use.
+// The router window: the person chooses which account a site may use, sees
+// what the site has used, and can stop it.
 //
 // A site opens this window. Most sites have the router's hidden frame in
-// them. This window finds that frame, hands it the grant and closes.
+// them. This window finds that frame, hands it the grant and closes. The
+// grant is made here and kept there. No server is told.
 //
 // A site that cannot have the frame, for example because its own
 // Content-Security-Policy forbids frames from other addresses, passes this
 // window a port instead. Then this window does the frame's job (host.js), and
 // it has to stay open for as long as the site is to have its model.
 
-import { choices, server, seal, random, me } from "/store.js";
+import { choices, random, remember, sighting, stopped } from "/store.js";
+import { seal } from "/seal.js";
 import { PROVIDERS } from "/providers.js";
 import { startHost } from "/host.js";
 const main = document.getElementById("main");
@@ -112,8 +115,8 @@ if (boxed) {
   let last = null;    // what the worker last told the site about its grant
 
   // Hand the grant over: to the frame inside the site, or to this window's own worker.
-  const deliver = (grant, info) => {
-    if (host) { host.setGrant(grant, info); return Promise.resolve(true); }
+  const deliver = (grant) => {
+    if (host) return host.setGrant(grant);
     return new Promise((resolve) => {
       let settled = false;
       const finish = (ok) => {
@@ -125,18 +128,45 @@ if (boxed) {
       };
       const timer = setTimeout(() => finish(false), 5000);
       const watch = setInterval(() => { if (!opener || opener.closed) finish(false); }, 300);
-      frame.line.onmessage = (event) => { if (event.data && event.data.t === "stored") finish(true); };
-      frame.line.postMessage({ t: "grant", info, grant });
+      frame.line.onmessage = (event) => { if (event.data && event.data.t === "stored") finish(true); else if (event.data && event.data.t === "failed") finish(false); };
+      frame.line.postMessage({ t: "grant", grant });
     });
   };
 
-  const cancel = () => {
+  // What the site has now: the account, the model, the limits and what is used. The frame said so when it was found.
+  const currently = async () => (frame ? frame.current : host.current());
+  const day = (ms) => new Date(ms).toLocaleDateString(undefined, { day: "numeric", month: "short" });
+  const usedSoFar = (now) => `${now.used} of ${now.requests} ${now.requests === 1 ? "request" : "requests"} used${now.tokensIn + now.tokensOut ? `, ${now.tokensIn} tokens in and ${now.tokensOut} out` : ""}. It stops on ${day(now.expires)}.`;
+
+  const cancel = async () => {
     if (busy) return;
     // A site that already has a model through this window keeps it.
-    if (host && host.current()) { tellSite({ router: "picked", ok: false }); return connected(); }
+    if (host && await host.current()) { tellSite({ router: "picked", ok: false }); return connected(); }
     if (frame) { try { frame.line.close(); } catch { /* closed */ } }
     close();
   };
+  // Stop: the site's grant is deleted where it is kept, with the key that opens your API key.
+  const stopSite = async () => {
+    if (busy) return;
+    busy = true;
+    stopping = true;
+    if (host) await host.stop();
+    else {
+      await new Promise((resolve) => {
+        const late = setTimeout(resolve, 3000);
+        frame.line.onmessage = (event) => { if (event.data && event.data.t === "stopped") { clearTimeout(late); resolve(); } };
+        frame.line.postMessage({ t: "stop" });
+      });
+      frame.current = null;
+    }
+    stopped(site);
+    busy = false;
+    stopping = false;
+    wasStopped = true;
+    draw();
+  };
+  let wasStopped = false;   // the person pressed Stop in this window, and has not allowed the site again
+  let stopping = false;
   addEventListener("keydown", (event) => {
     if (event.key === "Escape" && !busy && view === "choose") {
       event.preventDefault();
@@ -149,27 +179,30 @@ if (boxed) {
     const el = document.getElementById("left");
     if (el) el.textContent = last && last.ready && last.left != null ? `${last.left} ${last.left === 1 ? "request" : "requests"} left.` : "";
   };
-  const connected = () => {
+  const connected = async () => {
+    const now = await host.current();
+    if (!now) return draw();
     view = "connected";
-    const now = host.current();
     document.title = "Connected, keep this window open | AI router";
     main.innerHTML = `
       <p class="origin">${esc(site)}</p>
       <h1 tabindex="-1">Keep this window open</h1>
       <p>This site is using <strong class="model-name">${esc(now.model)}</strong>, from your account <strong>${esc(now.label)}</strong>, through this window. <span id="left" role="status"></span></p>
       <p class="note small">Most sites hold the router in a hidden frame, and this window closes once you have chosen. This site is not using that frame, so its prompts come through this window. Closing it disconnects the site. Your choice is kept, so the site can open this window again without asking you to choose.</p>
-      <div class="actions"><button class="quiet" id="again">Choose a different model</button><button class="quiet" id="bye">Disconnect</button></div>
-      <p class="small muted">You can see what this site has used, and stop it, at <a href="/" target="_blank" rel="noopener">your router</a>.</p>`;
+      <p class="small" id="used">${esc(usedSoFar(now))}</p>
+      <div class="actions"><button class="quiet" id="again">Choose a different model</button><button class="quiet" id="bye">Disconnect</button><button class="quiet" id="stop">Stop this site</button></div>
+      <p class="small muted">Disconnect closes this window and keeps your choice. Stop deletes it, so the site has to ask you again.</p>`;
     document.getElementById("again").onclick = () => draw();
     document.getElementById("bye").onclick = () => close();
+    document.getElementById("stop").onclick = stopSite;
     showLeft();
   };
 
   const draw = async () => {
     view = "choose";
-    const list = await choices();
+    const [list, current] = await Promise.all([choices(), currently()]);
     if (view !== "choose") return;
-    const current = frame ? frame.current : host.current();
+    sighting(site, current);    // note what this site has used, for the list at the router's own page
     // Nothing to choose from: say so, and say where to add an account. The
     // window draws again as soon as one is saved.
     if (!list.length) {
@@ -206,7 +239,8 @@ if (boxed) {
       <p class="origin">${esc(site)}</p>
       <h1 tabindex="-1">This site wants to use an AI model</h1>
       <p>Choose which of your accounts it may use. The site can send prompts and read the answers. It cannot see your API key.</p>
-      ${current ? `<p class="note small">${usesNow} Choosing again replaces that.</p>` : ""}
+      ${current ? `<p class="note small" id="now">${usesNow} ${esc(usedSoFar(current))} Choosing again replaces that.</p>` : ""}
+      ${wasStopped && !current ? `<p class="note small" id="stopped" role="status">Stopped. This site can no longer use your account. You can close this window, or allow it again below.</p>` : ""}
       ${host ? `<p class="note small">This site is not holding the router in a hidden frame. This window will stay open after you choose, and the site's prompts will come through it.</p>` : ""}
       <fieldset class="choices" id="choices">
         <legend class="small muted">Choose a model from one of your accounts</legend>
@@ -223,20 +257,21 @@ if (boxed) {
         <div><label for="days">Or after</label><select id="days"><option value="1">1 day</option><option value="7" selected>7 days</option><option value="30">30 days</option></select></div>
       </div>
       <p class="error" id="error" role="alert" hidden></p>
-      <div class="actions"><button class="accent" id="yes">Allow</button><button class="quiet" id="no">${host && current ? "Keep what it has" : "Don't allow"}</button></div>
-      <p class="small muted">You can see what this site has used, and stop it, at <a href="/" target="_blank" rel="noopener">your router</a>. ${NEVER}</p>`;
+      <div class="actions"><button class="accent" id="yes">Allow</button><button class="quiet" id="no">${current ? "Keep what it has" : wasStopped ? "Close" : "Don't allow"}</button>${current ? `<button class="quiet" id="stop">Stop this site</button>` : ""}</div>
+      <p class="small muted">What you allow is kept in this browser, inside that site, and stops by itself at the limit you set. To see what a site has used, or to stop it sooner, open this window from the site again. ${NEVER}</p>`;
     // Say where the prompts can go with the choice that is ticked.
     const lock = () => {
       const ticked = document.querySelector("input[name=choice]:checked");
       const picked = list.find((c) => c.key === (ticked && ticked.value)) || list[0];
       const address = PROVIDERS[picked.provider] && PROVIDERS[picked.provider].baseUrl;
       document.getElementById("lock").textContent = address
-        ? `With this choice the router sends this site's prompts to ${new URL(address).host}. Your browser lets the router connect there and to the router's own server, and nowhere else.`
+        ? `With this choice the router sends this site's prompts to ${new URL(address).host}. Your browser lets the router connect there, and nowhere else.`
         : "With this choice your prompts stay on this device.";
     };
     document.getElementById("choices").addEventListener("change", lock);
     lock();
     document.getElementById("no").onclick = cancel;
+    if (current) document.getElementById("stop").onclick = stopSite;
     document.getElementById("yes").onclick = async () => {
       if (busy) return;
       const yes = document.getElementById("yes");
@@ -248,13 +283,21 @@ if (boxed) {
       box.textContent = "";
       const selected = document.querySelector("input[name=choice]:checked");
       const choice = list.find((c) => c.key === selected?.value) || list[0];
-      const secret = random(24);
+      const within = (value, low, high, otherwise) => Math.min(high, Math.max(low, Math.round(Number(value)) || otherwise));
+      const made = Date.now();
       try {
-        const made = await server("grant", { site, secret, label: choice.label, provider: choice.provider, model: choice.model, requests: document.getElementById("requests").value, days: document.getElementById("days").value });
-        if (!made.ok) throw new Error(made.why || "The router server refused the grant.");
-        const sealed = choice.secretKey ? await seal(made.wrap, choice.secretKey) : null;
-        const confirmed = await deliver({ person: me().id, id: made.id, secret, site, provider: choice.provider, providerName: choice.providerName, model: choice.model, label: choice.label, sealed }, made.grant);
+        // The API key is encrypted here, to a key pair made by the page that will keep it:
+        // the frame inside the site, or this window's own worker. Only that page can open it.
+        const sealed = choice.secretKey ? await seal(host ? await host.offer() : frame.pub, choice.secretKey) : null;
+        const grant = {
+          id: random(9), site, provider: choice.provider, providerName: choice.providerName, model: choice.model, label: choice.label,
+          requests: within(document.getElementById("requests").value, 1, 100000, 20), expires: made + within(document.getElementById("days").value, 1, 365, 7) * 86400000,
+          used: 0, tokensIn: 0, tokensOut: 0, made, last: 0, sealed,
+        };
+        const confirmed = await deliver(grant);
         if (!confirmed) throw new Error("The opening site closed or did not confirm the grant. You can close this window or try again.");
+        remember(grant, host ? "window" : "frame");
+        wasStopped = false;
         if (!host) return close();
         busy = false;
         tellSite({ router: "picked", ok: true });
@@ -281,7 +324,7 @@ if (boxed) {
     };
     // The grant was stopped or used up, or the site asked to forget it. The
     // window has nothing left to carry. Wait a moment so the site hears why.
-    host.onforget = () => { if (view === "connected") setTimeout(() => close(), 400); };
+    host.onforget = () => { if (view === "connected" && !stopping) setTimeout(() => close(), 400); };
     addEventListener("message", (event) => {
       if (event.origin !== site || !event.data) return;
       // The site's page is going away. By the time this arrives the page may
@@ -290,6 +333,8 @@ if (boxed) {
       if (event.data.router === "bye") close();
       else if (event.data.router === "choose" && event.source === opener && view === "connected") draw();   // the site asks the person to choose again
     });
+    // Keep the count on show up to date while the site uses the model through this window.
+    setInterval(async () => { const el = document.getElementById("used"); const now = view === "connected" && await host.current(); if (el && now) el.textContent = usedSoFar(now); }, 1000);
     setInterval(() => { if (!opener || opener.closed) close(); }, 500);
     addEventListener("pagehide", () => tellSite({ router: "closing" }));
   }
