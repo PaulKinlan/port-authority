@@ -279,6 +279,9 @@ export async function connect(options = {}) {
   const link = channel();
   const api = link.api;
   api.router = ROUTER;
+  // Hawser carries the Chat Completions calls, and is only needed for the first of them. It is asked for now,
+  // so that the browser has a copy of it if the router's address cannot be reached when that call comes.
+  import(ROUTER + "/hawser.js").catch(() => {});
   // A sandboxed page, or one that is not http or https, has no address. The
   // router frame and the router window would both refuse it, so neither is opened.
   const homeless = self.origin === "null" || !/^https?:$/.test(location.protocol);

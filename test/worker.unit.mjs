@@ -212,6 +212,16 @@ test("every /call/<provider>.js is the one call worker, sent with the policy it 
   assert.equal(await header("/call/anthropic"), "default-src 'none'; script-src 'self'; connect-src https://api.anthropic.com/v1/messages; base-uri 'none'; form-action 'none'");
 });
 
+test("the two scripts a site's own page loads may be used from the browser's copy while a new one is fetched", async () => {
+  const cache = async (path) => (await worker.fetch(new Request("https://llmchannel.dev" + path), routerEnv())).headers.get("cache-control");
+  assert.equal(await cache("/router.js"), "max-age=60, stale-while-revalidate=604800");
+  assert.equal(await cache("/hawser.js"), "max-age=60, stale-while-revalidate=604800");
+  // Everything else is checked with the server every time. The router's own pages have the service worker for when it is gone.
+  for (const path of ["/", "/frame.html", "/frame.js", "/pick.html", "/sw.js", "/call/anthropic.js", "/call/anthropic", "/providers.js"]) assert.equal(await cache(path), "no-cache", path);
+  // And only at the router's address: the main site's copy of hawser.js is as it was.
+  assert.equal((await worker.fetch(new Request("https://port-authority.dev/hawser.js"), routerEnv())).headers.get("cache-control"), "no-cache");
+});
+
 test("the service worker may fetch the router's own files, and nothing else", async () => {
   assert.deepEqual(await policy("/sw.js"), { "default-src": "'none'", "connect-src": "'self'" });
 });

@@ -66,7 +66,9 @@ async function answer(request) {
   let late;
   const slow = new Promise((resolve) => { late = setTimeout(() => resolve("slow"), SLOW); });
   const asked = (async () => {
-    const fresh = await fetch(request);
+    // Past the browser's own cache, so that "the network first" means the network. (A page being
+    // gone to cannot be asked for this way, and pages are sent to be checked every time anyway.)
+    const fresh = await fetch(request.mode === "navigate" ? request : new Request(request, { cache: "no-cache" }));
     // Keep a good answer. A redirect or an error is passed on and not kept.
     if (fresh.ok && fresh.type === "basic") (await caches.open(COPY)).put(request.url.split(/[?#]/)[0], fresh.clone()).catch(() => {});
     return fresh;

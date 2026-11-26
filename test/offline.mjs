@@ -105,14 +105,6 @@ async function run(browser, label, { expectWorker }) {
   await home.waitForSelector("#accounts li[data-id]");
   check(`${label}: the router's own page loads with its address gone, with the person's accounts`, /Work key/.test(await home.locator("#accounts").innerText()) && /planner/.test(await home.locator("#grants").innerText()));
 
-  // What does not work: a site's own page is not the router's to keep a copy for.
-  const fresh = await ctx.newPage();
-  await fresh.goto(base("planner") + "/another-page");
-  const loaded = await fresh.evaluate((at) => import(at + "/router.js").then(() => "loaded", () => "failed"), base("router"));
-  console.log(`note ${label}: a page of a site, loaded while the router's address is gone, ${loaded === "failed" ? "cannot fetch router.js. The service worker answers for the router's own pages, not for a site's" : "could fetch router.js"}`);
-  check(`${label}: (known gap) a site's page cannot fetch router.js while the router's address is gone`, loaded === "failed");
-  await fresh.close();
-
   // ------------------------------------------------ the router's address answers with errors
   router = "broken";
   await home.reload();
@@ -129,8 +121,29 @@ async function run(browser, label, { expectWorker }) {
   await ctx.close();
 }
 
+// A site's own page loads router.js from the router's address, and no service worker of the router's answers for
+// a site's page. That script is sent so that the browser may go on using its copy. This part has to run with none
+// of the test's own request handlers, because the browser keeps no cache of its own while they are on. So the
+// router's address is not failed here: the whole browser is taken off the network.
+async function siteScript(browser) {
+  const ctx = await browser.newContext();
+  const site = await ctx.newPage();
+  await site.goto(base("planner") + "/a-site-of-its-own");
+  const first = await site.evaluate((at) => import(at + "/router.js").then(async (m) => { await m.connect(); return typeof m.connect; }, () => "failed"), base("router"));
+  await site.waitForTimeout(500);
+  await ctx.setOffline(true);
+  const got = await site.evaluate(async (at) => {
+    const ask = (path) => fetch(at + path).then(async (r) => (r.ok ? (await r.text()).length : "status " + r.status), () => "failed");
+    return { router: await ask("/router.js"), hawser: await ask("/hawser.js"), frame: await ask("/frame.js") };
+  }, base("router"));
+  check("off the network, a site's page still has router.js and hawser.js, from the browser's own copy", first === "function" && got.router > 1000 && got.hawser > 1000, JSON.stringify(got));
+  check("that is those two scripts only: the rest of the router is not kept that way", got.frame === "failed", JSON.stringify(got));
+  await ctx.close();
+}
+
 const browser = await launchWithPartitioning(chromium);
 await run(browser, "Chrome", { expectWorker: true });
+await siteScript(browser);
 await browser.close();
 // With third-party cookies blocked, as in Chrome's Incognito. The router has to work whether or not the frame may have a service worker.
 const strict = await launchWithPartitioning(chromium, { args: ["--test-third-party-cookie-phaseout"] });

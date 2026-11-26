@@ -60,6 +60,8 @@ function callPageFor(path) {
 // may fetch the router's own files, to keep a copy of them, and nothing else.
 // /frame.html is put inside other sites, and the call page inside /frame.html,
 // so those two cannot say which pages may frame them. The rest cannot be framed.
+// The router's scripts that a site's own page loads: router.js, and hawser.js which it imports.
+const SITE_LOADED = ["/router.js", "/hawser.js"];
 function routerCsp(path) {
   // The call worker, /call/<provider>.js. A worker is held to the policy on
   // its own script. It needs the router's scripts and that one address, and it
@@ -161,6 +163,13 @@ async function serve(env, site, pathname) {
       if (site === "router") {
         headers["content-security-policy"] = routerCsp(path);
         headers["referrer-policy"] = "no-referrer";
+        // A site's page loads these two from the router's address, and the
+        // router's service worker cannot answer for a site's page. So the
+        // browser is told it may go on using its copy for a week, while it asks
+        // for a new one in the background. A site visited in the last week
+        // still connects when the router's address cannot be reached. The cost
+        // is that after a change, a site runs the old script one more time.
+        if (SITE_LOADED.includes(path)) headers["cache-control"] = "max-age=60, stale-while-revalidate=604800";
       }
       return new Response(body, { headers });
     }
