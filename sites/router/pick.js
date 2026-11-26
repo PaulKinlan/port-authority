@@ -16,6 +16,7 @@ const main = document.getElementById("main");
 // in one place only: the router's own page, in a tab the person opened. Then a
 // look-alike window that asks for a key gives itself away.
 const NEVER = "This window never asks for an API key. A window that looks like this one and asks for a key is not the router.";
+const web = (address) => /^https?:\/\//.test(String(address));    // a website's address, not a sandboxed page's or a file's
 const esc = (text) => String(text).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 
 // The site that opened this window has a hidden router frame in it. Post to
@@ -48,9 +49,10 @@ function helloFromSite() {
     const late = setTimeout(() => resolve(null), 3000);
     addEventListener("message", function hear(event) {
       if (event.source !== opener || !event.data || event.data.router !== "hello" || !event.ports[0]) return;
-      if (!/^https?:\/\//.test(event.origin)) return;    // a page with no address of its own has nothing to keep a grant under
       removeEventListener("message", hear);
       clearTimeout(late);
+      // A page with no address of its own has nothing to show the person and nothing to keep a grant under.
+      if (!web(event.origin)) { event.ports[0].close(); return resolve({ refused: "no-address" }); }
       resolve({ site: event.origin, port: event.ports[0] });
     });
     try { opener.postMessage({ router: "picker-ready" }, "*"); } catch { resolve(null); }   // carries nothing, so any page may read it
@@ -65,18 +67,41 @@ const nested = (() => { try { return !!opener && opener !== opener.top; } catch 
 
 // The site says "#window" when it knows it has no frame, to save the search.
 // It is only a hint: which site this is always comes from the browser.
-const frame = nested || location.hash === "#window" ? null : await findFrame();
-const direct = nested || frame ? null : await helloFromSite();
+// A sandbox takes this window's own address away. Then it cannot read the
+// person's accounts, and cannot name the router's address to find the frame.
+const boxed = origin === "null";
 
-if (nested) {
-  document.title = "Open the site in a tab of its own | AI router";
-  main.innerHTML = `<h1 tabindex="-1">Open the site in a tab of its own</h1><p>The page that opened this window is inside another page. This window only answers the page whose address is in the tab's address bar, so that you can always see who is asking.</p><div class="actions"><button class="quiet" id="no">Close</button></div>`;
+const frame = boxed || nested || location.hash === "#window" ? null : await findFrame();
+const direct = boxed || nested || frame ? null : await helloFromSite();
+const homeless = (frame && !web(frame.site)) || (direct && direct.refused === "no-address");
+
+// The address of the page that sent the person here, when the browser passed
+// one on and it is not the router's own. It is only shown, never trusted.
+const from = (() => { try { const address = new URL(document.referrer).origin; return web(address) && address !== location.origin ? address : ""; } catch { return ""; } })();
+
+// This window cannot go on. Say which thing stopped it: each is a different thing the browser did.
+const stop = (title, heading, ...paragraphs) => {
+  document.title = title + " | AI router";
+  main.innerHTML = `<h1 tabindex="-1">${heading}</h1>${paragraphs.map((text) => `<p>${text}</p>`).join("")}<div class="actions"><button class="quiet" id="no">Close</button></div>`;
   document.getElementById("no").onclick = () => close();
   main.querySelector("h1").focus();
-} else if (!frame && !direct) {
+};
+
+if (boxed) {
+  stop("This window is in a sandbox", "This window is in a sandbox", "The page that opened this window is sandboxed, and the browser put this window in the same sandbox. In here the router cannot read your accounts, and it cannot tell which site is asking. So it will not go on.", "Nothing was shared with the page.");
+} else if (nested) {
+  stop("Open the site in a tab of its own", "Open the site in a tab of its own", "The page that opened this window is inside another page. This window only answers the page whose address is in the tab's address bar, so that you can always see who is asking.");
+} else if (homeless) {
+  stop("This page has no address of its own", "This page has no address of its own", "The page that opened this window is sandboxed, or it is a file and not a website. The browser gives a page like that no address. The router shows you the address of the site that is asking, and keeps what you allow under it. With no address, it will not go on.", "Nothing was shared with the page.");
+  try { opener.postMessage({ router: "refused", why: "no-address" }, "*"); } catch { /* the page has gone */ }   // carries nothing, and a page with no address cannot be named as the target
+} else if (!opener && from) {
+  stop("This window cannot reach the site", "This window cannot reach the site that opened it", `<strong>${esc(from)}</strong> opened this window, and then the browser cut the link between the two.`, "The site's own settings do that. The usual one is a header called <code>Cross-Origin-Opener-Policy</code>, set to <code>same-origin</code>. Without the link, this window cannot find the site's page, so the router cannot work on that site.", "Nothing was shared with the site.");
+} else if (!opener) {
   document.title = "Open from a site | AI router";
-  main.innerHTML = `<h1 tabindex="-1">This window is opened by a site</h1><p>A site that wants to use an AI model opens this window so that you can choose one. Nothing opened it this time.</p><p><a class="button" href="/">Go to your router</a></p>`;
+  main.innerHTML = `<h1 tabindex="-1">This window is opened by a site</h1><p>A site that wants to use an AI model opens this window so that you can choose one. Nothing opened it this time.</p><p>If you did come here from a site, that site cuts its link to the windows it opens, and the router cannot work on it.</p><p><a class="button" href="/">Go to your router</a></p>`;
   main.querySelector("h1").focus();
+} else if (!frame && !direct) {
+  stop("The page did not answer", "The page that opened this window did not answer", "A site opens this window, and then tells it where the model's answers should go. This page said nothing. Close this window and try again from the site.");
 } else {
   const site = frame ? frame.site : direct.site;
   // With no frame in the site, this window serves the site itself.

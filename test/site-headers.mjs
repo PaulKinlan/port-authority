@@ -20,16 +20,22 @@ const check = (name, ok, extra = "") => { console.log(`${ok ? "ok  " : "FAIL"} $
 //       "none"    the person cannot choose at all
 const CASES = [
   { name: "no headers", headers: {}, what: "frame" },
-  { name: "COOP same-origin", headers: { "cross-origin-opener-policy": "same-origin" }, what: "none" },
+  { name: "COOP same-origin", headers: { "cross-origin-opener-policy": "same-origin" }, what: "none", window: /cannot reach the site that opened it/, names: true, heard: "choose-error cut-off" },
+  { name: "COOP same-origin, and no referrer", headers: { "cross-origin-opener-policy": "same-origin", "referrer-policy": "no-referrer" }, what: "none", window: /opened by a site/, heard: "choose-error cut-off" },
   { name: "COOP same-origin-allow-popups", headers: { "cross-origin-opener-policy": "same-origin-allow-popups" }, what: "frame" },
   { name: "COOP noopener-allow-popups", headers: { "cross-origin-opener-policy": "noopener-allow-popups" }, what: "frame" },
   { name: "COEP require-corp", headers: { "cross-origin-embedder-policy": "require-corp" }, what: "window" },
   { name: "COEP credentialless", headers: { "cross-origin-embedder-policy": "credentialless" }, what: "window" },
-  { name: "cross-origin isolated (COOP same-origin, COEP require-corp)", headers: { "cross-origin-opener-policy": "same-origin", "cross-origin-embedder-policy": "require-corp" }, what: "none", isolated: true },
+  { name: "cross-origin isolated (COOP same-origin, COEP require-corp)", headers: { "cross-origin-opener-policy": "same-origin", "cross-origin-embedder-policy": "require-corp" }, what: "none", isolated: true, window: /cannot reach the site that opened it/, names: true, heard: "choose-error cut-off" },
   { name: "Document-Isolation-Policy isolate-and-require-corp", headers: { "document-isolation-policy": "isolate-and-require-corp" }, what: "frame", isolated: true },
   { name: "CSP frame-src 'none'", headers: { "content-security-policy": "frame-src 'none'" }, what: "window" },
-  { name: "CSP sandbox, popups kept in the sandbox", headers: { "content-security-policy": "sandbox allow-scripts allow-popups" }, what: "none" },
-  { name: "CSP sandbox, popups let out", headers: { "content-security-policy": "sandbox allow-scripts allow-popups allow-popups-to-escape-sandbox" }, what: "none" },
+  // A sandboxed page has no address. The site's script knows that, and opens nothing.
+  { name: "CSP sandbox, popups kept in the sandbox", headers: { "content-security-policy": "sandbox allow-scripts allow-popups" }, what: "none", window: /^no window$/, heard: "choose-error no-address" },
+  { name: "CSP sandbox, popups let out", headers: { "content-security-policy": "sandbox allow-scripts allow-popups allow-popups-to-escape-sandbox" }, what: "none", window: /^no window$/, heard: "choose-error no-address" },
+  // The same two pages with a script of their own, which opens the window whatever the router's script would say.
+  { name: "by hand: CSP sandbox, popups kept in the sandbox", hand: true, headers: { "content-security-policy": "sandbox allow-scripts allow-popups" }, what: "none", window: /This window is in a sandbox/, heard: "nothing" },
+  { name: "by hand: CSP sandbox, popups let out", hand: true, headers: { "content-security-policy": "sandbox allow-scripts allow-popups allow-popups-to-escape-sandbox" }, what: "none", window: /This page has no address of its own/, heard: 'heard {"router":"refused","why":"no-address"}' },
+  { name: "by hand: a page that opens the window and never says hello", hand: "silent", headers: {}, what: "none", window: /did not answer/, heard: "nothing" },
 ];
 const only = process.env.ONLY ? CASES.filter((c) => c.name.includes(process.env.ONLY)) : CASES;
 
@@ -44,11 +50,25 @@ const PAGE = `<!doctype html><meta charset="utf-8"><title>loading</title><button
   } catch (error) { out("load-error " + error.message); }
   document.title = "ready";
 </script>`;
+// A site that does not use the router's script. It opens the window itself, passes it a port, and writes down what it hears.
+const HAND = (silent) => `<!doctype html><meta charset="utf-8"><title>ready</title><button id="go">Choose</button><pre id="out">mode by hand\n</pre>
+<script>
+  const out = (text) => { document.getElementById("out").textContent += text + "\\n"; };
+  let w = null;
+  addEventListener("message", (event) => {
+    if (event.source !== w) return;
+    if (event.data && event.data.router === "picker-ready") {
+      ${silent ? "return;" : `const line = new MessageChannel(); w.postMessage({ router: "hello" }, "${ROUTER}", [line.port2]); return;`}
+    }
+    out("heard " + JSON.stringify(event.data));
+  });
+  document.getElementById("go").onclick = () => { w = open("${ROUTER}/pick.html#window", "by-hand", "popup,width=460,height=640"); };
+</script>`;
 const server = http.createServer((request, response) => {
   const found = CASES[Number(new URL(request.url, "http://x").searchParams.get("case"))];
   if (!found || !request.url.startsWith("/site")) { response.writeHead(404); return response.end("not found"); }
   response.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", ...found.headers });
-  response.end(PAGE);
+  response.end(found.hand ? HAND(found.hand === "silent") : PAGE);
 });
 await new Promise((done) => server.listen(0, "::", done));
 const SITE = `http://a-site.localhost:${server.address().port}`;
@@ -86,17 +106,20 @@ async function run(browser, found, label = found.name) {
   if (popup) {
     await popup.waitForLoadState().catch(() => {});
     const yes = popup.locator("#yes");
-    const stuck = popup.locator("h1", { hasText: /opened by a site|tab of its own/i });
+    const stuck = popup.locator("h1", { hasText: /opened by a site|tab of its own|cannot reach|no address|sandbox|did not answer/i });
     const first = await Promise.race([yes.waitFor({ timeout: 9000 }).then(() => "chooser"), stuck.waitFor({ timeout: 9000 }).then(() => "stuck")]).catch(() => "neither");
     seen.opener = await popup.evaluate(() => (window.opener ? "has opener" : "no opener")).catch(() => "unknown");
     seen.window = first === "chooser" ? "asks the person to choose" : first === "stuck" ? "says: " + (await popup.locator("h1").innerText()) : "shows: " + (await popup.locator("body").innerText().catch(() => "")).trim().slice(0, 80);
+    seen.text = await popup.locator("#main").innerText().catch(() => "");
+    seen.asks = (await popup.locator("#yes").count()) + (await popup.locator("input").count());
     if (first === "chooser") {
       await yes.click();
       await site.locator("#out", { hasText: /chose (true|false)/ }).waitFor({ timeout: 8000 }).catch(() => {});
     }
   }
   await site.waitForTimeout(1200);
-  seen.chose = ((await said()).find((line) => /^chose|^choose-error/.test(line)) || "still waiting");
+  seen.chose = ((await said()).find((line) => /^chose|^choose-error|^heard/.test(line)) || (found.hand ? "nothing" : "still waiting"));
+  const began = Date.now();
   seen.answer = await site.evaluate(async () => {
     if (!window.ai) return "no router";
     try { return (await Promise.race([window.ai.chat.completions.create({ messages: [{ role: "user", content: "hello" }] }), new Promise((_, no) => setTimeout(() => no(new Error("no answer in 6 s")), 6000))])).choices[0].message.content; }
@@ -104,6 +127,11 @@ async function run(browser, found, label = found.name) {
   });
   const got = seen.answer === "An answer." ? seen.mode : "none";
   check(`${label}: ${found.what === "none" ? "the person cannot choose" : "works, by the " + found.what}`, got === found.what, `(mode ${seen.mode}; window ${seen.window}, ${seen.opener}; site heard "${seen.chose}"; prompt gave "${seen.answer}")`);
+  if (found.window) {
+    check(`${label}: the window says what stopped it`, found.window.test(seen.window) && (!found.names || seen.text.includes(SITE)) && !seen.asks, `(window ${seen.window})`);
+    check(`${label}: ${found.heard === "nothing" ? "the page is sent nothing" : "the site is told why"}`, seen.chose === found.heard, `(site heard "${seen.chose}")`);
+    if (!found.hand) check(`${label}: a prompt is refused at once, and does not wait`, seen.answer === "error: no-grant" && Date.now() - began < 2000, `(prompt gave "${seen.answer}" in ${Date.now() - began} ms)`);
+  }
   await ctx.close();
   return seen;
 }

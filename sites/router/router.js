@@ -27,6 +27,15 @@
 //                          addresses. Closing the window disconnects the site,
 //                          and ai.choose() opens it again.
 //
+// There are two kinds of page the router cannot work on. ai.choose() rejects
+// on both, with a code that says which:
+//
+//   "cut-off"      This page is sent with Cross-Origin-Opener-Policy:
+//                  same-origin. The browser cuts it off from every window it
+//                  opens, so the router window cannot reach it.
+//   "no-address"   This page is sandboxed, or is not http or https. It has no
+//                  address to show the person or to keep a grant under.
+//
 // connect({ via: "window" }) skips the frame.
 
 const ROUTER = new URL(import.meta.url).origin;
@@ -254,6 +263,14 @@ function openFrame(link) {
 
 const POPUP = () => { const w = 460, h = 640; return `popup,width=${w},height=${h},left=${Math.max(0, screenX + (outerWidth - w) / 2)},top=${Math.max(0, screenY + (outerHeight - h) / 2)}`; };
 const blocked = () => Object.assign(new Error("Your browser blocked the router window. Allow popups for this site and click again."), { code: "popup-blocked" });
+const noAddress = () => Object.assign(new Error("This page has no address of its own: it is sandboxed, or it is not http or https. The router keeps what a person allows under a site's address, so it cannot work here."), { code: "no-address" });
+const cutOff = () => Object.assign(new Error("This page is sent with Cross-Origin-Opener-Policy: same-origin, so the browser cuts it off from every window it opens. The router window cannot reach this page, and the router cannot work here."), { code: "cut-off" });
+// A page is told nothing when the browser cuts it off from a window: the
+// window only looks closed. Its own headers say whether that is the reason.
+// They are asked for once, and only after a window has come to nothing.
+let asked = null;
+const isCutOff = () => asked ||= fetch(location.href, { method: "HEAD", cache: "no-store" })
+  .then((response) => /^\s*same-origin\s*(;|$)/i.test(response.headers.get("cross-origin-opener-policy") || ""), () => false);
 
 // Connect this page to the router. Resolves to the object described at the
 // top of this file, with choose() and mode added.
@@ -261,14 +278,24 @@ export async function connect(options = {}) {
   const link = channel();
   const api = link.api;
   api.router = ROUTER;
-  const viaFrame = options.via !== "window" && await openFrame(link);
+  // A sandboxed page, or one that is not http or https, has no address. The
+  // router frame and the router window would both refuse it, so neither is opened.
+  const homeless = self.origin === "null" || !/^https?:$/.test(location.protocol);
+  const viaFrame = !homeless && options.via !== "window" && await openFrame(link);
   Object.defineProperty(api, "mode", { value: viaFrame ? "frame" : "window", enumerable: true });
 
   // choose() opens the router window so the person can pick an account and a
   // model. Browsers only allow a window to open during a click. It resolves
   // true when this site has a model afterwards, false if the person closed
-  // the window or said no, and rejects with code "popup-blocked" if the
-  // browser blocked the window.
+  // the window or said no. It rejects with code "popup-blocked" if the
+  // browser blocked the window, and with "cut-off" or "no-address" on a page
+  // the router cannot work on.
+
+  if (homeless) {
+    link.begin();
+    api.choose = () => Promise.reject(noAddress());
+    return api;
+  }
 
   if (viaFrame) {
     // The window finds the frame inside this page, hands it the grant and closes.
@@ -277,7 +304,16 @@ export async function connect(options = {}) {
       if (!picker) return reject(blocked());
       const before = api.model ? JSON.stringify(api.model) + api.expires : "";
       const off = api.onchange(() => { if (api.ready && JSON.stringify(api.model) + api.expires !== before) { off(); clearInterval(timer); resolve(true); } });
-      const timer = setInterval(() => { if (picker.closed) { clearInterval(timer); setTimeout(() => { off(); resolve(api.ready && JSON.stringify(api.model) + api.expires !== before); }, 300); } }, 300);
+      const timer = setInterval(() => {
+        if (!picker.closed) return;
+        clearInterval(timer);
+        setTimeout(async () => {
+          off();
+          if (api.ready && JSON.stringify(api.model) + api.expires !== before) return resolve(true);
+          // Nothing was chosen. The person may have closed the window, or the browser may have cut it off.
+          if (await isCutOff()) reject(cutOff()); else resolve(false);
+        }, 300);
+      }, 300);
     });
     return api;
   }
@@ -288,31 +324,52 @@ export async function connect(options = {}) {
   link.begin();
   let picker = null;      // the router window, while it is open
   let watching = null;
-  let answer = null;      // resolves the choose() that is waiting
+  let answer = null;      // settles the choose() that is waiting: { resolve, reject }
+  let heard = false;      // whether the window that is open has ever spoken to this page
   const settle = (ok) => {
     const done = answer;
     answer = null;
     if (!done) return;
-    if (!ok || api.ready) return done(!!ok);
+    if (!ok || api.ready) return done.resolve(!!ok);
     // The window said yes. Wait for the port to say so too.
-    const off = api.onchange(() => { if (api.ready) { off(); clearTimeout(late); done(true); } });
-    const late = setTimeout(() => { off(); done(api.ready); }, 3000);
+    const off = api.onchange(() => { if (api.ready) { off(); clearTimeout(late); done.resolve(true); } });
+    const late = setTimeout(() => { off(); done.resolve(api.ready); }, 3000);
+  };
+  const fail = (error) => {
+    const done = answer;
+    answer = null;
+    if (done) done.reject(error);
   };
   const lost = () => {
     clearInterval(watching);
     picker = null;
     link.detach();
-    settle(false);
+    const silent = !heard;
+    heard = false;
+    if (!silent || !answer) return settle(false);
+    // The window went without a word. The person may have closed it at once, or the browser may have cut it off.
+    const done = answer;
+    answer = null;
+    isCutOff().then((cut) => { if (cut) done.reject(cutOff()); else done.resolve(false); });
   };
   addEventListener("message", (event) => {
     if (!picker || event.source !== picker || event.origin !== ROUTER) return;
     const message = event.data || {};
     if (message.router === "picker-ready") {
+      heard = true;
       const line = new MessageChannel();
       picker.postMessage({ router: "hello" }, ROUTER, [line.port2]);   // only a page at the router's address can receive this
       link.attach(line.port1);
     } else if (message.router === "picked") settle(!!message.ok);
     else if (message.router === "closing") lost();
+    else if (message.router === "refused") {
+      // The window will not serve this page, and says why. The port this page passed it leads nowhere.
+      clearInterval(watching);
+      picker = null;
+      heard = false;
+      link.detach();
+      fail(message.why === "no-address" ? noAddress() : closed());
+    }
   });
   // The window has no reason to stay once this page has gone.
   addEventListener("pagehide", () => { try { if (picker && !picker.closed) picker.postMessage({ router: "bye" }, ROUTER); } catch { /* gone */ } });
@@ -321,14 +378,15 @@ export async function connect(options = {}) {
     settle(false);
     if (picker && !picker.closed) {
       // The window is open. Bring it forward so the person can choose again.
-      answer = resolve;
+      answer = { resolve, reject };
       picker.postMessage({ router: "choose" }, ROUTER);
       try { picker.focus(); } catch { /* not allowed */ }
       return;
     }
     picker = window.open(ROUTER + "/pick.html#window", "ai-router-picker", POPUP());
     if (!picker) { picker = null; return reject(blocked()); }
-    answer = resolve;
+    answer = { resolve, reject };
+    heard = false;
     clearInterval(watching);
     watching = setInterval(() => { if (picker && picker.closed) lost(); }, 300);
   });
