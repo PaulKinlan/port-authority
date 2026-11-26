@@ -116,8 +116,8 @@ async function start({ worker }) {
     const none = await openCaller("nothing");
     return { real: real.kind, none: none.kind };
   });
-  check("where the worker is held to the policy it expects, the caller is the worker", got.real === "worker" && home.workers().some((w) => w.url() === base("router") + "/call/anthropic.js"), JSON.stringify(got));
-  check("a call worker that finds it is not held to the policy it expects will not take a key: the page is used instead", got.none === "page" && home.frames().some((f) => f.url() === base("router") + "/call/nothing") && !home.workers().some((w) => w.url().endsWith("/call/nothing.js")), JSON.stringify(got));
+  check("where the worker is held to the policy it expects, the caller is the worker", got.real === "worker" && home.workers().some((w) => w.url() === base("router") + "/call-worker/anthropic.js"), JSON.stringify(got));
+  check("a call worker that finds it is not held to the policy it expects will not take a key: the page is used instead", got.none === "page" && home.frames().some((f) => f.url() === base("router") + "/call/nothing") && !home.workers().some((w) => w.url().endsWith("/call-worker/nothing.js")), JSON.stringify(got));
   await ctx.close();
 }
 

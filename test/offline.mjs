@@ -70,11 +70,12 @@ async function run(browser, label, { expectWorker }) {
   check(`${label}: the site has its model, with the router's address there`, (await site.evaluate(() => window.chose)) === true && (await ask()) === "Still here." && calls.at(-1).key === KEY);
   if (!framed) { await ctx.close(); return; }
 
-  // In Chrome the call is made by a worker. The rule that sends other addresses straight to the network covers a
-  // page's requests and not, yet, a worker's. So the service worker is shown this call, and leaves it alone.
+  // The call is made by the call worker, which is under a service worker of its own that does nothing. So the
+  // service worker that keeps the router's files is never shown the request that carries the key.
   const before = await seen(frame);
-  check(`${label}: the service worker left the call to the provider alone: it reached the provider, from the call worker`, !!before && calls.length === 1 && (await callers(site)).map((c) => c.url()).join() === base("router") + "/call/anthropic.js", JSON.stringify(before));
-  console.log(`note ${label}: the service worker was shown ${before.passedBy} request(s) for other addresses, and answered none of them`);
+  const under = await frame.evaluate(async () => (await navigator.serviceWorker.getRegistrations()).map((r) => new URL(r.scope).pathname + " " + r.active.scriptURL.split("/").pop()).sort().join(", "));
+  check(`${label}: the frame has two service workers: one for the router's files, and one that does nothing, for the call worker`, under === "/ sw.js, /call-worker/ quiet.js", under);
+  check(`${label}: the call to the provider, which carries the key, was never shown to the service worker that keeps the files`, !!before && before.passedBy === 0 && calls.length === 1 && (await callers(site)).map((c) => c.url()).join() === base("router") + "/call-worker/anthropic.js", JSON.stringify(before));
 
   // ------------------------------------------------ the router's address goes away
   router = "down";
@@ -86,9 +87,13 @@ async function run(browser, label, { expectWorker }) {
   const policy = await frames.at(-1).evaluate(() => new Promise((resolve) => { setTimeout(() => fetch("/_sites.js").then(() => resolve("allowed"), () => resolve("blocked")), 0); }));
   check(`${label}: a frame taken from the copy is held to the same policy: it can connect to nothing`, policy === "blocked");
   const n = calls.length;
-  check(`${label}: and a prompt through it is answered, by a call worker taken from the copy`, (await ask("again")) === "Still here." && calls.length === n + 1 && calls.at(-1).key === KEY && calls.at(-1).from === base("router") + "/frame.html" && (await callers(site)).length === 2 && (await callers(site)).every((c) => c.url() === base("router") + "/call/anthropic.js"), JSON.stringify(calls.at(-1)) + " " + (await callers(site)).map((c) => c.url()).join());
-  const held = await (await callers(site)).at(-1).evaluate(() => new Promise((resolve) => { addEventListener("securitypolicyviolation", (event) => resolve(event.originalPolicy), { once: true }); setTimeout(() => resolve("held to nothing"), 2000); fetch("https://example.com/").catch(() => {}); }));
-  check(`${label}: a call worker taken from the copy is held to the same policy: one address, at that provider`, held === "default-src 'none'; script-src 'self'; connect-src https://api.anthropic.com/v1/messages", held);
+  // The call worker's script is not in the copy, so with the router's address gone there is none. The call page is in the copy.
+  check(`${label}: and a prompt through it is answered, by the call page taken from the copy`, (await ask("again")) === "Still here." && calls.length === n + 1 && calls.at(-1).key === KEY && calls.at(-1).from === base("router") + "/call/anthropic", JSON.stringify(calls.at(-1)) + " " + (await callers(site)).map((c) => c.url()).join());
+  const page = site.frames().find((f) => f.url() === base("router") + "/call/anthropic");
+  const held = await page.evaluate(() => new Promise((resolve) => { document.addEventListener("securitypolicyviolation", (event) => resolve(event.originalPolicy), { once: true }); setTimeout(() => resolve("held to nothing"), 2000); fetch("https://example.com/").catch(() => {}); }));
+  check(`${label}: a call page taken from the copy is held to the same policy: one address, at that provider`, held === "default-src 'none'; script-src 'self'; connect-src https://api.anthropic.com/v1/messages; base-uri 'none'; form-action 'none'", held);
+  const after = await seen(frames.at(-1));
+  check(`${label}: and its call was not shown to the service worker either`, !!after && after.passedBy === 0, JSON.stringify(after));
   check(`${label}: the network was asked first each time, and failed`, asked.length > 5 && asked.every((line) => line.startsWith("down ")), `${asked.length} requests failed`);
 
   // The router window opens from its copy too. It shows what the site has used, and Stop works.

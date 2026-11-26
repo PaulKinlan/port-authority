@@ -1,6 +1,6 @@
 // The call worker: a worker that calls one model provider.
 //
-// A router page starts it with the provider in the address: /call/anthropic.js.
+// A router page starts it with the provider in the address: /call-worker/anthropic.js.
 // The server sends this script with a Content-Security-Policy whose connect-src
 // is that one provider's address for prompts. A worker is held to the policy on
 // its own script, not to the policy of the page that started it. So the API key
@@ -19,7 +19,7 @@
 import { serveCalls } from "/calling.js";
 import { callWorkerPolicy } from "/providers.js";
 
-const named = /^\/call\/([^/]+)\.js$/.exec(location.pathname);
+const named = /^\/call-worker\/([^/]+)\.js$/.exec(location.pathname);
 const provider = named ? decodeURIComponent(named[1]) : null;
 
 // Ask for something no policy here allows, and read which policy stopped it.

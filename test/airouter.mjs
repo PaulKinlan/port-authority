@@ -167,7 +167,7 @@ await florist.click("#write");
 await florist.waitForFunction(() => /pieces/.test(document.querySelector("#log").textContent));
 check("the answer streams into the site", (await florist.locator("#card").innerText()) === "Dear Ada, well done on passing.");
 check("the provider was called with the person's key", seen.at(-1).key === KEY && seen.at(-1).body.model === "claude-sonnet-5-5" && seen.at(-1).body.stream === true);
-check("the call was made by the router's worker for that one provider, not by the site", byRouter(seen.at(-1)) && (await callerUrls(florist)) === base("router") + "/call/anthropic.js", seen.at(-1).from + " " + (await callerUrls(florist)));
+check("the call was made by the router's worker for that one provider, not by the site", byRouter(seen.at(-1)) && (await callerUrls(florist)) === base("router") + "/call-worker/anthropic.js", seen.at(-1).from + " " + (await callerUrls(florist)));
 check("the site saw how many requests are left", /4 requests left/.test(await florist.locator("#state").innerText()));
 
 // The site cannot get at the key: not in any message, not in its storage, not by reaching into the frame.
@@ -210,7 +210,7 @@ const csp = await header("/frame.html");
 check("the router frame is served with a content security policy", /default-src 'none'/.test(csp) && !/unsafe/.test(csp), csp.slice(0, 60));
 check("the router frame may connect to nothing", connect(csp) === "'none'", connect(csp));
 check("nor may the router's own page, the router window, or the worker", connect(await header("/")) === "'none'" && connect(await header("/pick.html")) === "'none'" && connect(await header("/frame-worker.js")) === "'none'");
-check("the worker that calls Anthropic is sent with a policy that allows Anthropic's one chat address and nothing else", (await header("/call/anthropic.js")) === "default-src 'none'; script-src 'self'; connect-src https://api.anthropic.com/v1/messages" && (await header("/call/openai.js")) === "default-src 'none'; script-src 'self'; connect-src https://api.openai.com/v1/chat/completions", await header("/call/anthropic.js"));
+check("the worker that calls Anthropic is sent with a policy that allows Anthropic's one chat address and nothing else", (await header("/call-worker/anthropic.js")) === "default-src 'none'; script-src 'self'; connect-src https://api.anthropic.com/v1/messages" && (await header("/call-worker/openai.js")) === "default-src 'none'; script-src 'self'; connect-src https://api.openai.com/v1/chat/completions", await header("/call-worker/anthropic.js"));
 check("the page that calls Anthropic, for a browser with no such worker, may connect to Anthropic's one chat address and nothing else", connect(await header("/call/anthropic")) === "https://api.anthropic.com/v1/messages", connect(await header("/call/anthropic")));
 check("the page that calls OpenAI may connect to OpenAI's one chat address and nothing else", connect(await header("/call/openai")) === "https://api.openai.com/v1/chat/completions");
 check("a call page for an unknown provider, or at the old address, may connect to nothing", connect(await header("/call/example.com")) === "'none'" && connect(await header("/call.html")) === "'none'" && connect(await header("/call.html?provider=anthropic")) === "'none'");
@@ -221,7 +221,7 @@ check("the router frame cannot connect to the router's own server either", (awai
 const frameWorker = florist.workers().find((w) => w.url().endsWith("/frame-worker.js"));
 check("the worker inside the frame cannot connect to anything", !!frameWorker && (await tryFetch(frameWorker, "/_sites.js")) === "blocked" && (await tryFetch(frameWorker, "https://example.com/")) === "blocked" && (await tryFetch(frameWorker, "https://api.anthropic.com/v1/messages")) === "blocked" && seen.length === before);
 check("the router frame cannot connect to the provider itself", (await tryFetch(frame, "https://api.anthropic.com/v1/messages")) === "blocked" && seen.length === before);
-const callWorker = florist.workers().find((w) => w.url() === base("router") + "/call/anthropic.js");
+const callWorker = florist.workers().find((w) => w.url() === base("router") + "/call-worker/anthropic.js");
 check("the calls are made by a worker for that one provider, and no page is opened to make them", !!callWorker && !florist.frames().some((f) => f.url().includes("/call/")), (await callerUrls(florist)));
 check("the call worker cannot connect to any other address at that provider", (await tryFetch(callWorker, "https://api.anthropic.com/v1/models")) === "blocked" && (await tryFetch(callWorker, "https://api.anthropic.com/v1/messages/batches")) === "blocked"
   && (await tryFetch(callWorker, "https://api.anthropic.com/")) === "blocked" && seen.length === before);
@@ -304,8 +304,8 @@ check("a worker holding a port wrote a note for all four books", notes.length ==
 const libraryCalls = seenOpenAI.slice(openaiCalls);
 check("the second site's prompts went to its provider and not to the first site's", libraryCalls.length === 4 && seen.length === anthropicCalls
   && libraryCalls.every((c) => byRouter(c) && c.key === "Bearer " + KEY2 && c.body.model === "gpt-6.2-sol"), libraryCalls[0] && libraryCalls[0].from);
-const libraryCaller = library.workers().find((w) => w.url() === base("router") + "/call/openai.js");
-check("the second site's call worker is for its own provider, and cannot connect to the first site's", !!libraryCaller && (await callerUrls(library)) === base("router") + "/call/openai.js" && (await tryFetch(libraryCaller, "https://api.anthropic.com/v1/messages")) === "blocked" && seen.length === anthropicCalls, (await callerUrls(library)));
+const libraryCaller = library.workers().find((w) => w.url() === base("router") + "/call-worker/openai.js");
+check("the second site's call worker is for its own provider, and cannot connect to the first site's", !!libraryCaller && (await callerUrls(library)) === base("router") + "/call-worker/openai.js" && (await tryFetch(libraryCaller, "https://api.anthropic.com/v1/messages")) === "blocked" && seen.length === anthropicCalls, (await callerUrls(library)));
 
 // A port lent for 3 requests stops at 3.
 await library.click("#lend");

@@ -39,20 +39,20 @@ export function keptGrant(frame, site) {
 }
 
 // What makes the calls to a provider for a page, by address: the call worker
-// (/call/<provider>.js) where the browser holds a worker to the policy on its
+// (/call-worker/<provider>.js) where the browser holds a worker to the policy on its
 // own script, or the call page (/call/<provider>) where it does not.
 // After a page is reloaded, the test's tools can go on listing a worker that went with the old page, so each
 // worker is asked to answer before it is counted.
 export async function callers(page) {
   const answers = (worker) => Promise.race([worker.evaluate(() => true).catch(() => false), new Promise((resolve) => setTimeout(() => resolve(false), 1000))]);
   const workers = [];
-  for (const worker of page.workers().filter((w) => /\/call\/[^/]+\.js$/.test(w.url()))) if (await answers(worker)) workers.push(worker);
+  for (const worker of page.workers().filter((w) => /\/call-worker\/[^/]+\.js$/.test(w.url()))) if (await answers(worker)) workers.push(worker);
   return [...workers, ...page.frames().filter((frame) => /\/call\/[^/.]+$/.test(frame.url()))];
 }
 // Makes a router page unable to start the call worker, as in a browser that cannot. It then uses the call page.
 export const withoutCallWorker = (context) => context.addInitScript(() => {
   const Real = self.Worker;
-  self.Worker = function (url, options) { if (/\/call\/[^/]+\.js$/.test(String(url))) throw new Error("no call worker in this test"); return new Real(url, options); };
+  self.Worker = function (url, options) { if (/\/call-worker\/[^/]+\.js$/.test(String(url))) throw new Error("no call worker in this test"); return new Real(url, options); };
   self.Worker.prototype = Real.prototype;
 });
 

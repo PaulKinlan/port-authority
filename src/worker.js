@@ -63,12 +63,12 @@ function callPageFor(path) {
 // The router's scripts that a site's own page loads: router.js, and hawser.js which it imports.
 const SITE_LOADED = ["/router.js", "/hawser.js"];
 function routerCsp(path) {
-  // The call worker, /call/<provider>.js. A worker is held to the policy on
+  // The call worker, /call-worker/<provider>.js. A worker is held to the policy on
   // its own script. It needs the router's scripts and that one address, and it
   // has no document, so there is nothing else to allow or forbid. The worker
   // checks that it is held to exactly these words before it takes a key
   // (callWorkerPolicy() in sites/router/providers.js).
-  const worker = /^\/call\/([^/]+)\.js$/.exec(path);
+  const worker = /^\/call-worker\/([^/]+)\.js$/.exec(path);
   if (worker) return ["default-src 'none'", "script-src 'self'", "connect-src " + (Object.hasOwn(ROUTER_ENDPOINTS, worker[1]) ? ROUTER_ENDPOINTS[worker[1]] : "'none'")].join("; ");
   const provider = callPageFor(path);
   if (provider !== null) {
@@ -82,6 +82,8 @@ function routerCsp(path) {
   // able to ask for them. It may connect to the router's address and nowhere
   // else: not to a provider, and not to any other site.
   if (path === "/sw.js") return ["default-src 'none'", "connect-src 'self'"].join("; ");
+  // The service worker that does nothing, which the call worker is put under. It may do nothing.
+  if (path === "/quiet.js") return "default-src 'none'";
   return [
     "default-src 'none'", "script-src 'self'", "worker-src 'self'", "frame-src 'self'", "style-src 'self' https://fonts.googleapis.com", "font-src https://fonts.gstatic.com",
     "img-src 'self' data:", "connect-src 'none'", "base-uri 'none'", "form-action 'none'", "frame-ancestors 'none'",
@@ -128,8 +130,9 @@ async function serve(env, site, pathname) {
   // Every /call/<provider> on the router is the same page. What differs is the
   // policy it is sent with, which is made from the address below.
   if (site === "router" && /^\/call\/[^/]+$/.test(path)) candidates = ["router/call.html"];
-  // And every /call/<provider>.js is the same worker script, sent with the policy for that provider.
-  if (site === "router" && /^\/call\/[^/]+\.js$/.test(path)) candidates = ["router/call-worker.js"];
+  // And every /call-worker/<provider>.js is the same worker script, sent with the policy for that provider.
+  // It is at an address of its own so that it can be put under a service worker of its own (quiet.js).
+  if (site === "router" && /^\/call-worker\/[^/]+\.js$/.test(path)) candidates = ["router/call-worker.js"];
   if (!/\.[a-z0-9]+$/i.test(path)) candidates.push(site + path + "/index.html");
   // Each pattern has a page of its own, all drawn by one file.
   if (site === "main" && /^\/patterns\/[a-z0-9-]+\/index\.html$/.test(path) && !path.startsWith("/patterns/served/")) candidates.push("main/patterns/_page.html");

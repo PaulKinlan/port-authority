@@ -9,9 +9,11 @@
 // What it must not do:
 //   - It answers for the router's own files and for nothing else. A request to
 //     any other address, such as the call to a model provider that carries the
-//     API key, is not its business. Where the browser allows it, such requests
-//     are sent straight to the network and this code is never shown them
-//     (addRoutes below). Elsewhere it is shown them and leaves them alone.
+//     API key, is not its business, and it is arranged that it is never shown
+//     one. The call worker is not under this service worker at all (quiet.js).
+//     The call page is, and a rule the browser applies first sends a page's
+//     requests for other addresses straight to the network (addRoutes below).
+//     In a browser with neither, it is shown them and leaves them alone.
 //   - It keeps each page with the headers it came with. A page taken from the
 //     copy has the same Content-Security-Policy as one from the network.
 //   - It is sent with a policy of its own that lets it connect to the router's
@@ -24,15 +26,18 @@
 const COPY = "router-files-1";
 
 // Every file a router page can ask for. A test checks this list against the
-// files (test/worker.unit.mjs). There is one call worker and one call page for
-// each provider, and each is kept with the policy that names its provider.
+// files (test/worker.unit.mjs). There is one call page for each provider, and
+// each is kept with the policy that names its provider. The call worker is not
+// here. A service worker is shown every request made by a worker whose script
+// it answers for, and the call worker's requests carry the API key. So the call
+// worker is under another service worker, which does nothing (quiet.js), and
+// when the router's address cannot be reached the call page is used instead.
 const FILES = [
   "/", "/frame.html", "/pick.html",
   "/call/anthropic", "/call/openai", "/call/openrouter", "/call/gemini", "/call/ollama",
-  "/call/anthropic.js", "/call/openai.js", "/call/openrouter.js", "/call/gemini.js", "/call/ollama.js",
   "/router.css", "/base.css", "/favicon.svg", "/_sites.js", "/hawser.js",
   "/account-form.js", "/call.js", "/caller.js", "/calling.js", "/chat.js", "/frame-worker.js", "/frame.js", "/grants.js", "/home.js", "/host.js",
-  "/keep.js", "/line.js", "/pick.js", "/providers.js", "/router.js", "/seal.js", "/store.js",
+  "/keep.js", "/line.js", "/pick.js", "/providers.js", "/quiet.js", "/router.js", "/seal.js", "/store.js",
 ];
 const SLOW = 4000;     // after this long with no answer, the copy is used and the network is left to finish
 

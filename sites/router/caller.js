@@ -7,15 +7,23 @@
 // same job (calling.js). The worker is tried first, because it is the
 // stronger of the two: it has no document to carry a key out with.
 // Resolves to { port, kind: "worker" or "page", close() }.
+import { quiet } from "/keep.js";
+
 export async function openCaller(provider) {
-  return (await callWorker(provider)) || callPage(provider);
+  // The call worker has to be under the service worker that does nothing, so that the service worker
+  // which keeps the router's files is never shown its requests. If that one is not in place while the
+  // other is, the page is used: a page's requests to other addresses are kept from a service worker.
+  const hidden = (await quiet) || !navigator.serviceWorker || !navigator.serviceWorker.controller;
+  return (hidden && await callWorker(provider)) || callPage(provider);
 }
 
 // Resolves to null when there is no worker to be had, or the worker says it is not held to its policy.
+// The worker's script is not in the copy the service worker keeps, so there is none to be had when the
+// router's address cannot be reached. The call page is in the copy, and is used then.
 function callWorker(provider) {
   return new Promise((resolve) => {
     let worker;
-    try { worker = new Worker("/call/" + encodeURIComponent(provider) + ".js", { type: "module" }); } catch { return resolve(null); }
+    try { worker = new Worker("/call-worker/" + encodeURIComponent(provider) + ".js", { type: "module" }); } catch { return resolve(null); }
     const no = () => { clearTimeout(late); worker.terminate(); resolve(null); };
     const late = setTimeout(no, 3000);
     worker.onerror = no;

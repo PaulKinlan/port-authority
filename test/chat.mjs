@@ -87,7 +87,7 @@ await Promise.all([popup.waitForEvent("close"), allow(popup)]);
 await chat.locator(".msg.assistant .msg-actions").waitFor();
 check("after the person allows it, the message is sent and the answer arrives", (await chat.locator(".msg.user .bubble").innerText()) === "Write a card for Ada" && (await chat.locator(".msg.assistant .md").innerText()) === "Dear Ada, well done on passing.");
 check("the answer is labelled with the model the person chose", (await chat.locator(".msg.assistant .who").innerText()).toLowerCase() === "claude-sonnet-5-5" && (await chat.locator("#model-text b").innerText()) === "claude-sonnet-5-5" && (await chat.locator("#model-text .from").innerText()) === "Work key");
-check("the call was made by the router's worker for that provider, with the key", byRouter(seen.at(-1)) && (await callerUrls(chat)) === base("router") + "/call/anthropic.js" && seen.at(-1).key === KEY && seen.at(-1).body.max_tokens === 4000);
+check("the call was made by the router's worker for that provider, with the key", byRouter(seen.at(-1)) && (await callerUrls(chat)) === base("router") + "/call-worker/anthropic.js" && seen.at(-1).key === KEY && seen.at(-1).body.max_tokens === 4000);
 check("the conversation is named after the first message and listed", (await chat.locator("#title").innerText()) === "Write a card for Ada" && (await chat.locator("#list a.conv").count()) === 1 && /^#c=/.test(new URL(chat.url()).hash));
 
 // A second message carries the conversation so far.
@@ -142,7 +142,7 @@ await chat.press("#prompt", "Enter");
 await chat.locator(".msg.assistant").nth(3).locator(".msg-actions").waitFor();
 check("after the change the app's next message goes to the new provider, with the conversation so far", (await chat.locator(".msg.assistant .md").nth(3).innerText()) === "A note from the stand-in." && seen.length === anthropicBefore
   && byRouter(seenOpenAI.at(-1)) && seenOpenAI.at(-1).key === "Bearer " + KEY2 && seenOpenAI.at(-1).body.model === "gpt-6.2-sol" && seenOpenAI.at(-1).body.messages.length === 8, JSON.stringify(seenOpenAI.at(-1) && seenOpenAI.at(-1).body.messages.length));
-check("the call worker for the old provider is gone, and there is one, for the new provider", (await callerUrls(chat)) === base("router") + "/call/openai.js", (await callerUrls(chat)));
+check("the call worker for the old provider is gone, and there is one, for the new provider", (await callerUrls(chat)) === base("router") + "/call-worker/openai.js", (await callerUrls(chat)));
 const newCall = (await callers(chat))[0];
 const reach = (address) => newCall.evaluate((a) => fetch(a, { mode: "no-cors" }).then(() => "allowed", () => "blocked"), address);
 check("the new call worker cannot connect to the old provider", (await reach("https://api.anthropic.com/v1/messages")) === "blocked" && seen.length === anthropicBefore);
@@ -155,8 +155,8 @@ await pickModel(popup, "Work key", "claude-sonnet-5-5");
 await Promise.all([popup.waitForEvent("close"), popup.click("#yes")]);
 await chat.locator("#model-text", { hasText: "claude-sonnet-5-5" }).waitFor();
 // The frame starts the call worker for the provider as soon as it has the grant. Give it a moment to load.
-for (let i = 0; i < 50 && (await callerUrls(chat)) !== base("router") + "/call/anthropic.js"; i++) await chat.waitForTimeout(100);
-check("the model can be changed back, and the call worker for the other provider is closed again", (await callerUrls(chat)) === base("router") + "/call/anthropic.js", (await callerUrls(chat)));
+for (let i = 0; i < 50 && (await callerUrls(chat)) !== base("router") + "/call-worker/anthropic.js"; i++) await chat.waitForTimeout(100);
+check("the model can be changed back, and the call worker for the other provider is closed again", (await callerUrls(chat)) === base("router") + "/call-worker/anthropic.js", (await callerUrls(chat)));
 
 // The same provider can be added again under another name, with another key. The two are told apart.
 const KEY3 = "sk-other-A-SECOND-ANTHROPIC-KEY-5550001111";
@@ -301,7 +301,7 @@ const through = await locked.evaluate(async () => {
   return { chat: answer.choices[0].message.content, model: answer.model, prompt: text };
 });
 check("the site's requests are answered through the window, both ways of asking", through.chat === "Dear Ada, well done on passing." && through.prompt === "Dear Ada, well done on passing." && through.model === "claude-sonnet-5-5");
-check("the call is made by the worker for the one provider, started by the router window", seen.at(-1).from === base("router") + "/pick.html#window" && (await callerUrls(popup)) === base("router") + "/call/anthropic.js" && seen.at(-1).key === KEY, seen.at(-1).from + " " + (await callerUrls(popup)));
+check("the call is made by the worker for the one provider, started by the router window", seen.at(-1).from === base("router") + "/pick.html#window" && (await callerUrls(popup)) === base("router") + "/call-worker/anthropic.js" && seen.at(-1).key === KEY, seen.at(-1).from + " " + (await callerUrls(popup)));
 await popup.locator("#left", { hasText: "18 requests left" }).waitFor();
 check("the window shows how many requests are left", true);
 check("the site holds no frame and no key", locked.frames().length === 1 && !(await locked.evaluate((key) => JSON.stringify({ ...localStorage }).includes(key), KEY)));
