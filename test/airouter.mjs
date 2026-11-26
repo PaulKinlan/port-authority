@@ -3,9 +3,11 @@
 // Needs `npx wrangler dev --port 8787` running (PORT=<n> for another port), or LIVE=<workers.dev subdomain>.
 import { createRequire } from "node:module";
 const { chromium } = createRequire(import.meta.url)("playwright");
+import { launchWithPartitioning } from "./real-browser.mjs";
 const LIVE = process.env.LIVE;
 const base = (name) => LIVE ? (name === "hub" && process.env.LIVE_MAIN) || `https://${name === "hub" ? "portauthority" : "pa-" + name}.${LIVE}` : `http://${name}.localhost:${process.env.PORT || 8787}`;
-const browser = await chromium.launch(process.env.HTTPS_PROXY && LIVE ? { proxy: { server: process.env.HTTPS_PROXY } } : {});
+// Storage partitioning has to be on, as it is in a person's own browser. Playwright switches it off.
+const browser = await launchWithPartitioning(chromium, process.env.HTTPS_PROXY && LIVE ? { proxy: { server: process.env.HTTPS_PROXY } } : {});
 const ctx = await browser.newContext();
 // The pages ask for web fonts. The tests do not wait on another network for them.
 await ctx.route(/^https:\/\/fonts\.(googleapis|gstatic)\.com\//, (route) => route.abort());
@@ -358,7 +360,7 @@ await main.waitForFunction(() => /pieces/.test(document.querySelector("#log").te
 check("the explainer page's own demo gets an answer", /A note from the stand-in\./.test(await main.locator("#answer").innerText()));
 const mainFrame = main.frames().find((f) => f.url().includes("/frame.html"));
 const mainKept = await mainFrame.evaluate(() => Object.keys(localStorage).join(" "));
-console.log(`note in this browser the frame inside ${base("hub")} ${/router\\.accounts/.test(mainKept) ? "can see the storage of the router's own pages" : "has storage of its own"}`);
+check("the router frame inside a site has storage of its own, and cannot read the accounts kept at the router's address", !/router\.accounts/.test(mainKept) && (await home.evaluate(() => Object.keys(localStorage).join(" "))).includes("router.accounts"), mainKept);
 
 // The two diagrams on the explainer: every numbered arrow has a step written under it, and
 // the diagram can be stepped through one arrow at a time. Nothing moves until it is asked to.

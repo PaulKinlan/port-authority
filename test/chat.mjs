@@ -4,9 +4,11 @@
 import { createRequire } from "node:module";
 import { readFile } from "node:fs/promises";
 const { chromium } = createRequire(import.meta.url)("playwright");
+import { launchWithPartitioning } from "./real-browser.mjs";
 const PORT = process.env.PORT || 8787;
 const base = (name) => `http://${name}.localhost:${PORT}`;
-const browser = await chromium.launch();
+// Storage partitioning has to be on, as it is in a person's own browser. Playwright switches it off.
+const browser = await launchWithPartitioning(chromium);
 const ctx = await browser.newContext({ acceptDownloads: true });
 // The pages ask for web fonts. The tests do not wait on another network for them.
 await ctx.route(/^https:\/\/fonts\.(googleapis|gstatic)\.com\//, (route) => route.abort());
