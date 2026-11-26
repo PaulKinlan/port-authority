@@ -405,6 +405,19 @@ const outside = await florist.evaluate(async (router) => {
 }, base("router"));
 check("another origin cannot call the router's grant list", outside === "blocked" || outside === 403, String(outside));
 
+// A site shown inside another site's page gets nothing: the router answers only the page in the tab itself.
+const outer = await ctx.newPage();
+await outer.goto(base("planner") + "/a-page-that-is-not-there");
+await outer.evaluate((src) => { document.body.innerHTML = `<iframe id="inner" src="${src}" width="900" height="700"></iframe>`; }, base("library") + "/digest/");
+const inner = outer.frameLocator("#inner");
+await inner.locator("#choose:not([disabled])").waitFor({ timeout: 20000 });
+check("a site inside another site's page is not given its model, though it has a grant in its own tab", /No model yet/.test(await inner.locator("#state").innerText()) && !outer.frames().some((f) => f.url().includes("/frame.html")), await inner.locator("#state").innerText());
+popup = await popupFrom(outer, () => inner.locator("#choose").click());
+await popup.locator("h1", { hasText: "Open the site in a tab of its own" }).waitFor();
+check("and the router window refuses it, with nothing to allow", (await popup.locator("#yes").count()) === 0 && (await popup.locator("input[name=choice]").count()) === 0 && /inside another page/.test(await popup.locator("#main").innerText()));
+await popup.close();
+await outer.close();
+
 const serverCalls = toServer.filter((line) => line.includes("/r/"));
 check("the router's server was never sent an API key, in the clear or encrypted", serverCalls.length > 20 && !toServer.some((line) => line.includes(KEY) || line.includes(KEY2) || /sealed|"key"|"iv"/.test(line)), `${serverCalls.length} requests to the server checked, of ${toServer.length} to the router's address`);
 check("no page threw an error", errors.length === 0, errors.join(" ; "));

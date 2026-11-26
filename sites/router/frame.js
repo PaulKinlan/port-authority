@@ -21,6 +21,10 @@ addEventListener("message", (event) => {
   // comes from the browser, so the site cannot claim to be another site.
   if (message.router === "hello" && event.source === parent && parent !== window && event.ports[0]) {
     if (site) return;     // one page, one hello
+    // The page has to be the one in the tab itself. Then the address the router
+    // window shows is the address in the tab's address bar. A site shown inside
+    // someone else's page gets no answer, so nobody can borrow its good name.
+    if (parent !== top) return;
     site = event.origin;
     host = startHost(site, event.ports[0]);
     // Tell the site the frame is here. A site that hears nothing knows the

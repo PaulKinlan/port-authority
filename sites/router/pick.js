@@ -54,12 +54,23 @@ function helloFromSite() {
   });
 }
 
+// The page that asks has to be the page in its tab, not a page inside another
+// page. Then the address this window shows is the one in that tab's address
+// bar, and a hostile page cannot show a trusted site inside itself and have
+// you approve it by the trusted name.
+const nested = (() => { try { return !!opener && opener !== opener.top; } catch { return false; } })();
+
 // The site says "#window" when it knows it has no frame, to save the search.
 // It is only a hint: which site this is always comes from the browser.
-const frame = location.hash === "#window" ? null : await findFrame();
-const direct = frame ? null : await helloFromSite();
+const frame = nested || location.hash === "#window" ? null : await findFrame();
+const direct = nested || frame ? null : await helloFromSite();
 
-if (!frame && !direct) {
+if (nested) {
+  document.title = "Open the site in a tab of its own | AI router";
+  main.innerHTML = `<h1 tabindex="-1">Open the site in a tab of its own</h1><p>The page that opened this window is inside another page. This window only answers the page whose address is in the tab's address bar, so that you can always see who is asking.</p><div class="actions"><button class="quiet" id="no">Close</button></div>`;
+  document.getElementById("no").onclick = () => close();
+  main.querySelector("h1").focus();
+} else if (!frame && !direct) {
   document.title = "Open from a site | AI router";
   main.innerHTML = `<h1 tabindex="-1">This window is opened by a site</h1><p>A site that wants to use an AI model opens this window so that you can choose one. Nothing opened it this time.</p><p><a class="button" href="/">Go to your router</a></p>`;
   main.querySelector("h1").focus();
