@@ -94,6 +94,7 @@ node --test test/providers.unit.mjs                          # what is sent to e
 NODE_PATH=$(npm root -g) node test/airouter.mjs              # the AI router end to end, against stand-in providers
 NODE_PATH=$(npm root -g) node test/chat.mjs                  # the chat app, and a site that cannot have the router's frame
 NODE_PATH=$(npm root -g) node test/hostile.mjs               # a hostile site that taps, forges and reaches for the key, and gets none of it
+NODE_PATH=$(npm root -g) node test/site-headers.mjs          # a site under each header that changes what it may embed or open: COOP, COEP, CSP, sandbox
 NODE_PATH=$(npm root -g) node test/hawser.mjs <screenshot-dir>   # the /comlink/ demos, 24 checks
 ```
 
