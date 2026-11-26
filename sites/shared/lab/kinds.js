@@ -111,7 +111,11 @@
       make: () => CropTarget.fromElement(document.body),
       use: (v) => { need(String(v) === "[object CropTarget]", "not a crop target"); return "token arrived"; } },
     { name: "SharedArrayBuffer", group: "Copied", how: "copy",
-      make: () => { const b = new SharedArrayBuffer(8); new Int32Array(b)[0] = 42; return b; },
+      // A page has SharedArrayBuffer only when it is cross-origin isolated. Say so, in place of "is not defined".
+      make: () => {
+        if (typeof SharedArrayBuffer === "undefined") throw new Error("No SharedArrayBuffer on this page. A browser allows shared memory only on a cross-origin isolated page. The isolated lab is one.");
+        const b = new SharedArrayBuffer(8); new Int32Array(b)[0] = 42; return b;
+      },
       use: (v) => { need(new Int32Array(v)[0] === 42, "memory is not shared"); return "same memory on both sides"; } },
     { name: "WebAssembly.Module", group: "Copied", how: "copy",
       make: () => new WebAssembly.Module(new Uint8Array([0, 97, 115, 109, 1, 0, 0, 0])),

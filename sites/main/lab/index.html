@@ -187,6 +187,7 @@
            <p class="outcome" data-o="${r.outcome}"><b>${OUTCOMES[r.outcome].mark}</b> ${esc(OUTCOMES[r.outcome].label)}. ${esc(OUTCOMES[r.outcome].text)}</p>
            ${r.note ? `<p class="small said">${esc(OUTCOMES[r.outcome].said || "What happened there:")}</p><pre class="note ${bad ? "bad" : ""}">${esc(r.note)}</pre>` : ""}
            ${OUTCOMES[r.outcome].why ? `<p class="small why">${esc(OUTCOMES[r.outcome].why)}</p>` : ""}
+           ${r.outcome === "cannot-make" && /isolated/.test(r.note || "") && !ISOLATED ? `<p class="small why"><a href="/isolated/lab/">Run the isolated lab</a>, where shared memory can be made.</p>` : ""}
            ${bad ? elsewhere(kind, dest) : ""}`
         : `<div class="pop-head"><p class="what"><strong>${esc(kind.name)}</strong> to <strong>${esc(dest.label)}</strong></p><button type="button" class="pop-close" aria-label="Close">×</button></div><p>That test has not run yet.</p>`;
       $("detail").innerHTML = r ? `<strong>${esc(kind.name)}</strong> ${kind.how === "move" ? "moved" : "copied"} to <strong>${esc(dest.label)}</strong>: ${esc(OUTCOMES[r.outcome].text)} ${r.note ? `<span class="muted">${esc(r.note)}</span>` : ""}` : "That test has not run yet.";

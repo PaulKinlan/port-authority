@@ -85,7 +85,10 @@ export const DESTINATIONS = [
   } },
   { ...PLACES["frame"], open: () => viaFrame(BASE + "frame.html") },
   { ...PLACES["frame-other"], open: () => viaFrame(OTHER + BASE + "frame.html") },
-  { ...PLACES["frame-other-worker"], open: () => viaFrame(OTHER + BASE + "frame.html?via=worker") },
+  // This frame is at the same address as the one before, so a browser puts the two in one process. Some
+  // things kill the process they arrive in. If both ran at once, one frame's test would take the other frame
+  // with it, and that would be written down as this place failing. So this one waits for that one to finish.
+  { ...PLACES["frame-other-worker"], after: "frame-other", open: () => viaFrame(OTHER + BASE + "frame.html?via=worker") },
   { ...PLACES["frame-sandbox"], open: () => viaFrame(null, {
     sandbox: "allow-scripts",
     srcdoc: `<script src="${location.origin}${BASE}kinds.js"><\/script><script>addEventListener("message", (e) => e.data && e.data.ctl && labReceive(e.ports[0], "sandbox")); parent.postMessage({ lab: "frame-ready" }, "*");<\/script>`,
@@ -170,8 +173,13 @@ async function one(dest, link, kind, seq) {
 
 export async function run(destinations, onCell) {
   const results = {};
+  // A place that names another in `after` is not opened until that one has run every test and closed.
+  const finished = {};
+  const settle = {};
+  for (const dest of destinations) finished[dest.id] = new Promise((resolve) => { settle[dest.id] = resolve; });
   await Promise.all(destinations.map(async (dest) => {
     results[dest.id] = {};
+    if (dest.after && finished[dest.after]) await finished[dest.after];
     let link = null;
     try { link = await dest.open(); } catch (err) { noteError(dest.label, "could not be set up: " + err.message, ""); }
     let seq = 0, lastHeard = "the start", dead = "", restarts = 0;
@@ -199,6 +207,7 @@ export async function run(destinations, onCell) {
     }
     inFlight.delete(dest.id);
     try { link?.close(); } catch {}
+    settle[dest.id]();
   }));
   try { localStorage.removeItem(JOURNAL); } catch {}
   return results;
