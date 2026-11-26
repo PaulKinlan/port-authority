@@ -87,7 +87,7 @@ await popup.waitForSelector("#no");
 check("the router window names the site that asked", (await popup.locator(".origin").innerText()) === base("florist"));
 if ((await popup.locator("#yes").count()) === 0) {
   check("with no account, the router window has nothing to allow and says to add one", /no account/.test(await popup.locator("#main").innerText())
-    && (await popup.locator("input[name=choice]").count()) === 0 && (await popup.locator('#main a[href="/"]').count()) === 1, (await popup.locator("#main").innerText()).replace(/\n+/g, " | "));
+    && (await popup.locator("input[name=choice]").count()) === 0 && (await popup.locator('#main a[href="/#add"]').count()) === 1 && (await popup.locator("input, textarea").count()) === 0, (await popup.locator("#main").innerText()).replace(/\n+/g, " | "));
 } else console.log("note this browser has a built-in model, so the router window had something to offer before any account was added");
 
 // The person adds an account at the router's own address, while that window is open.
@@ -116,6 +116,7 @@ check("the home page can test the second account, and the call goes to its provi
 // The window that was open shows the accounts as soon as they are saved. Don't allow: nothing changes.
 await popup.locator("#choices", { hasText: "Spare key" }).waitFor();
 const offered = await popup.locator("#choices").innerText();
+check("the router window has nowhere to type a key: accounts are added at the router's own page only", (await popup.locator("input[type=password], input[type=text], textarea, #key").count()) === 0 && /never asks for an API key/.test(await popup.locator("#main").innerText()) && (await popup.locator('#main a[href="/#add"]').count()) === 1);
 check("the router window lists both accounts, and nothing that is not an account", /Work key/.test(offered) && /Spare key/.test(offered) && !/practice|not a real model/i.test(await popup.locator("#main").innerText()));
 const groups = await popup.locator("#choices .account").evaluateAll((all) => all.map((group) => ({
   name: group.querySelector(".account-name strong").textContent, about: group.querySelector(".account-name span").textContent, models: [...group.querySelectorAll("label")].map((label) => label.textContent.trim()) })));

@@ -11,8 +11,11 @@
 import { choices, server, seal, random, me } from "/store.js";
 import { PROVIDERS } from "/providers.js";
 import { startHost } from "/host.js";
-import { accountForm, formInUse } from "/account-form.js";
 const main = document.getElementById("main");
+// A site opens this window, so this window never takes a key. A key is typed
+// in one place only: the router's own page, in a tab the person opened. Then a
+// look-alike window that asks for a key gives itself away.
+const NEVER = "This window never asks for an API key. A window that looks like this one and asks for a key is not the router.";
 const esc = (text) => String(text).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 
 // The site that opened this window has a hidden router frame in it. Post to
@@ -81,9 +84,6 @@ if (nested) {
   const tellSite = (message) => { try { opener.postMessage(message, site); } catch { /* the site has gone */ } };
   let busy = false;
   let view = "";      // "choose" or "connected"
-  let prefer = "";    // the choice to tick: an account that was added in this window a moment ago
-  // An account saved in this window is offered at once, and ticked.
-  const added = (account) => { prefer = account.id + "|" + account.models[0]; draw(); };
   let last = null;    // what the worker last told the site about its grant
 
   // Hand the grant over: to the frame inside the site, or to this window's own worker.
@@ -152,11 +152,9 @@ if (nested) {
       main.innerHTML = `
         <p class="origin">${esc(site)}</p>
         <h1 tabindex="-1">This site wants to use an AI model</h1>
-        <p>You have no account for it to use yet. Add one here. It is kept in this browser, at the router's address, and the site never sees it.</p>
-        <form class="fields" id="form" novalidate></form>
-        <div class="actions"><button class="quiet" id="no">Close</button></div>
-        <p class="small muted">You can see and remove your accounts at <a href="/" target="_blank" rel="noopener">your router</a>.</p>`;
-      accountForm(document.getElementById("form"), added);
+        <p>You have no account for it to use yet. Accounts are added at <strong>${esc(location.host)}</strong> itself, in a tab of its own. This window will show a new account as soon as it is saved.</p>
+        <div class="actions"><a class="button accent" href="/#add" target="_blank" rel="noopener">Add an account at ${esc(location.host)}</a><button class="quiet" id="no">Close</button></div>
+        <p class="small muted">${NEVER}</p>`;
       document.getElementById("no").onclick = cancel;
       return;
     }
@@ -177,8 +175,7 @@ if (nested) {
     const using = currentIndex >= 0 ? list[currentIndex] : null;
     const usesNow = !current ? "" : using && using.provider === "builtin" ? "It uses this browser's built-in model now."
       : `It uses <strong class="model-name">${esc(current.model)}</strong> from your account <strong>${esc(current.label)}</strong> now.`;
-    const preferIndex = prefer ? list.findIndex((c) => c.key === prefer) : -1;
-    const selectedIndex = preferIndex >= 0 ? preferIndex : currentIndex >= 0 ? currentIndex : 0;
+    const selectedIndex = currentIndex >= 0 ? currentIndex : 0;
     document.title = `Choose a model | AI router`;
     main.innerHTML = `
       <p class="origin">${esc(site)}</p>
@@ -194,7 +191,7 @@ if (nested) {
             ${group.items.map((c) => `<label><input type="radio" name="choice" value="${esc(c.key)}" ${c.index === selectedIndex ? "checked" : ""}><span>${esc(c.model)}</span></label>`).join("")}
           </div>`).join("")}
       </fieldset>
-      <details id="add"><summary class="button quiet tiny">Add an account</summary><form class="fields" id="form" novalidate></form></details>
+      <p class="small"><a href="/#add" target="_blank" rel="noopener">Add an account at ${esc(location.host)}</a>. It will show up here as soon as it is saved.</p>
       <p class="note small" id="lock" aria-live="polite"></p>
       <div class="limits">
         <div><label for="requests">Stop after</label><select id="requests"><option value="5">5 requests</option><option value="20" selected>20 requests</option><option value="100">100 requests</option><option value="1000">1,000 requests</option></select></div>
@@ -202,7 +199,7 @@ if (nested) {
       </div>
       <p class="error" id="error" role="alert" hidden></p>
       <div class="actions"><button class="accent" id="yes">Allow</button><button class="quiet" id="no">${host && current ? "Keep what it has" : "Don't allow"}</button></div>
-      <p class="small muted">You can see what this site has used, and stop it, at <a href="/" target="_blank" rel="noopener">your router</a>.</p>`;
+      <p class="small muted">You can see what this site has used, and stop it, at <a href="/" target="_blank" rel="noopener">your router</a>. ${NEVER}</p>`;
     // Say where the prompts can go with the choice that is ticked.
     const lock = () => {
       const ticked = document.querySelector("input[name=choice]:checked");
@@ -214,7 +211,6 @@ if (nested) {
     };
     document.getElementById("choices").addEventListener("change", lock);
     lock();
-    accountForm(document.getElementById("form"), added);
     document.getElementById("no").onclick = cancel;
     document.getElementById("yes").onclick = async () => {
       if (busy) return;
@@ -273,5 +269,5 @@ if (nested) {
     addEventListener("pagehide", () => tellSite({ router: "closing" }));
   }
   // An account added in another tab shows up here without a reload.
-  addEventListener("storage", () => { if (!busy && view === "choose" && !formInUse(document.getElementById("form"))) draw(); });
+  addEventListener("storage", () => { if (!busy && view === "choose") draw(); });
 }

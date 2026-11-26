@@ -112,16 +112,21 @@ check("and so is the model, with no window", /claude-sonnet-5-5 Work key/.test(a
 // Change the model. The model button opens the router window again, and an account can be set up there.
 popup = await popupFrom(chat, () => chat.click("#model"));
 await popup.waitForSelector("#yes");
-check("the model button opens the router window, which says what the app uses now", /It uses claude-sonnet-5-5 from your account Work key now\./.test(await popup.locator("#main").innerText()) && (await popup.locator("#add").count()) === 1);
-await popup.click("#add summary");
-await popup.selectOption("#provider", "openai");
-await popup.fill("#label", "Spare key");
-await popup.fill("#key", KEY2);
-await popup.click("#form button");
+check("the model button opens the router window, which says what the app uses now", /It uses claude-sonnet-5-5 from your account Work key now\./.test(await popup.locator("#main").innerText()) && (await popup.locator("input[type=password], input[type=text], textarea").count()) === 0 && (await popup.locator('#main a[href="/#add"]').count()) === 1);
+// A key is only ever typed at the router's own page. The window that is open picks the new account up.
+const addAccount = async (provider, label, key) => {
+  await home.click("#add summary");
+  await home.selectOption("#provider", provider);
+  await home.fill("#label", label);
+  await home.fill("#key", key);
+  await home.click("#form button");
+  await home.locator("#accounts li", { hasText: label }).waitFor();
+};
+await addAccount("openai", "Spare key", KEY2);
 await popup.locator("#choices .account", { hasText: "Spare key" }).waitFor();
+await pickModel(popup, "Spare key", "gpt-6.2-sol");
 const ticked = async () => ({ account: await popup.locator("#choices .account:has(input:checked) .account-name strong").innerText(), model: (await popup.locator("#choices label:has(input:checked)").innerText()).trim() });
-check("an account set up in the router window is offered at once, and its first model is ticked", JSON.stringify(await ticked()) === JSON.stringify({ account: "Spare key", model: "gpt-6.2-sol" }) && /prompts to api\.openai\.com\./.test(await popup.locator("#lock").innerText()), JSON.stringify(await ticked()));
-check("the new account is saved in the router, for the next site too", (await home.evaluate(() => JSON.parse(localStorage.getItem("router.accounts")).map((a) => a.label).join())) === "Work key,Spare key");
+check("an account added at the router's own page is offered in the open window at once, and can be picked", JSON.stringify(await ticked()) === JSON.stringify({ account: "Spare key", model: "gpt-6.2-sol" }) && /prompts to api\.openai\.com\./.test(await popup.locator("#lock").innerText()), JSON.stringify(await ticked()));
 await Promise.all([popup.waitForEvent("close"), popup.click("#yes")]);
 await chat.locator("#model-text", { hasText: "gpt-6.2-sol" }).waitFor();
 check("the app shows the model, and the account it comes from, apart", (await chat.locator("#model-text b").innerText()) === "gpt-6.2-sol" && (await chat.locator("#model-text .from").innerText()) === "Spare key");
@@ -153,16 +158,13 @@ check("the model can be changed back, and the page for the other provider is clo
 const KEY3 = "sk-other-A-SECOND-ANTHROPIC-KEY-5550001111";
 popup = await popupFrom(chat, () => chat.click("#model"));
 await popup.waitForSelector("#yes");
-await popup.click("#add summary");
-await popup.selectOption("#provider", "anthropic");
-await popup.fill("#label", "Team key");
-await popup.fill("#key", KEY3);
-await popup.click("#form button");
+await addAccount("anthropic", "Team key", KEY3);
 await popup.locator("#choices .account", { hasText: "Team key" }).waitFor();
 const sameModel = await popup.locator("#choices .account").evaluateAll((all) => all.filter((group) => [...group.querySelectorAll("label")].some((label) => label.textContent.trim() === "claude-sonnet-5-5"))
   .map((group) => group.querySelector(".account-name").innerText.replace(/\s+/g, " ").trim()));
 check("the same model can be offered by two accounts, told apart by the name each was given and the end of its key", sameModel.length === 2 && sameModel[0] === "Work key Anthropic, key ends " + KEY.slice(-4) && sameModel[1] === "Team key Anthropic, key ends " + KEY3.slice(-4), JSON.stringify(sameModel));
-check("the account just added is the one ticked, not the other with the same model", JSON.stringify(await ticked()) === JSON.stringify({ account: "Team key", model: "claude-sonnet-5-5" }));
+await pickModel(popup, "Team key", "claude-sonnet-5-5");
+check("the one that is picked is ticked, not the other with the same model", JSON.stringify(await ticked()) === JSON.stringify({ account: "Team key", model: "claude-sonnet-5-5" }));
 await Promise.all([popup.waitForEvent("close"), popup.click("#yes")]);
 await chat.locator("#model-text .from", { hasText: "Team key" }).waitFor();
 await chat.fill("#prompt", "Which key is this");

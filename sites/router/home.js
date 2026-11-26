@@ -24,6 +24,8 @@ $("try").innerHTML = [
 // ---- accounts
 // The form that adds an account is shared with the router window.
 accountForm($("form"), () => { $("add").open = false; drawAccounts(); });
+// The router window sends people here to add an account, with the form already open.
+if (location.hash === "#add") { $("add").open = true; $("label").focus(); }
 
 let latestGrants = [];
 

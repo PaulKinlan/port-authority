@@ -1,8 +1,8 @@
 // The form that adds an account.
 //
-// The router's own page has it. So does the router window, so that an account
-// can be set up at the moment a site asks for one. Either way the account is
-// saved in this browser, in the router's own storage, and nowhere else.
+// Only the router's own page has it. A key is typed there and nowhere else:
+// never in the window a site opens, and never in a frame. The account is saved
+// in this browser, in the router's own storage.
 
 import { PROVIDERS } from "/providers.js";
 import { saveAccount, random } from "/store.js";
@@ -57,6 +57,3 @@ export function accountForm(form, onSaved) {
     onSaved?.(account);
   };
 }
-
-// True while someone has started to fill the form in, so that it is not redrawn under them.
-export const formInUse = (form) => !!form && [...form.querySelectorAll("#label, #key")].some((input) => input.value !== "");
