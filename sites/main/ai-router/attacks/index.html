@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Attack lab: a hostile site against the AI router | Port Authority</title>
+  <meta name="description" content="This page plays a hostile site. It embeds the real AI router and tries to take your API key: by relaying, by forging the router's messages, by reaching into its frame and its window. Each attack runs for real in your browser, with its code beside it.">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <meta property="og:title" content="Attack lab: a hostile site against the AI router | Port Authority">
+  <meta property="og:description" content="This page plays a hostile site. It embeds the real AI router and tries to take your API key. Each attack runs for real in your browser, with its code beside it.">
+  <meta property="og:type" content="website">
+  <meta name="twitter:card" content="summary">
+  <link rel="stylesheet" href="/base.css">
+  <script src="/nav.js"></script>
+  <script src="/errors.js"></script>
+  <style>
+    main { display: grid; grid-template-columns: minmax(0, 1fr); gap: clamp(2rem, 5vw, 3rem); padding-block: 1rem 4rem; }
+    main section { display: grid; gap: 1rem; border-top: 2px solid var(--ink); padding-top: clamp(1.5rem, 4vw, 2.5rem); grid-template-columns: minmax(0, 1fr); }
+    main h2 { font-size: var(--step-2); }
+    main ul, main ol { margin: 0; padding-left: 1.2rem; max-width: 66ch; display: grid; gap: 0.5rem; }
+    .hero { padding-top: 1.5rem; --gap: 1.1rem; }
+    .hostile { border: 2px solid var(--red); border-radius: 18px; padding: clamp(.8rem, 3vw, 1.4rem); display: grid; gap: 1rem; grid-template-columns: minmax(0, 1fr); background: color-mix(in srgb, var(--red) 6%, var(--paper)); }
+    .status { display: flex; align-items: center; gap: 0.8rem; flex-wrap: wrap; }
+    .attacks { list-style: none; padding: 0; max-width: none; display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(min(100%, 24rem), 1fr)); align-items: start; }
+    .attack { border: 2px solid var(--ink); border-radius: 16px; padding: 1rem 1.2rem; display: grid; gap: 0.7rem; grid-template-columns: minmax(0, 1fr); background: var(--panel); }
+    .attack h3 { font: 700 var(--step-0)/1.25 var(--body); margin: 0; }
+    .attack p { margin: 0; }
+    .results { list-style: none; padding: 0; margin: 0; display: grid; gap: 0.35rem; font-size: var(--step--1); max-width: none; }
+    .results li { padding-left: 1.6rem; position: relative; overflow-wrap: anywhere; }
+    .results li::before { position: absolute; left: 0; font-weight: 700; }
+    .results li.held::before { content: "✓"; color: var(--teal); }
+    .results li.broke::before { content: "✗"; color: var(--red); }
+    .results li.broke { color: var(--red); font-weight: 600; }
+    .results li.told::before { content: "→"; }
+    .attack pre, #loot { overflow: auto; max-height: 22rem; white-space: pre-wrap; overflow-wrap: anywhere; margin: 0; }
+    .attack details summary { cursor: pointer; font-size: var(--step--1); font-weight: 600; }
+    .attack iframe { width: 100%; height: 26rem; border: 2px dashed var(--red); border-radius: 10px; background: var(--paper); }
+    #verdict { font-weight: 700; }
+    #verdict.held { color: var(--teal); } #verdict.broke { color: var(--red); }
+  </style>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <div class="wrap">
+    <header class="site-bar">
+      <a class="wordmark" href="/">Port Authority</a>
+      <nav aria-label="Primary"><a href="/">Experiments</a><a href="/guide/">The guide</a><a href="/patterns/">Port patterns</a><a href="/comlink/">Comlink today</a><a href="/ai-router/" aria-current="page">AI router</a><a href="/lab/">The lab</a><a href="/missing/">What is missing</a><a href="/reading/">Further reading</a><a href="/hub/">Your hub</a></nav>
+    </header>
+
+    <main id="main">
+      <div class="stack hero">
+        <p class="eyebrow"><a href="/ai-router/">AI router</a></p>
+        <h1 style="font-size:var(--step-3)">Attack lab: this page is a hostile site</h1>
+        <p>The <a href="/ai-router/">AI router</a> lets a site use your model account without seeing your API key. The site sits in the middle the whole time: it embeds the router's frame, and it opens the router's window. So the question is what a site that wants your key can do from there.</p>
+        <p>This page is that site. It embeds the real router and attacks it. Every attack below runs for real, in your browser, when you press its button. The code that runs is shown beside it. Everything this page manages to collect is shown at the bottom, so you can read it yourself.</p>
+      </div>
+
+      <section id="setup" style="border-top:0; padding-top:0">
+        <div class="hostile">
+          <h2 style="font-size:var(--step-1)">Before you start</h2>
+          <ol>
+            <li>You need an account at <a id="router-link" href="#">the router</a>. The key can be made up, such as <code>sk-made-up-0000</code>. A key is only checked when a prompt is sent, and most of these attacks send none.</li>
+            <li>Several attacks open the router window. Choose an account there and press Allow, as you would for a site you trusted. Give it 5 requests.</li>
+            <li>This page started recording before the router's script loaded. It has recorded every message its window was sent, every port it was ever given, and every message on those ports.</li>
+          </ol>
+          <div class="status">
+            <span id="state" role="status">Loading the router's frame.</span>
+          </div>
+          <p class="small muted">You are safe to try this with a real key: that is what the page is here to show. But it is an experiment, so use a key you can cancel.</p>
+        </div>
+      </section>
+
+      <section id="attacks-section">
+        <h2>The attacks</h2>
+        <p>A tick means the attack failed. A cross means it got something it should not have. Run them in any order.</p>
+        <ul class="attacks" id="attacks"></ul>
+      </section>
+
+      <section id="collected">
+        <h2>Everything this page collected</h2>
+        <p>This is every message this page has received since it loaded: on its window, on the ports it made, and on any port it was passed. It is searched, each time it changes, for anything that passed between the router's window and the router's frame, and for anything shaped like a key.</p>
+        <p id="verdict" role="status">Nothing collected yet.</p>
+        <pre id="loot" data-no-hl tabindex="0" aria-label="Every message this page has received">Nothing yet.</pre>
+        <p class="small muted">Prompts and answers do appear here. They are this page's own: it wrote the prompts and asked for the answers. What never appears is the key, the encrypted key, or a word of what the window said to the frame.</p>
+      </section>
+
+      <section id="why">
+        <h2>Why they fail</h2>
+        <ul>
+          <li><strong>A page cannot read a frame or a window from another address.</strong> The browser refuses, with a <code>SecurityError</code>.</li>
+          <li><strong>A message goes only to the address the sender named.</strong> The router window posts the key line with the router's address as the target. A decoy frame at any other address is sent nothing.</li>
+          <li><strong>A message is marked with the address it really came from.</strong> This page can post the router's own messages at the frame. They arrive marked with this page's address, and the frame ignores them.</li>
+          <li><strong>A port has two ends and cannot be copied.</strong> The window made the key line and kept one end. The browser put the other end in the frame. This page never held either.</li>
+          <li><strong>The count is kept where this page cannot reach.</strong> It is in the frame's own storage for this site. Clearing this page's storage does not touch it.</li>
+        </ul>
+        <p>The one attack that works is the look-alike window. Nothing in a browser stops a site opening a window that looks like the router's. The address bar is the only thing that tells you, and that is why the real window never asks for a key.</p>
+        <p>The longer account is in <a href="/ai-router/#security">Security: the site is in the middle</a>. The same attacks run as an automatic test in <code>test/hostile.mjs</code>, and this page has a test of its own in <code>test/attacks.mjs</code>.</p>
+      </section>
+    </main>
+    <footer class="small muted" style="padding-block:2rem 4rem">Port Authority, by <a href="https://paul.kinlan.me">Paul Kinlan</a>. <a href="/about/">About this site</a>.</footer>
+  </div>
+  <script type="module" src="/ai-router/attacks/attacks.js"></script>
+</body>
+</html>

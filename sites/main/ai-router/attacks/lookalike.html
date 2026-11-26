@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Choose a model | AI router</title>
+  <meta name="robots" content="noindex">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/base.css">
+  <style>
+    body { margin: 0; padding: 1.4rem; display: grid; gap: 1rem; align-content: start; max-width: 30rem; }
+    .origin { font: 600 var(--step--1)/1.3 var(--mono); background: var(--panel); border-radius: 999px; padding: 0.35rem 0.8rem; justify-self: start; margin: 0; }
+    h1 { font-size: var(--step-1); margin: 0; }
+    p { margin: 0; }
+    label { font-weight: 600; display: grid; gap: 0.3rem; }
+    input { font: inherit; padding: 0.6rem 0.7rem; border: 2px solid var(--ink); border-radius: 10px; background: var(--paper); color: var(--ink); }
+    .caught { border: 3px solid var(--red); border-radius: 14px; padding: 1rem; display: grid; gap: 0.6rem; background: color-mix(in srgb, var(--red) 8%, var(--paper)); }
+    .caught h2 { font-size: var(--step-0); margin: 0; color: var(--red); }
+  </style>
+</head>
+<body>
+  <!-- A look-alike of the AI router's window, opened by the attack lab. It is a
+       fake, at this site's own address. It takes nothing: nothing typed into
+       the box is kept, and the page says what it is as soon as the box is used. -->
+  <p class="origin" id="asking"></p>
+  <h1>This site wants to use an AI model</h1>
+  <p>To continue, paste the API key for your account.</p>
+  <form id="form" novalidate>
+    <label for="key">API key
+      <input id="key" type="password" autocomplete="off" placeholder="sk-..." aria-describedby="caught">
+    </label>
+    <p style="margin-top:.8rem"><button type="submit" class="accent">Allow</button></p>
+  </form>
+  <div class="caught" id="caught" role="alert" hidden>
+    <h2>This is not the router</h2>
+    <p>This window was opened by the attack lab to show the one attack that works. It looks like the router's window and it asks for a key.</p>
+    <p>Look at the address bar. It says <strong id="here"></strong>. The router's window is at <strong id="there"></strong>.</p>
+    <p>The real router window never asks for a key. A key is typed at the router's own address, in a tab you opened yourself, and nowhere else. A window that asks for one is not the router.</p>
+    <p>Nothing you typed here was kept or sent.</p>
+    <p><button type="button" id="close" class="quiet">Close</button></p>
+  </div>
+  <script type="module">
+    import { sites } from "/_sites.js";
+    const $ = (id) => document.getElementById(id);
+    $("asking").textContent = location.origin;
+    $("here").textContent = location.host;
+    $("there").textContent = new URL(sites.router).host;
+    // The box takes nothing. The moment it is used, the page says what it is.
+    const caught = () => { $("key").value = ""; $("caught").hidden = false; $("close").focus(); };
+    $("key").addEventListener("beforeinput", (event) => { event.preventDefault(); caught(); });
+    $("key").addEventListener("paste", (event) => { event.preventDefault(); caught(); });
+    $("form").addEventListener("submit", (event) => { event.preventDefault(); caught(); });
+    $("close").onclick = () => close();
+  </script>
+</body>
+</html>
