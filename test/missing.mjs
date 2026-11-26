@@ -4,7 +4,7 @@
 import { createRequire } from "node:module";
 const { chromium } = createRequire(import.meta.url)("playwright");
 const LIVE = process.env.LIVE;
-const root = LIVE ? process.env.LIVE_MAIN || `https://portauthority.${LIVE}` : "http://hub.localhost:8787";
+const root = LIVE ? process.env.LIVE_MAIN || `https://portauthority.${LIVE}` : `http://hub.localhost:${process.env.PORT || 8787}`;
 const shots = process.argv[2];
 let failed = 0;
 const check = (name, ok, extra = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${name}${extra ? " " + extra : ""}`); if (!ok) failed++; };
@@ -12,7 +12,7 @@ const proxy = process.env.HTTPS_PROXY && LIVE ? { proxy: { server: process.env.H
 
 // Once as an ordinary browser, and once with the other origin and sandboxed
 // frames in processes of their own, which is how desktop Chrome runs them.
-const isolate = LIVE ? ["--site-per-process", "--enable-features=IsolateSandboxedIframes"] : ["--site-per-process", "--isolate-origins=http://florist.localhost:8787", "--enable-features=IsolateSandboxedIframes"];
+const isolate = LIVE ? ["--site-per-process", "--enable-features=IsolateSandboxedIframes"] : ["--site-per-process", `--isolate-origins=http://florist.localhost:${process.env.PORT || 8787}`, "--enable-features=IsolateSandboxedIframes"];
 for (const [label, args] of [["one process", []], ["isolated frames", isolate]]) {
   const browser = await chromium.launch({ ...proxy, args });
   const context = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });

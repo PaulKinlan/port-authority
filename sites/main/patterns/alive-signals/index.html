@@ -1,0 +1,134 @@
+<!doctype html>
+<!-- Written by scripts/patterns.mjs from the modules in /patterns/. Edit those, then run it. -->
+<html lang="en" data-pattern="alive-signals">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Which signal notices which ending, and how quickly | Port Authority</title>
+  <meta name="description" content="Every way of knowing the far side has gone, side by side, measured in your browser. For each row a fresh far side is made on this site's own origin and given every signal at once: ">
+  <meta property="og:title" content="Which signal notices which ending, and how quickly | Port Authority">
+  <meta property="og:description" content="Every way of knowing the far side has gone, side by side, measured in your browser. For each row a fresh far side is made on this site's own origin and given every signal at once: ">
+  <meta property="og:type" content="article">
+  <meta name="twitter:card" content="summary">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/base.css">
+  <script src="/nav.js"></script>
+  <link rel="stylesheet" href="/patterns/patterns.css">
+  <link rel="stylesheet" href="/patterns/page.css">
+  <script src="/errors.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <div class="wrap">
+    <header class="site-bar">
+      <a class="wordmark" href="/">Port Authority</a>
+      <nav aria-label="Primary"><a href="/">Experiments</a><a href="/guide/">The guide</a><a href="/patterns/" aria-current="page">Port patterns</a><a href="/comlink/">Comlink today</a><a href="/ai-router/">AI router</a><a href="/lab/">The lab</a><a href="/missing/">What is missing</a><a href="/reading/">Further reading</a><a href="/hub/">Your hub</a></nav>
+    </header>
+    <main id="main">
+      <div class="stack page-head">
+        <p class="crumb"><a href="/patterns/">Port patterns</a> / <span id="group"><a href="/patterns/#alive-signals">Knowing the other side is still there</a></span></p>
+        <h1 id="title">Which signal notices which ending, and how quickly</h1>
+      </div>
+      <section class="pattern" id="demo"><div class="demo"><noscript><p class="small muted">The demo that runs here needs JavaScript. Everything else on this page reads the same without it.</p></noscript></div></section>
+      <div class="deep" id="deep">
+      <section id="what">
+        <h2>What you are looking at</h2>
+        <p>Every way of knowing the far side has gone, side by side, measured in your browser. For each row a fresh far side is made on this site's own origin and given every signal at once: a port that only carries its goodbye, a port it answers pings on every half second, a port it beats on every half second, and a Web Lock it holds. Then it is ended in one way, and the table shows how long each signal took to say so. The last column is the port <code>close</code> event. It was added to the HTML standard in 2024, never switched on in any browser, and taken out again in October 2026.</p>
+      </section>
+      <section id="code">
+        <h2>The code</h2>
+        <pre><span class="c">// the far side holds a lock with a name only it uses, and tells the page the name</span>
+const name = "alive-" + crypto.randomUUID();
+navigator.locks.request(name, () => new Promise(() => {}));  <span class="c">// never let go</span>
+
+<span class="c">// this page queues for the same lock. It is granted when the holder is destroyed.</span>
+await navigator.locks.request(name, () => {});
+farSideIsGone();</pre>
+        <h3 id="using">Using it</h3>
+        <pre><span class="c">// a document editor open in several tabs, and one SharedWorker that keeps the list of tabs</span>
+<span class="c">// a tab: take the lock, and send its name to the worker once the lock is held</span>
+const { port } = new SharedWorker("/editor-worker.js");
+const name = "alive-" + crypto.randomUUID();
+navigator.locks.request(name, () =&gt; {
+  port.postMessage({ name });
+  return new Promise(() =&gt; {});              <span class="c">// never let go</span>
+});
+
+<span class="c">// the worker: queue for each tab's lock. It is granted when that tab is destroyed.</span>
+onconnect = ({ ports: [port] }) =&gt; port.onmessage = async ({ data: { name } }) =&gt; {
+  tabs.add(port);
+  await navigator.locks.request(name, () =&gt; {});
+  farSideIsGone(port, name);
+};
+
+<span class="c">// the tab closed, crashed or went to another page. Nothing came on its port to say so.</span>
+function farSideIsGone(port, name) {
+  tabs.delete(port); port.close();
+  for (const tab of tabs) tab.postMessage({ left: name });   <span class="c">// the others remove its cursor</span>
+}</pre>
+        <h3 id="case">Where you would use it</h3>
+        <p>A real case. A document editor is open in several tabs of one browser, and one SharedWorker keeps the list of tabs so that each tab can show the others' cursors. Each tab holds a Web Lock with a name of its own and sends that name to the worker on its port. The worker shares the tabs' origin, so it can queue for the same lock, and the browser grants it when the tab is closed, navigated away or crashed. Then the worker closes that tab's port and tells the other tabs to remove its cursor. A tab that is hung still holds its lock, so a worker that must notice a hang needs pings or beats as well.</p>
+      </section>
+      <section id="how">
+        <h2>How it works</h2>
+        <div class="stack paras">
+          <p>There are four signals a page can use today, and each one notices a different set of endings.</p>
+          <p>The goodbye. A page that is closing, navigating or being removed from its parent fires <code>pagehide</code>, and can post on a port from there. It is the quickest signal, a few milliseconds. It is never sent by a worker, by a process that crashes, or by a page that just calls <code>close()</code>.</p>
+          <p>Pings and beats. They notice everything, including a stuck thread and a crash, and they are the only signal that works across origins for anything other than a page. Their cost is time: the far side is only called gone after several missed intervals. A stuck far side looks the same as a dead one until it recovers.</p>
+          <p>A Web Lock. The far side requests a lock with a name only it uses and never releases it. The page queues for the same name. The browser grants the page's request the moment the holder is destroyed: frame removed, page navigated, worker terminated, process crashed. It does not fire for a stuck thread, which still holds its lock, or for <code>close()</code> on a port. Locks belong to one origin, and in a frame on another site, to one storage partition, so this only works between contexts that share both.</p>
+          <p>The port <code>close</code> event. It would have been the quickest of all. It is no longer in the HTML standard and no browser turns it on. The column stays so that a browser that does have it shows its numbers.</p>
+          <p>Only on this page, the far side for the busy row is a worker. A frame on the same site as the page usually shares its thread, so a busy frame stops the page too, and the page cannot time anything while it waits.</p>
+        </div>
+      </section>
+      <section id="steps">
+        <h2>Step by step</h2>
+        <p>What each press of Next does in the demo at the top.</p>
+        <ol>
+          <li><strong>Run every row.</strong> Each ending is tried in turn on a fresh far side. A row takes a few seconds.</li>
+        </ol>
+      </section>
+      <section id="uses">
+        <h2>What you could build with it</h2>
+        <h3 class="todo">Already running</h3>
+        <ul>
+          <li>Choosing the signal for each far side: a goodbye and a lock for pages and workers on your own origin, pings or beats for everything else. <a href="#demo">See the demo at the top of this page.</a></li>
+        </ul>
+      </section>
+      <section id="try">
+        <h2>Things to try</h2>
+        <ul>
+          <li>Run every row and compare the goodbye and lock columns with the pings and beats columns.</li>
+          <li>In Chrome, start it with <code>--enable-blink-features=MessagePortCloseEvent</code> and run the table again. The last column fills in.</li>
+          <li>Run it on a phone too, where the timings are different.</li>
+        </ul>
+      </section>
+      <section id="traps">
+        <h2>Common mistakes</h2>
+        <ul>
+          <li>A Web Lock used as a liveness signal must have a name nobody else will use. Make it from <code>crypto.randomUUID()</code>.</li>
+          <li>A held Web Lock can stop a page entering the back/forward cache in some browsers, and the page's code cannot release it while frozen. Release it in <code>pagehide</code> if you hold one in a page.</li>
+          <li>A lock on another origin has the same name and is a different lock. The page gets it at once and would conclude, wrongly, that the far side is gone.</li>
+        </ul>
+      </section>
+      <section id="measured">
+        <h2>Measured</h2>
+        <p class="measured">Chromium 153, frames on this origin: removing the frame was seen by the goodbye in 3 to 4 ms and by the lock in 4 to 5 ms. Navigating it away, 16 to 31 ms for both. <code>close()</code> was seen only by pings (1.8 s) and beats (1.5 s). A terminated worker's lock was free in 1 ms. A worker busy for 4 seconds was marked silent by pings and beats and alive again afterwards, and kept its lock. With the <code>MessagePortCloseEvent</code> flag on, the close event fired 0 to 1 ms after <code>close()</code>, 2 to 4 ms after removal, 20 to 24 ms after navigation and 1 ms after a worker was terminated, and not for a busy worker. Between two origins, a page was granted the far side's lock name immediately while the far side still held it. Other browsers are being filled in from <a href="/lab/results/">the lab's results</a>.</p>
+      </section>
+      <section id="related">
+        <h2>Read next</h2>
+        <ul class="cards">
+          <li><a href="/patterns/health-pair/"><strong>Send a second port with the first, only for health checks</strong><span>A port does not tell you when its other end has gone.</span></a></li>
+          <li><a href="/patterns/health-beats/"><strong>Send a beat each way on two one-way ports</strong><span>Each side makes a channel, keeps the end it posts into and gives the other side the end to listen on.</span></a></li>
+          <li><a href="/patterns/alive-restart/"><strong>Restart a worker that has stopped answering, and ask again</strong><span>A worker counts prime numbers for this page.</span></a></li>
+          <li><a href="/patterns/exchange/"><strong>Use a SharedWorker to connect tabs to each other</strong><span>Every tab on an origin can reach the same SharedWorker.</span></a></li>
+        </ul>
+      </section>
+      </div>
+      <nav class="pager" id="pager" aria-label="More patterns"><a href="/patterns/health-beats/"><small>‹ Before this</small>Send a beat each way on two one-way ports</a><a class="pager-all" href="/patterns/">All patterns</a><a class="pager-next" href="/patterns/alive-restart/"><small>After this ›</small>Restart a worker that has stopped answering, and ask again</a></nav>
+    </main>
+    <footer class="small muted" style="padding-block:2rem 4rem">Port Authority, by <a href="https://paul.kinlan.me">Paul Kinlan</a>. <a href="/about/">About this site</a>.</footer>
+  </div>
+  <script type="module" src="/patterns/page.js"></script>
+  <script type="module" src="/refs.js"></script>
+</body>
+</html>

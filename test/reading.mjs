@@ -5,7 +5,7 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 const { chromium } = createRequire(import.meta.url)("playwright");
 const LIVE = process.env.LIVE;
-const root = LIVE ? process.env.LIVE_MAIN || `https://portauthority.${LIVE}` : "http://hub.localhost:8787";
+const root = LIVE ? process.env.LIVE_MAIN || `https://portauthority.${LIVE}` : `http://hub.localhost:${process.env.PORT || 8787}`;
 const data = JSON.parse(readFileSync(new URL("../sites/main/reading/links.json", import.meta.url), "utf8"));
 const want = data.groups.flatMap((g) => g.items.map((i) => i.u));
 let failed = 0;

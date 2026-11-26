@@ -1,0 +1,157 @@
+<!doctype html>
+<!-- Written by scripts/patterns.mjs from the modules in /patterns/. Edit those, then run it. -->
+<html lang="en" data-pattern="zerocopy">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Move 64 MB between origins without copying it | Port Authority</title>
+  <meta name="description" content="Post an ArrayBuffer and it is copied. Put it in the transfer list and the memory itself changes hands: the sender's buffer drops to zero bytes and the cost stops depending on size.">
+  <meta property="og:title" content="Move 64 MB between origins without copying it | Port Authority">
+  <meta property="og:description" content="Post an ArrayBuffer and it is copied. Put it in the transfer list and the memory itself changes hands: the sender's buffer drops to zero bytes and the cost stops depending on size.">
+  <meta property="og:type" content="article">
+  <meta name="twitter:card" content="summary">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/base.css">
+  <script src="/nav.js"></script>
+  <link rel="stylesheet" href="/patterns/patterns.css">
+  <link rel="stylesheet" href="/patterns/page.css">
+  <script src="/errors.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <div class="wrap">
+    <header class="site-bar">
+      <a class="wordmark" href="/">Port Authority</a>
+      <nav aria-label="Primary"><a href="/">Experiments</a><a href="/guide/">The guide</a><a href="/patterns/" aria-current="page">Port patterns</a><a href="/comlink/">Comlink today</a><a href="/ai-router/">AI router</a><a href="/lab/">The lab</a><a href="/missing/">What is missing</a><a href="/reading/">Further reading</a><a href="/hub/">Your hub</a></nav>
+    </header>
+    <main id="main">
+      <div class="stack page-head">
+        <p class="crumb"><a href="/patterns/">Port patterns</a> / <span id="group"><a href="/patterns/#zerocopy">More things a port can carry</a></span></p>
+        <h1 id="title">Move 64 MB between origins without copying it</h1>
+      </div>
+      <section class="pattern" id="demo"><div class="demo"><noscript><p class="small muted">The demo that runs here needs JavaScript. Everything else on this page reads the same without it.</p></noscript></div></section>
+      <div class="deep" id="deep">
+      <section id="what">
+        <h2>What you are looking at</h2>
+        <p>Post an <code>ArrayBuffer</code> and it is copied. Put it in the transfer list and the memory itself changes hands: the sender's buffer drops to zero bytes and the cost stops depending on size. Each button sends 64 MB to another origin and back, and times the round trip.</p>
+      </section>
+      <section id="code">
+        <h2>The code</h2>
+        <pre>port.postMessage(buffer);            <span class="c">// structured clone: a copy each way</span>
+port.postMessage(buffer, [buffer]);  <span class="c">// transfer: buffer.byteLength is now 0</span></pre>
+        <h3 id="using">Using it</h3>
+        <pre><span class="c">// a photo editor. A filter plug-in from another company runs in a frame.</span>
+const image = ctx.getImageData(0, 0, canvas.width, canvas.height);
+const buffer = image.data.buffer;       <span class="c">// 48 MB for a picture of 4000 by 3000</span>
+port.postMessage(buffer, [buffer]);
+<span class="c">// buffer.byteLength is 0 now, and so is image.data.length.</span>
+<span class="c">// The editor holds no pixels until the plug-in sends them back.</span>
+<span class="c">// With port.postMessage(buffer) both sides would hold 48 MB.</span>
+
+<span class="c">// the plug-in: change the bytes, then transfer the same buffer back</span>
+port.onmessage = ({ data: buffer }) =&gt; {
+  sepia(new Uint8ClampedArray(buffer));
+  port.postMessage(buffer, [buffer]);
+};
+
+<span class="c">// the editor: the old view stays empty, so make a new one</span>
+port.onmessage = ({ data: buffer }) =&gt;
+  ctx.putImageData(new ImageData(new Uint8ClampedArray(buffer), canvas.width), 0, 0);</pre>
+        <h3 id="case">Where you would use it</h3>
+        <p>A real case. A photo editor lets filter plug-ins from other companies change the picture, each in a frame of its own. A picture of 4000 by 3000 pixels is 48 MB. The editor transfers the buffer to the plug-in, the plug-in changes the bytes and transfers the same buffer back. Only one side holds the buffer at a time, where a plain <code>postMessage</code> would leave 48 MB on each side. While the buffer is away the editor has zero bytes, so it waits for the buffer to return before it draws or lets the person paint.</p>
+      </section>
+      <section id="how">
+        <h2>How it works</h2>
+        <div class="stack paras">
+          <p>An <code>ArrayBuffer</code> in the transfer list changes hands. The bytes stay where they are in memory and ownership moves to the receiver. The sender's buffer becomes zero length in the same instant.</p>
+          <p>Without the transfer list the same call copies every byte. For 64 MB that is tens of milliseconds and twice the memory. With it, the time does not depend on the size.</p>
+          <p>Because the sender is left with nothing, there is no shared state and nothing to lock. It is the simplest safe way to give a large block of data to another thread or another origin.</p>
+        </div>
+      </section>
+      <section id="steps">
+        <h2>Step by step</h2>
+        <p>What each press of Next does in the demo at the top.</p>
+        <ol>
+          <li><strong>Open a channel.</strong> This page opens a channel to the frame on another origin.</li>
+          <li><strong>Transfer 64 MB.</strong> 64 MB moves to the other origin and back without copying. While it is away, this page holds zero bytes.</li>
+          <li><strong>Copy 64 MB.</strong> The same 64 MB is cloned instead of moved, so you can compare the round-trip time.</li>
+        </ol>
+      </section>
+      <section id="uses">
+        <h2>What you could build with it</h2>
+        <p>These are built and running below.</p>
+        <article class="built" id="built-pool">
+          <h3>Reuse two buffers between a page and a worker without copying</h3>
+          <p class="small muted idea">The idea: Passing decoded images, audio or model weights to a worker. A pool of buffers that travels back and forth between two contexts.</p>
+          <div class="demo"></div>
+          <h4>What you are looking at</h4>
+          <p>A worker needs somewhere to put each result, and making a fresh 8 MB buffer every time is wasteful. This page makes two, once. One goes to the worker, which fills it and sends it back, while the other is being read here. Then they swap. The counters show megabytes moved climbing and megabytes copied staying at zero.</p>
+          <h4>The code</h4>
+          <pre>const pool = [new ArrayBuffer(SIZE), new ArrayBuffer(SIZE)];
+worker.onmessage = ({ data }) => {
+  use(data.buffer);                            <span class="c">// read the result</span>
+  worker.postMessage({ buffer: data.buffer }, [data.buffer]);   <span class="c">// and send the same memory back</span>
+};
+for (const buffer of pool) worker.postMessage({ buffer }, [buffer]);</pre>
+          <h4>Step by step</h4>
+          <p>What each press of Next does in this demo.</p>
+          <ol>
+          <li><strong>Start the pool.</strong> Two buffers are made once, and then only moved.</li>
+          <li><strong>Stop.</strong> The pool stops. Two buffers were ever made.</li>
+        </ol>
+        </article>
+        <article class="built" id="built-result">
+          <h3>A sandboxed calculation that hands back 16 MB without copying it</h3>
+          <p class="small muted idea">The idea: Returning large results from a sandboxed computation.</p>
+          <div class="demo"></div>
+          <h4>What you are looking at</h4>
+          <p>The frame is sandboxed and on another origin, which is where you want code you did not write. It marks every prime below 16.7 million in a 16 MB buffer. Posting that back the ordinary way makes a second 16 MB and takes time that grows with the size. Posting it with the buffer in the transfer list moves the memory itself. The frame measures how long each call took, and how much it has left afterwards.</p>
+          <h4>The code</h4>
+          <pre><span class="c">// in the sandbox</span>
+const sieve = findPrimes(16 * 1024 * 1024);                <span class="c">// a 16 MB Uint8Array</span>
+port.postMessage({ sieve }, [sieve.buffer]);               <span class="c">// moved</span>
+sieve.byteLength;                                          <span class="c">// 0: it is the page's now</span></pre>
+          <h4>Step by step</h4>
+          <p>What each press of Next does in this demo.</p>
+          <ol>
+          <li><strong>Sandbox: work it out and send a copy.</strong> The frame computes, then posts the result the ordinary way. It keeps its 16 MB, and the page gets another.</li>
+          <li><strong>Sandbox: work it out and move it.</strong> The same work, and this time the buffer is in the transfer list.</li>
+        </ol>
+        </article>
+      </section>
+      <section id="try">
+        <h2>Things to try</h2>
+        <ul>
+          <li>Transfer 64 MB and read the time. Then copy 64 MB and compare.</li>
+          <li>Watch the byte count held by this page drop to zero while the buffer is away.</li>
+        </ul>
+      </section>
+      <section id="traps">
+        <h2>Common mistakes</h2>
+        <ul>
+          <li>Forgetting the transfer list silently copies. Nothing warns you.</li>
+          <li>After the transfer, typed arrays on the old buffer have length zero. Code that still holds one reads nothing.</li>
+          <li>A <code>SharedArrayBuffer</code> is a different thing: both sides keep it, and it needs a cross-origin isolated page.</li>
+        </ul>
+      </section>
+      <section id="measured">
+        <h2>Measured</h2>
+        <p class="measured">Chromium 157: 64 MB to a sandboxed frame and back in a few milliseconds by transfer. Other browsers are being filled in from <a href="/lab/results/">the lab's results</a>.</p>
+      </section>
+      <section id="related">
+        <h2>Read next</h2>
+        <ul class="cards">
+          <li><a href="/patterns/stream/"><strong>Send a stream to another frame</strong><span>A ReadableStream is transferable too, so you can hand another origin a live stream and it reads with back-pressure, as if the source were local.</span></a></li>
+          <li><a href="/patterns/filter/"><strong>Run live video through a filter on another origin</strong><span>Video can leave your page one frame at a time and come back changed.</span></a></li>
+          <li><a href="/patterns/canvas/"><strong>Let another origin paint on your page</strong><span>The painter is a frame on another origin.</span></a></li>
+        </ul>
+      </section>
+      </div>
+      <nav class="pager" id="pager" aria-label="More patterns"><a href="/patterns/functions/"><small>‹ Before this</small>Pass a function to another origin</a><a class="pager-all" href="/patterns/">All patterns</a><a class="pager-next" href="/patterns/tearoff/"><small>After this ›</small>Tear a live widget off into its own window</a></nav>
+    </main>
+    <footer class="small muted" style="padding-block:2rem 4rem">Port Authority, by <a href="https://paul.kinlan.me">Paul Kinlan</a>. <a href="/about/">About this site</a>.</footer>
+  </div>
+  <script type="module" src="/patterns/page.js"></script>
+  <script type="module" src="/refs.js"></script>
+</body>
+</html>

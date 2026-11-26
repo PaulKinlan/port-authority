@@ -1,0 +1,156 @@
+<!doctype html>
+<!-- Written by scripts/patterns.mjs from the modules in /patterns/. Edit those, then run it. -->
+<html lang="en" data-pattern="hello">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Open a channel and send a message through it | Port Authority</title>
+  <meta name="description" content="new MessageChannel() gives you two entangled ports. Keep one, post the other to anyone you can already reach. From then on the two of you have a line of your own. What goes down it">
+  <meta property="og:title" content="Open a channel and send a message through it | Port Authority">
+  <meta property="og:description" content="new MessageChannel() gives you two entangled ports. Keep one, post the other to anyone you can already reach. From then on the two of you have a line of your own. What goes down it">
+  <meta property="og:type" content="article">
+  <meta name="twitter:card" content="summary">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/base.css">
+  <script src="/nav.js"></script>
+  <link rel="stylesheet" href="/patterns/patterns.css">
+  <link rel="stylesheet" href="/patterns/page.css">
+  <script src="/errors.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <div class="wrap">
+    <header class="site-bar">
+      <a class="wordmark" href="/">Port Authority</a>
+      <nav aria-label="Primary"><a href="/">Experiments</a><a href="/guide/">The guide</a><a href="/patterns/" aria-current="page">Port patterns</a><a href="/comlink/">Comlink today</a><a href="/ai-router/">AI router</a><a href="/lab/">The lab</a><a href="/missing/">What is missing</a><a href="/reading/">Further reading</a><a href="/hub/">Your hub</a></nav>
+    </header>
+    <main id="main">
+      <div class="stack page-head">
+        <p class="crumb"><a href="/patterns/">Port patterns</a> / <span id="group"><a href="/patterns/#hello">The six basic patterns</a></span></p>
+        <h1 id="title">Open a channel and send a message through it</h1>
+      </div>
+      <section class="pattern" id="demo"><div class="demo"><noscript><p class="small muted">The demo that runs here needs JavaScript. Everything else on this page reads the same without it.</p></noscript></div></section>
+      <div class="deep" id="deep">
+      <section id="what">
+        <h2>What you are looking at</h2>
+        <p><code>new MessageChannel()</code> gives you two entangled ports. Keep one, post the other to anyone you can already reach. From then on the two of you have a line of your own. What goes down it is not a window message, so a script that listens for <code>window.postMessage</code> messages does not see it.</p>
+      </section>
+      <section id="code">
+        <h2>The code</h2>
+        <pre>const { port1, port2 } = new MessageChannel();
+frame.contentWindow.postMessage("here", "*", [port2]); <span class="c">// port2 is moved, not copied</span>
+port1.onmessage = (e) => console.log(e.data);
+port1.postMessage("ping");</pre>
+        <h3 id="using">Using it</h3>
+        <pre><span class="c">// inside the frame: a help chat from a support company, on a shop's order page</span>
+addEventListener("message", (event) =&gt; {
+  <span class="c">// check who sent it once, here. Messages on the port need no check.</span>
+  if (event.origin !== shopOrigin || event.data !== "here") return;
+  const port = event.ports[0];          <span class="c">// this is port2. It belongs to the frame now.</span>
+  <span class="c">// the page posted "ping" before this ran. It waited in the port.</span>
+  port.onmessage = (e) =&gt; {
+    if (e.data === "ping") port.postMessage("pong");
+    else showOrder(e.data.order);
+  };
+});
+
+<span class="c">// back in the shop's page, when the person opens an order</span>
+port1.postMessage({ order: "A-1041" });</pre>
+        <h3 id="case">Where you would use it</h3>
+        <p>A real case. A shop puts a help chat from a support company on its order page, in a frame. When the frame has loaded, the shop's page makes a channel and posts one end into it. The chat checks the sender's origin once, when the port arrives, and keeps the port. After that the shop sends the order the person is looking at down the port, and the chat answers on it. A third-party script in the shop's page that listens for window <code>message</code> events sees none of these messages.</p>
+      </section>
+      <section id="how">
+        <h2>How it works</h2>
+        <div class="stack paras">
+          <p><code>new MessageChannel()</code> gives you two ports that are joined to each other and to nothing else. Whatever is posted into one comes out of the other, in order. There is no address, name or origin check, because nobody else is on the channel.</p>
+          <p>A port is one of the few things that can be <em>moved</em> with <code>postMessage</code>. Put it in the transfer list and it leaves your context and arrives in the other one, still joined to its twin. Every other pattern on this site uses that.</p>
+          <p>Compare it with <code>window.postMessage</code>, where every listener in the window gets every message, and both sides have to check <code>event.origin</code> and <code>event.source</code> on every message. With a port you check once, when you decide who to hand the port to.</p>
+        </div>
+      </section>
+      <section id="steps">
+        <h2>Step by step</h2>
+        <p>What each press of Next does in the demo at the top.</p>
+        <ol>
+          <li><strong>Open a channel.</strong> A channel is made. One end stays in this page and the other is posted to the frame.</li>
+          <li><strong>Send a ping.</strong> A message goes down the wire, and the frame answers on the same wire.</li>
+        </ol>
+      </section>
+      <section id="uses">
+        <h2>What you could build with it</h2>
+        <p>These are built and running below.</p>
+        <article class="built" id="built-private">
+          <h3>A private line that other scripts on the page cannot hear</h3>
+          <p class="small muted idea">The idea: A private line between a page and one embedded widget, where other scripts in either window cannot listen in.</p>
+          <div class="demo"></div>
+          <h4>What you are looking at</h4>
+          <p>A sign-in widget from another origin has a token to hand to this page. If it posts the token to the window, every script in the page hears it, including an advert's. If the page first gives the widget one end of a channel, the token arrives on the page's own port, and there is nothing for the advert's script to listen to.</p>
+          <h4>The code</h4>
+          <pre><span class="c">// heard by every "message" listener in the page</span>
+parent.postMessage({ token }, "*");
+
+<span class="c">// heard only by whoever holds the other end</span>
+port.postMessage({ token });</pre>
+          <h4>Step by step</h4>
+          <p>What each press of Next does in this demo.</p>
+          <ol>
+          <li><strong>Widget: post the token to the window.</strong> The page gets the token. So does the advert's script, which only had to listen.</li>
+          <li><strong>Open a private line.</strong> This page makes a channel, keeps one end and gives the widget the other.</li>
+          <li><strong>Widget: post the token down the line.</strong> The token arrives on the page's port. The advert's script hears nothing.</li>
+        </ol>
+        </article>
+        <article class="built" id="built-oneknock">
+          <h3>One window.postMessage to deliver a port, and everything after it on the port</h3>
+          <p class="small muted idea">The idea: The first step of every protocol on this site: one <code>window.postMessage</code> to deliver a port, then ports only.</p>
+          <div class="demo"></div>
+          <h4>What you are looking at</h4>
+          <p>This page calls <code>window.postMessage</code> on the frame once. That message carries nothing except one end of a channel. Everything after it goes over the port: a question with an answer, then a subscription that sends five prices. The frame counts what it hears on its window and what it hears on the port, and sends both counts back with every reply. The window count stays at one however long the conversation goes on. The buttons below use the port only.</p>
+          <h4>The code</h4>
+          <pre>const { port1, port2 } = new MessageChannel();
+frame.contentWindow.postMessage({ cmd: "port" }, "*", [port2]);   <span class="c">// the only window message</span>
+
+<span class="c">// from here on, only the port</span>
+port1.postMessage({ id: 1, sum: [19, 23] });
+port1.postMessage({ subscribe: "prices" });
+port1.onmessage = ({ data }) => show(data);</pre>
+          <h4>Step by step</h4>
+          <p>What each press of Next does in this demo.</p>
+          <ol>
+          <li><strong>Deliver a port with one window.postMessage.</strong> The frame's window hears one message. It holds a port and no data.</li>
+          <li><strong>Ask for a sum over the port.</strong> The question and the answer both travel on the port. The window count is still one.</li>
+          <li><strong>Subscribe to prices over the port.</strong> Five prices arrive, half a second apart, all on the port.</li>
+          <li><strong>Ask for a sum over the port.</strong> Still the same port, and the frame's window has still heard one message.</li>
+        </ol>
+        </article>
+      </section>
+      <section id="try">
+        <h2>Things to try</h2>
+        <ul>
+          <li>Open the channel, then send several pings quickly. The answers come back in the order you asked.</li>
+          <li>Press Start again and send a ping before opening the channel. Nothing happens, because there is no channel yet.</li>
+        </ul>
+      </section>
+      <section id="traps">
+        <h2>Common mistakes</h2>
+        <ul>
+          <li>A port you listen to with <code>addEventListener</code> is silent until you call <code>port.start()</code>. Setting <code>onmessage</code> starts it for you.</li>
+          <li>Messages posted before the other side is listening are queued in the port, not lost. You can post a port and talk into it straight away.</li>
+          <li>A transferred port is gone from the sender. Posting it a second time throws.</li>
+        </ul>
+      </section>
+      <section id="related">
+        <h2>Read next</h2>
+        <ul class="cards">
+          <li><a href="/patterns/introduce/"><strong>Connect two sites to each other, then remove yourself</strong><span>A port can be passed on by whoever holds it.</span></a></li>
+          <li><a href="/patterns/reply/"><strong>Send a reply port with each request</strong><span>Instead of matching replies to requests with ids, make a new channel for each request and send one end along with it.</span></a></li>
+          <li><a href="/patterns/attenuate/"><strong>Give a frame limited access, then revoke it</strong><span>Holding a port is the permission to use it.</span></a></li>
+        </ul>
+      </section>
+      </div>
+      <nav class="pager" id="pager" aria-label="More patterns"><span></span><a class="pager-all" href="/patterns/">All patterns</a><a class="pager-next" href="/patterns/introduce/"><small>After this ›</small>Connect two sites to each other, then remove yourself</a></nav>
+    </main>
+    <footer class="small muted" style="padding-block:2rem 4rem">Port Authority, by <a href="https://paul.kinlan.me">Paul Kinlan</a>. <a href="/about/">About this site</a>.</footer>
+  </div>
+  <script type="module" src="/patterns/page.js"></script>
+  <script type="module" src="/refs.js"></script>
+</body>
+</html>

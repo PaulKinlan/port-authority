@@ -1,0 +1,315 @@
+<!doctype html>
+<!-- Written by scripts/patterns.mjs from the modules in /patterns/. Edit those, then run it. -->
+<html lang="en" data-pattern="router">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>A worker that routes between windows that have never met | Port Authority</title>
+  <meta name="description" content="The three windows above the router know two things each: their own name, and how to reach the router. None of them has a reference to another, and none of them holds a port of anot">
+  <meta property="og:title" content="A worker that routes between windows that have never met | Port Authority">
+  <meta property="og:description" content="The three windows above the router know two things each: their own name, and how to reach the router. None of them has a reference to another, and none of them holds a port of anot">
+  <meta property="og:type" content="article">
+  <meta name="twitter:card" content="summary">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/base.css">
+  <script src="/nav.js"></script>
+  <link rel="stylesheet" href="/patterns/patterns.css">
+  <link rel="stylesheet" href="/patterns/page.css">
+  <script src="/errors.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <div class="wrap">
+    <header class="site-bar">
+      <a class="wordmark" href="/">Port Authority</a>
+      <nav aria-label="Primary"><a href="/">Experiments</a><a href="/guide/">The guide</a><a href="/patterns/" aria-current="page">Port patterns</a><a href="/comlink/">Comlink today</a><a href="/ai-router/">AI router</a><a href="/lab/">The lab</a><a href="/missing/">What is missing</a><a href="/reading/">Further reading</a><a href="/hub/">Your hub</a></nav>
+    </header>
+    <main id="main">
+      <div class="stack page-head">
+        <p class="crumb"><a href="/patterns/">Port patterns</a> / <span id="group"><a href="/patterns/#router">More things a port can carry</a></span></p>
+        <h1 id="title">A worker that routes between windows that have never met</h1>
+      </div>
+      <section class="pattern" id="demo"><div class="demo"><noscript><p class="small muted">The demo that runs here needs JavaScript. Everything else on this page reads the same without it.</p></noscript></div></section>
+      <div class="deep" id="deep">
+      <section id="what">
+        <h2>What you are looking at</h2>
+        <p>The three windows above the router know two things each: their own name, and how to reach the router. None of them has a reference to another, and none of them holds a port of another's. To reach the kitchen, the orders window posts a message to the router addressed to "kitchen". The router looks the name up and passes the message on, with the sender's name attached. Address a name nobody has and the router says so. The router here is a SharedWorker. Each box is a real page of this site, and the link opens a fourth window that can join in.</p>
+      </section>
+      <section id="code">
+        <h2>The code</h2>
+        <pre><span class="c">// every window: say who you are, then address others by name</span>
+const { port } = new SharedWorker("/router-worker.js");
+port.postMessage({ iam: "orders" });
+port.postMessage({ to: "kitchen", text: "two tulip bunches" });
+port.onmessage = ({ data }) => show(data.from, data.text);
+
+<span class="c">// the router: a table of names, and nothing else</span>
+onconnect = ({ ports: [port] }) => {
+  port.onmessage = ({ data }) => {
+    if (data.iam) return table.set(data.iam, port);
+    const target = table.get(data.to);
+    target ? target.postMessage({ from: nameOf(port), text: data.text })
+           : port.postMessage({ undelivered: data.to });
+  };
+};</pre>
+        <h3 id="using">Using it</h3>
+        <pre><span class="c">// one delivery business, one computer, three windows: orders, kitchen and driver</span>
+<span class="c">// the kitchen window: it is told who sent each message, and answers by that name</span>
+const { port } = new SharedWorker("/router-worker.js");
+port.postMessage({ iam: "kitchen" });
+port.onmessage = ({ data }) =&gt; {
+  if (data.undelivered) return warn("No window called " + data.undelivered + " is open");
+  show(data.from, data.text);
+  port.postMessage({ to: data.from, text: "started" });
+};
+readyButton.onclick = () =&gt; port.postMessage({ to: "driver", text: "two tulip bunches, ready to go" });
+
+<span class="c">// the router's table, and how it finds the sender's name</span>
+const table = new Map();                      <span class="c">// name -&gt; port</span>
+const nameOf = (port) =&gt; [...table].find(([, p]) =&gt; p === port)?.[0];
+
+<span class="c">// Nobody has opened the driver window yet today, so "driver" is not in the table.</span>
+<span class="c">// The kitchen gets { undelivered: "driver" } back and shows the warning. The message is not kept.</span></pre>
+        <h3 id="case">Where you would use it</h3>
+        <p>A real case. A small delivery business runs one web app on one computer, in three windows on three screens: orders at the counter, the kitchen's list, and the driver's list by the door. The windows are opened and closed through the day in any order, and none of them opened another, so none has a handle to another. Each one tells the router its name and addresses the others by name. The kitchen answers the orders window using the <code>from</code> that the router filled in. The moment that matters is a message to a name nobody holds: the router sends <code>undelivered</code> back, and the kitchen can tell its staff that the driver's window is not open.</p>
+      </section>
+      <section id="how">
+        <h2>How it works</h2>
+        <figure class="flow"><svg viewBox="0 0 520 590" role="img" aria-labelledby="flow-title flow-desc" xmlns="http://www.w3.org/2000/svg">
+  <title id="flow-title">How a message gets from one window to another through the router</title>
+  <desc id="flow-desc">Windows are drawn with rounded corners and an address bar. The router is a worker, drawn with its corners cut off. Three windows each tell the router their name. The orders window posts a message addressed to kitchen. The router looks kitchen up in its table and posts the message to the kitchen window with the sender's name attached. No line joins one window to another.</desc>
+  <defs>
+    <marker id="flow-tip" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z" fill="context-stroke"/></marker>
+  </defs>
+  <g font-family="system-ui, sans-serif" fill="currentColor">
+    <g fill="var(--panel, #ffffff)" stroke="currentColor" stroke-width="2">
+      <rect x="14" y="14" width="224" height="92" rx="12"/><path d="M14 38h224" fill="none"/>
+      <g fill="none" stroke-width="1.5"><circle cx="28" cy="26" r="3"/><circle cx="39" cy="26" r="3"/><circle cx="50" cy="26" r="3"/></g>
+      <rect x="282" y="14" width="224" height="92" rx="12"/><path d="M282 38h224" fill="none"/>
+      <g fill="none" stroke-width="1.5"><circle cx="296" cy="26" r="3"/><circle cx="307" cy="26" r="3"/><circle cx="318" cy="26" r="3"/></g>
+      <rect x="148" y="484" width="224" height="92" rx="12"/><path d="M148 508h224" fill="none"/>
+      <g fill="none" stroke-width="1.5"><circle cx="162" cy="496" r="3"/><circle cx="173" cy="496" r="3"/><circle cx="184" cy="496" r="3"/></g>
+    </g>
+    <text x="62" y="30" font-family="ui-monospace, Menlo, monospace" font-size="11" fill="var(--muted, #475379)">/route.html?name=orders</text>
+    <text x="330" y="30" font-family="ui-monospace, Menlo, monospace" font-size="11" fill="var(--muted, #475379)">/route.html?name=driver</text>
+    <text x="196" y="500" font-family="ui-monospace, Menlo, monospace" font-size="11" fill="var(--muted, #475379)">/route.html?name=kitchen</text>
+    <polygon points="122,218 422,218 436,232 436,380 422,394 122,394 108,380 108,232" fill="var(--line, #c9d1e0)"/>
+    <polygon points="116,212 416,212 430,226 430,374 416,388 116,388 102,374 102,226" fill="var(--muted, #56628a)"/>
+    <polygon points="110,206 410,206 424,220 424,368 410,382 110,382 96,368 96,220" fill="var(--panel, #ffffff)" stroke="currentColor" stroke-width="2.5"/>
+    <text x="126" y="66" text-anchor="middle" font-weight="800" font-size="19">Orders window</text>
+    <text x="126" y="90" text-anchor="middle" font-size="14" fill="var(--muted, #475379)">knows: its name, the router</text>
+    <text x="394" y="66" text-anchor="middle" font-weight="800" font-size="19">Driver window</text>
+    <text x="394" y="90" text-anchor="middle" font-size="14" fill="var(--muted, #475379)">knows: its name, the router</text>
+    <text x="260" y="536" text-anchor="middle" font-weight="800" font-size="19">Kitchen window</text>
+    <text x="260" y="560" text-anchor="middle" font-size="14" fill="var(--muted, #475379)">knows: its name, the router</text>
+    <text x="260" y="238" text-anchor="middle" font-weight="800" font-size="19">Router</text>
+    <text x="260" y="260" text-anchor="middle" font-size="14" fill="var(--muted, #475379)">a SharedWorker, or a Service Worker</text>
+    <rect x="134" y="303" width="252" height="26" rx="6" fill="color-mix(in srgb, var(--teal, #0e9f8e) 16%, var(--panel, #ffffff))" stroke="var(--teal, #0e9f8e)" stroke-width="1.5"/>
+    <g font-family="ui-monospace, Menlo, monospace" font-size="15">
+      <text x="150" y="294">orders</text><text x="250" y="294">→ window 1</text>
+      <text x="150" y="321" font-weight="800">kitchen</text><text x="250" y="321" font-weight="800">→ window 2</text>
+      <text x="150" y="348">driver</text><text x="250" y="348">→ window 3</text>
+    </g>
+    <text x="260" y="370" text-anchor="middle" font-size="13" fill="var(--muted, #475379)">2. looks the name up</text>
+    <g fill="none" stroke-width="3" marker-end="url(#flow-tip)">
+      <path d="M200 106 L200 203" stroke="var(--red, #e0364c)"/>
+      <path d="M260 382 L260 482" stroke="var(--teal, #0e9f8e)"/>
+    </g>
+    <path d="M320 106 L320 203" fill="none" stroke="var(--muted, #56628a)" stroke-width="2" stroke-dasharray="6 6" marker-end="url(#flow-tip)"/>
+    <g font-size="14">
+      <text x="188" y="146" text-anchor="end" font-weight="700">1. posts to the router</text>
+      <text x="188" y="168" text-anchor="end" font-family="ui-monospace, Menlo, monospace" font-size="13">{ to: "kitchen", text }</text>
+      <text x="334" y="146" fill="var(--muted, #475379)">any window can,</text>
+      <text x="334" y="166" fill="var(--muted, #475379)">the same way</text>
+      <text x="276" y="420" font-weight="700">3. passes it on</text>
+      <text x="276" y="442" font-family="ui-monospace, Menlo, monospace" font-size="13">{ from: "orders", text }</text>
+    </g>
+  </g>
+</svg><figcaption>Every message goes to the router and comes out of it. No line joins one window to another.</figcaption></figure><div class="stack paras">
+          <p>Most of this site is about introducing two parties and then leaving. Here the router stays in the path of every message on purpose, so that the windows need to know almost nothing. A window knows its own name and how to reach the router. It never learns which window answers to a name, whether that window is open, or how many there are.</p>
+          <p>The whole router is a table from names to places it can post to. A window registers by saying its name. To send, a window posts <code>{ to, text }</code> to the router. The router looks <code>to</code> up, and posts <code>{ from, text }</code> to whatever it finds. The sender's name is filled in by the router from the connection the message arrived on, so a window cannot claim to be somebody else.</p>
+          <p>As a shared worker, the table holds ports: one per window, handed over when the window connected. As a service worker, there are no ports to hold. The table holds client ids, and the worker reaches a window with <code>clients.get(id)</code> and <code>client.postMessage</code>. Either way the windows share an origin, because that is who can reach the same worker.</p>
+          <p>The two differ in how long they remember. A shared worker lives as long as one of its pages does, and its table lives with it. A service worker is stopped by the browser whenever it has been idle for a while, and starts again with nothing. The version below deals with that the simple way: when it cannot place a name, it asks every open window to say who it is, waits a moment, and looks again.</p>
+          <p>Because every message passes through one place, that place can do more than forward. It can refuse, log, queue for a window that is not open yet, or send to every window with a role. And if two windows turn out to talk a lot, the router can stop carrying their traffic and introduce them instead: make a channel, post one end to each, and step back.</p>
+        </div>
+      </section>
+      <section id="steps">
+        <h2>Step by step</h2>
+        <p>What each press of Next does in the demo at the top.</p>
+        <ol>
+          <li><strong>Register the three windows.</strong> Each window connects to the SharedWorker and registers its name. None of them has a line to another window.</li>
+          <li><strong>Orders: send to the kitchen.</strong> The orders window posts to the router, addressed to "kitchen". The router looks the name up and passes it on.</li>
+          <li><strong>Kitchen: send to the driver.</strong> The kitchen does the same for the driver. It has never seen the driver's window.</li>
+          <li><strong>Driver: send to orders.</strong> And the driver reaches orders. Every message went through the middle.</li>
+          <li><strong>Orders: send to the florist.</strong> Nobody registered that name. The router tells the sender it could not be delivered.</li>
+          <li><strong>Close the kitchen.</strong> The kitchen's window is destroyed. The router notices and takes it out of its table.</li>
+          <li><strong>Orders: send to the kitchen.</strong> The same message as before. This time there is nobody to give it to.</li>
+        </ol>
+      </section>
+      <section id="uses">
+        <h2>What you could build with it</h2>
+        <p>These are built and running below.</p>
+        <article class="built" id="built-swroute">
+          <h3>The same router as a Service Worker, which forgets and asks again</h3>
+          <p class="small muted idea">The idea: Windows of one app that open and close in any order, and still reach each other by role.</p>
+          <div class="demo"></div>
+          <h4>What you are looking at</h4>
+          <p>A Service Worker can do the same job with no ports at all. Each window posts to the Service Worker, and the Service Worker reaches the others through its list of open windows. There is one difference that matters. A browser stops a Service Worker when it is idle, and it wakes with an empty table. So when this one cannot place a name, it asks every open window to say who it is, and then tries again. The button that makes it forget stands in for the browser stopping it, which a page cannot ask for.</p>
+          <h4>The code</h4>
+          <pre><span class="c">// every window</span>
+registration.active.postMessage({ iam: "orders" });
+registration.active.postMessage({ to: "kitchen", text: "two tulip bunches" });
+navigator.serviceWorker.onmessage = ({ data }) =>
+  data.rollcall ? registration.active.postMessage({ iam: "orders" }) : show(data.from, data.text);
+
+<span class="c">// the Service Worker</span>
+onmessage = async (event) => {
+  let target = await clients.get(table.get(event.data.to));
+  if (!target) { await rollCall(); target = await clients.get(table.get(event.data.to)); }   <span class="c">// woke up empty?</span>
+  target.postMessage({ from: nameOf(event.source.id), text: event.data.text });
+};</pre>
+          <h4>Step by step</h4>
+          <p>What each press of Next does in this demo.</p>
+          <ol>
+          <li><strong>Register the three windows.</strong> Each window tells the Service Worker its name. No MessagePorts are used.</li>
+          <li><strong>Orders: send to the kitchen.</strong> The orders window posts to the Service Worker, which finds the kitchen's window and passes the message on.</li>
+          <li><strong>Make the Service Worker forget.</strong> Its table is emptied, as it would be if the browser had stopped it.</li>
+          <li><strong>Kitchen: send to the driver.</strong> The Service Worker knows nobody. It asks every window to say who it is, rebuilds its table, and delivers.</li>
+          <li><strong>Orders: send to the florist.</strong> It asks again, nobody answers to that name, and the sender is told.</li>
+        </ol>
+        </article>
+        <article class="built" id="built-queue">
+          <h3>Messages kept in the worker until the window they are for opens</h3>
+          <p class="small muted idea">The idea: A message queue in the worker, holding messages for a window that has not opened yet.</p>
+          <div class="demo"></div>
+          <h4>What you are looking at</h4>
+          <p>The orders and kitchen windows are open. The driver's window is not. When either of them sends to "driver", the shared worker finds no such name in its table and keeps the message in a list under that name. When a window opens and says it is the driver, the worker hands over everything in the list, oldest first. After that it passes messages straight through. The senders do the same thing in both cases. The list is in the worker's memory, so it lasts for as long as at least one window of the app stays open.</p>
+          <h4>The code</h4>
+          <pre><span class="c">// the worker</span>
+const table = new Map();   <span class="c">// name -> port</span>
+const held = new Map();    <span class="c">// name -> messages waiting for that name</span>
+
+port.onmessage = ({ data }) => {
+  if (data.iam) {
+    table.set(data.iam, port);
+    for (const message of held.get(data.iam) || []) port.postMessage(message);
+    held.delete(data.iam);
+  }
+  if (data.to) {
+    const target = table.get(data.to);
+    const message = { from: nameOf(port), text: data.text };
+    target ? target.postMessage(message)
+           : held.set(data.to, [...(held.get(data.to) || []), message]);
+  }
+};</pre>
+          <h4>Step by step</h4>
+          <p>What each press of Next does in this demo.</p>
+          <ol>
+          <li><strong>Orders: send to the driver.</strong> No window is called driver. The worker keeps the message.</li>
+          <li><strong>Kitchen: send to the driver.</strong> A second message for the driver, from a different window. The worker is now holding two.</li>
+          <li><strong>Open the driver's window.</strong> The new window tells the worker its name. The worker hands over both messages, in the order they were sent.</li>
+          <li><strong>Orders: send to the driver.</strong> The driver is open now, so this one is passed straight on.</li>
+        </ol>
+        </article>
+        <article class="built" id="built-everyone">
+          <h3>One message to every window with a role</h3>
+          <p class="small muted idea">The idea: One window addressing every window with a role at once, such as every open editor.</p>
+          <div class="demo"></div>
+          <h4>What you are looking at</h4>
+          <p>Each window tells the worker its name and its role. Two of these are editors and one is a preview. The settings window does not know how many editors are open or what they are called. It posts one message addressed to the role "editor", and the worker sends a copy to every window that gave that role. Open another editor and it is included from then on. Close one and the worker takes it out of the table, so the next message goes to the ones that are left.</p>
+          <h4>The code</h4>
+          <pre><span class="c">// each window</span>
+port.postMessage({ iam: "editor-1", role: "editor" });
+
+<span class="c">// the settings window</span>
+port.postMessage({ toRole: "editor", text: "use font size 18" });
+
+<span class="c">// the worker</span>
+if (data.toRole) {
+  for (const [, w] of table)
+    if (w.role === data.toRole && w.port !== port)
+      w.port.postMessage({ from: nameOf(port), text: data.text });
+}</pre>
+          <h4>Step by step</h4>
+          <p>What each press of Next does in this demo.</p>
+          <ol>
+          <li><strong>Settings: tell every editor.</strong> One message, addressed to the role "editor". Both editors get it. The preview has a different role and gets nothing.</li>
+          <li><strong>Open a third editor.</strong> Another window opens and gives the same role.</li>
+          <li><strong>Settings: tell every editor.</strong> The same call as before. This time three windows get it.</li>
+          <li><strong>Close editor 1.</strong> The window is destroyed. The worker notices and takes it out of its table.</li>
+          <li><strong>Settings: tell every editor.</strong> Two editors are left, and those two get it.</li>
+        </ol>
+        </article>
+        <article class="built" id="built-toolroute">
+          <h3>A request sent to whichever open window offers the tool</h3>
+          <p class="small muted idea">The idea: A hub that routes each request to whichever open window offers the tool that was asked for.</p>
+          <div class="demo"></div>
+          <h4>What you are looking at</h4>
+          <p>Windows tell the worker which tool they offer. The shop window asks for a tool by what it does, "print-label" or "find-route", and never names a window. The worker looks for an open window that offers it, passes the request on, and that window answers the shop by name through the same worker. Close the label printer and the request has nowhere to go, and the shop is told. Open a different window that offers the same tool and the same request reaches that one. <a href="/hub/">The hub on this site</a> does this between sites on different origins.</p>
+          <h4>The code</h4>
+          <pre><span class="c">// a window that offers a tool</span>
+port.postMessage({ iam: "label-printer", tool: "print-label" });
+port.onmessage = ({ data }) =>
+  data.job && port.postMessage({ to: data.from, text: print(data.text) });
+
+<span class="c">// the shop: asks for the tool, not for a window</span>
+port.postMessage({ need: "print-label", text: "order 1" });
+
+<span class="c">// the worker</span>
+if (data.need) {
+  const found = [...table].find(([, w]) => w.tool === data.need);
+  found ? found[1].port.postMessage({ from: nameOf(port), job: data.need, text: data.text })
+        : port.postMessage({ nobody: data.need });
+}</pre>
+          <h4>Step by step</h4>
+          <p>What each press of Next does in this demo.</p>
+          <ol>
+          <li><strong>Shop: ask for a label.</strong> The shop asks for "print-label". The worker finds the window that offers it. The answer comes back to the shop.</li>
+          <li><strong>Shop: ask for a route.</strong> A different tool, so the worker picks a different window.</li>
+          <li><strong>Close the label printer.</strong> The only window that prints labels is destroyed.</li>
+          <li><strong>Shop: ask for a label.</strong> No open window offers that tool now. The worker tells the shop.</li>
+          <li><strong>Open the back office.</strong> A different window opens. It also offers "print-label".</li>
+          <li><strong>Shop: ask for a label.</strong> The same request as before. It goes to the back office.</li>
+        </ol>
+        </article>
+      </section>
+      <section id="try">
+        <h2>Things to try</h2>
+        <ul>
+          <li>Open a fourth window from the link. It is called florist. Now send from orders to the florist again: it arrives.</li>
+          <li>Close the kitchen, then send to it. The router has already taken it out of the table.</li>
+          <li>In the service worker version, make it forget and then send. Watch the count of times it asked who is here go up by one.</li>
+        </ul>
+      </section>
+      <section id="traps">
+        <h2>Common mistakes</h2>
+        <ul>
+          <li>The router sees everything. Where that matters, use it only to introduce, and let the two talk directly.</li>
+          <li>A shared worker reached from inside a frame on another site is partitioned by the top-level site. Two sites that embed the same frame get two routers, and their windows cannot find each other.</li>
+          <li>A service worker forgets its table whenever the browser stops it. Keep nothing in it that you cannot rebuild by asking the windows, or store it.</li>
+          <li>Names are first come, first served here. A second window that registers a name takes it over. Decide whether that is a takeover you want, a refusal, or a group.</li>
+          <li>Nothing tells the router that a window has closed. The shared worker waits on a Web Lock the window holds. The service worker finds out when <code>clients.get</code> returns nothing.</li>
+        </ul>
+      </section>
+      <section id="measured">
+        <h2>Measured</h2>
+        <p class="measured">Chromium 157: three same-origin frames with no references to each other exchange messages through a shared worker, and through a service worker using <code>clients.get</code>. After the service worker's table is cleared, one roll call rebuilds it and the message is delivered. Other browsers are being filled in from <a href="/lab/results/">the lab's results</a>.</p>
+      </section>
+      <section id="related">
+        <h2>Read next</h2>
+        <ul class="cards">
+          <li><a href="/patterns/exchange/"><strong>Use a SharedWorker to connect tabs to each other</strong><span>Every tab on an origin can reach the same SharedWorker.</span></a></li>
+          <li><a href="/patterns/introduce/"><strong>Connect two sites to each other, then remove yourself</strong><span>A port can be passed on by whoever holds it.</span></a></li>
+          <li><a href="/patterns/socket/"><strong>One connection to the server, shared by every tab</strong><span>Ten tabs of the same site usually means ten connections to the server.</span></a></li>
+          <li><a href="/patterns/tabserver/"><strong>Serve pages to other tabs from this tab</strong><span>A Service Worker can answer a fetch any way it likes, including by asking someone else.</span></a></li>
+        </ul>
+      </section>
+      </div>
+      <nav class="pager" id="pager" aria-label="More patterns"><a href="/patterns/reload/"><small>‹ Before this</small>Keep a port across a page reload</a><a class="pager-all" href="/patterns/">All patterns</a><a class="pager-next" href="/patterns/frozen/"><small>After this ›</small>Two workers that keep talking while this page is frozen</a></nav>
+    </main>
+    <footer class="small muted" style="padding-block:2rem 4rem">Port Authority, by <a href="https://paul.kinlan.me">Paul Kinlan</a>. <a href="/about/">About this site</a>.</footer>
+  </div>
+  <script type="module" src="/patterns/page.js"></script>
+  <script type="module" src="/refs.js"></script>
+</body>
+</html>

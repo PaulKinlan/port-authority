@@ -11,7 +11,7 @@ export const demos = [
   {
     id: "hello",
     title: "Open a channel and send a message through it",
-    blurb: "<code>new MessageChannel()</code> gives you two entangled ports. Keep one, post the other to anyone you can already reach. From then on you have a private line that no other script on either page can listen to, unlike <code>window.postMessage</code>.",
+    blurb: "<code>new MessageChannel()</code> gives you two entangled ports. Keep one, post the other to anyone you can already reach. From then on the two of you have a line of your own. What goes down it is not a window message, so a script that listens for <code>window.postMessage</code> messages does not see it.",
     code: `const { port1, port2 } = new MessageChannel();
 frame.contentWindow.postMessage("here", "*", [port2]); <span class="c">// port2 is moved, not copied</span>
 port1.onmessage = (e) => console.log(e.data);
@@ -45,7 +45,7 @@ port1.postMessage("ping");`,
   {
     id: "introduce",
     title: "Connect two sites to each other, then remove yourself",
-    blurb: "A port can be passed on by whoever holds it. So a third party that knows two sites can make a channel, give each of them an end, and step away. The three windows are three different sites, and each address is in its bar. So that you can see all three at once, each is shown as a frame inside this page. Between real windows the introducer gets its lines to Site A and Site B because it opened them or they opened it. Close the introducer and the other two do not notice. This is how <a href=\"/hub/\">the hub</a> works.",
+    blurb: "A port can be passed on by whoever holds it. So a third party that knows two sites can make a channel, give each of them an end, and step away. The three windows are three different sites, and each address is in its bar. So that you can see all three at once, each is shown as a frame inside this page. A site cannot go and find the introducer. Two windows that have nothing to do with each other cannot reach each other in a browser at all. A first line exists only because one window opened the other, or one is a frame inside the other. So an introducer is a window a site opens, or a window that opens the sites, or a page that holds them as frames. This page stands in for that: it holds all three, and hands Site A and Site B their first lines. Close the introducer and the other two do not notice. This is how <a href=\"/hub/\">the hub</a> works.",
     code: `<span class="c">// in the introducer, which holds a port to each side</span>
 const { port1, port2 } = new MessageChannel();
 toLeft.postMessage({ meet: "right" }, [port1]);
@@ -184,13 +184,16 @@ toRight.postMessage({ meet: "left" }, [port2]);
     title: "Use a SharedWorker to connect tabs to each other",
     blurb: "Every tab on an origin can reach the same SharedWorker. Here it keeps a port to each tab and does one job: when a tab joins, it makes a channel between that tab and every other, then stays out of it. The tabs talk directly. Open a third in a new tab and it joins the same mesh.",
     code: `<span class="c">// in the SharedWorker</span>
+const peers = new Set();
 onconnect = ({ ports: [port] }) => {
-  for (const other of peers) {
-    const { port1, port2 } = new MessageChannel();
-    port.postMessage({ meet: other.name }, [port1]);
-    other.port.postMessage({ meet: name }, [port2]);
-  }
-  peers.add({ name, port });
+  port.onmessage = ({ data: { name } }) => {     <span class="c">// each tab says its name once</span>
+    for (const other of peers) {
+      const { port1, port2 } = new MessageChannel();
+      port.postMessage({ meet: other.name }, [port1]);
+      other.port.postMessage({ meet: name }, [port2]);
+    }
+    peers.add({ name, port });
+  };
 };`,
     async setup(stage, ui) {
       const suffix = Math.random().toString(36).slice(2, 5);
@@ -336,7 +339,7 @@ export const TOURS = {
     ["Send a ping", "A message goes down the wire, and the frame answers on the same wire."],
   ] },
   introduce: { steps: [
-    ["Connect Site A to the introducer", "Site A gets a private line to the introducer. Site B is still separate."],
+    ["Connect Site A to the introducer", "Site A gets a private line to the introducer. Between real windows that takes one of them having opened the other. Here this page hands the line over. Site B is still separate."],
     ["Connect Site B to the introducer", "Site B gets its own line to the introducer. A and B still cannot reach each other."],
     ["Introduce them", "The introducer makes a new channel and sends one end to Site A and one end to Site B. The yellow direct line appears underneath."],
     ["Site A says hello", "Site A talks directly to Site B on the yellow cable. Nothing passes through the introducer."],
@@ -410,7 +413,7 @@ export const TOURS = {
   ], then: "Now press Freeze this page for 3 seconds. The page stops completely while the two workers keep counting." },
   filter: { steps: [
     ["Connect the filter", "This page opens a channel to the filter frame on another origin."],
-    ["Start the video", "VideoFrames leave this page one at a time, pass through the filter, and come back changed.", 3000],
+    ["Start the video", "Frames leave this page one at a time, pass through the filter, and come back changed. The note under the right-hand picture says what each frame was sent as.", 3000],
     ["Ask for another effect", "This page asks the filter to switch effects over the port."],
     ["Remove the filter", "The filter frame is destroyed and the output stops with it."],
   ] },
@@ -541,6 +544,9 @@ export function mount(container, demo, tours = TOURS, { autoplay = false } = {})
 
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const find = (start) => [...controls.querySelectorAll("button")].find((b) => b.textContent.startsWith(start));
+  // What the demo itself has said this browser cannot do, if anything. Demos write it into their own boxes
+  // ("This browser cannot transfer streams yet."), where it is easy to miss while the step bar just says it stopped.
+  const limit = () => [...container.querySelectorAll(".stage-el li, .stage-el p")].map((el) => el.textContent.trim()).find((text) => /^This browser (cannot|does not|lacks) /.test(text)) || "";
 
   // Do step i: wait for its button, show which one it is, press it, say what it did.
   async function step(i, mine, lead = 450) {
@@ -551,11 +557,14 @@ export function mount(container, demo, tours = TOURS, { autoplay = false } = {})
       if (button && !button.disabled) break;
       // If the button does not exist in DOM at all after 1.2s, stop early instead of hanging 10s.
       if (!button && waited >= 1200) break;
+      // The demo has said what this browser cannot do, and the button is still shut: waiting longer will not open it.
+      if (waited >= 1500 && limit()) break;
       await sleep(150);
     }
     if (playing !== mine) return false;
     if (!button || button.disabled) {
-      say(`<span class="step">Stopped</span> Could not run "${esc(start)}" in this browser.`);
+      const why = limit();
+      say(why ? `<span class="step">Stopped</span> ${esc(why)} So "${esc(start)}" cannot run here.` : `<span class="step">Stopped</span> Could not run "${esc(start)}" in this browser.`);
       return false;
     }
     button.classList.add("next");

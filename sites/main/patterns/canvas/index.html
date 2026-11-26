@@ -1,0 +1,175 @@
+<!doctype html>
+<!-- Written by scripts/patterns.mjs from the modules in /patterns/. Edit those, then run it. -->
+<html lang="en" data-pattern="canvas">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Let another origin paint on your page | Port Authority</title>
+  <meta name="description" content="The painter is a frame on another origin. It draws on a canvas of its own and sends each finished frame down a port as an ImageBitmap, which is moved and not copied. This page show">
+  <meta property="og:title" content="Let another origin paint on your page | Port Authority">
+  <meta property="og:description" content="The painter is a frame on another origin. It draws on a canvas of its own and sends each finished frame down a port as an ImageBitmap, which is moved and not copied. This page show">
+  <meta property="og:type" content="article">
+  <meta name="twitter:card" content="summary">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/base.css">
+  <script src="/nav.js"></script>
+  <link rel="stylesheet" href="/patterns/patterns.css">
+  <link rel="stylesheet" href="/patterns/page.css">
+  <script src="/errors.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <div class="wrap">
+    <header class="site-bar">
+      <a class="wordmark" href="/">Port Authority</a>
+      <nav aria-label="Primary"><a href="/">Experiments</a><a href="/guide/">The guide</a><a href="/patterns/" aria-current="page">Port patterns</a><a href="/comlink/">Comlink today</a><a href="/ai-router/">AI router</a><a href="/lab/">The lab</a><a href="/missing/">What is missing</a><a href="/reading/">Further reading</a><a href="/hub/">Your hub</a></nav>
+    </header>
+    <main id="main">
+      <div class="stack page-head">
+        <p class="crumb"><a href="/patterns/">Port patterns</a> / <span id="group"><a href="/patterns/#canvas">More things a port can carry</a></span></p>
+        <h1 id="title">Let another origin paint on your page</h1>
+      </div>
+      <section class="pattern" id="demo"><div class="demo"><noscript><p class="small muted">The demo that runs here needs JavaScript. Everything else on this page reads the same without it.</p></noscript></div></section>
+      <div class="deep" id="deep">
+      <section id="what">
+        <h2>What you are looking at</h2>
+        <p>The painter is a frame on another origin. It draws on a canvas of its own and sends each finished frame down a port as an <code>ImageBitmap</code>, which is moved and not copied. This page shows each one in a canvas it owns. The painter cannot read or touch anything here. Handing over the canvas's own drawing surface would be shorter, but Chrome crashes a frame in another process that draws on one, so that is kept for workers.</p>
+      </section>
+      <section id="code">
+        <h2>The code</h2>
+        <pre><span class="c">// the other origin: draw, then send the finished frame</span>
+const mine = new OffscreenCanvas(width, height);
+const ctx = mine.getContext("2d");
+requestAnimationFrame(async function draw(t) {
+  paint(ctx, t);
+  const frame = await createImageBitmap(mine);
+  port.postMessage({ frame }, [frame]);       <span class="c">// moved</span>
+  requestAnimationFrame(draw);
+});
+
+<span class="c">// this page: show it</span>
+const show = canvas.getContext("bitmaprenderer");
+port.onmessage = ({ data }) => show.transferFromImageBitmap(data.frame);</pre>
+        <h3 id="using">Using it</h3>
+        <pre><span class="c">// a shoe shop's product page. The 3D viewer is a frame from another company.</span>
+const channel = new MessageChannel();
+const port = channel.port1;
+viewer.contentWindow.postMessage("paint", viewerOrigin, [channel.port2]);
+
+<span class="c">// the viewer cannot measure the shop's canvas, so the page sends width and height</span>
+port.postMessage({ width: canvas.width, height: canvas.height });
+
+<span class="c">// the person picks red. The viewer's paint() uses it from the next frame.</span>
+redSwatch.onclick = () =&gt; port.postMessage({ colour: "red" });
+
+<span class="c">// the person leaves the product. A closed port tells the viewer nothing,</span>
+<span class="c">// so the page asks it to stop, and frees frames that are already on the way.</span>
+closeButton.onclick = () =&gt; {
+  port.postMessage({ stop: true });
+  port.onmessage = ({ data }) =&gt; data.frame.close();
+};</pre>
+        <h3 id="case">Where you would use it</h3>
+        <p>A real case. A shoe shop shows a 3D view of each shoe, drawn by a viewer from another company. The viewer runs in a frame on its own origin and sends each finished picture down a port, and the shop shows it in a canvas inside its own product layout. The shop sends the canvas size and the colour the person picks down the same port. The viewer's code never runs in the shop's page, so it cannot read the basket or the person's details. When the person leaves the product, the shop asks the viewer to stop and closes any pictures that still arrive.</p>
+      </section>
+      <section id="how">
+        <h2>How it works</h2>
+        <div class="stack paras">
+          <p>There are two ways to let someone else draw in your page. Which one to use depends on where the drawer runs.</p>
+          <p>For a worker: <code>canvas.transferControlToOffscreen()</code> splits a canvas in two. The element stays in your page, and its drawing surface becomes an <code>OffscreenCanvas</code> that can be transferred. The worker draws, and the pixels appear in your element without passing through your main thread, so the canvas keeps animating while your page is busy.</p>
+          <p>For a frame on another origin: the frame draws on an <code>OffscreenCanvas</code> of its own, turns each finished frame into an <code>ImageBitmap</code> and transfers it down a port. Your page shows it with a <code>bitmaprenderer</code> context. A bitmap is moved, so no pixels are copied on the way.</p>
+          <p>Either way the drawer cannot read your page or see the rest of your DOM. It fills one rectangle you chose and nothing else.</p>
+        </div>
+      </section>
+      <section id="steps">
+        <h2>Step by step</h2>
+        <p>What each press of Next does in the demo at the top.</p>
+        <ol>
+          <li><strong>Open a channel to the painter.</strong> This page makes a channel and sends one end to the painter frame on another origin.</li>
+          <li><strong>Ask the painter to paint.</strong> This page sends the canvas size. The painter starts drawing and transfers each finished ImageBitmap back.</li>
+          <li><strong>Ask for another colour.</strong> This page sends a new colour over the same port.</li>
+        </ol>
+      </section>
+      <section id="uses">
+        <h2>What you could build with it</h2>
+        <p>These are built and running below.</p>
+        <article class="built" id="built-chart">
+          <h3>A chart drawn by another origin, inside your layout</h3>
+          <p class="small muted idea">The idea: A chart, map or 3D viewer supplied by another origin that renders into your layout without an iframe's box.</p>
+          <div class="demo"></div>
+          <h4>What you are looking at</h4>
+          <p>The chart maker is a sandboxed frame with an opaque origin. It stands in for a charting service from another site. This page gives it a port and sends it numbers. The chart maker draws the bars on a canvas of its own and sends back each finished frame as an <code>ImageBitmap</code>, which this page shows in a canvas it owns. The chart maker never sees the page, and its code never runs in this page.</p>
+          <h4>The code</h4>
+          <pre>const show = canvas.getContext("bitmaprenderer");
+chartMaker.onmessage = ({ data }) => show.transferFromImageBitmap(data.frame);
+chartMaker.postMessage({ size: [460, 230], numbers });
+<span class="c">// later, new figures: the chart redraws itself</span>
+chartMaker.postMessage({ numbers: [12, 30, 22, 41, 17] });
+
+<span class="c">// the chart maker, after each redraw</span>
+const frame = await createImageBitmap(mine);
+port.postMessage({ frame }, [frame]);</pre>
+          <h4>Step by step</h4>
+          <p>What each press of Next does in this demo.</p>
+          <ol>
+          <li><strong>Ask the chart maker for a chart.</strong> The size and the first numbers go to the other origin. It draws the bars and sends back finished frames.</li>
+          <li><strong>Send new numbers.</strong> This page posts new figures. The chart maker animates to them.</li>
+          <li><strong>Send new numbers.</strong> And again. Only numbers go one way, and only pixels come back.</li>
+        </ol>
+        </article>
+        <article class="built" id="built-render">
+          <h3>The same heavy drawing, on the page's thread and then on a worker's</h3>
+          <p class="small muted idea">The idea: Moving heavy rendering to a worker.</p>
+          <div class="demo"></div>
+          <h4>What you are looking at</h4>
+          <p>Both canvases get the same job: two seconds of zooming into the Mandelbrot set, frame after frame. Drawn by the page, the page can do nothing else: its counter stops, and you see only the last frame. Drawn by a worker that was handed the canvas, every frame appears as it is finished, and the page's counter keeps going.</p>
+          <h4>The code</h4>
+          <pre>const surface = canvas.transferControlToOffscreen();
+worker.postMessage({ surface }, [surface]);
+
+<span class="c">// the worker: draw as hard as you like, the page is not waiting for you</span>
+onmessage = ({ data }) => { const ctx = data.surface.getContext("2d"); for (;;) drawNextFrame(ctx); };</pre>
+          <h4>Step by step</h4>
+          <p>What each press of Next does in this demo.</p>
+          <ol>
+          <li><strong>Draw on the page's thread.</strong> The page draws for two seconds. Watch its counter: it stops.</li>
+          <li><strong>Draw in the worker.</strong> The worker draws the same frames into a canvas it was handed. The counter keeps going.</li>
+        </ol>
+        </article>
+        <h3 class="todo">Already running</h3>
+        <ul>
+          <li>A plug-in that may draw and may not read. <a href="#demo">See the demo at the top of this page.</a></li>
+        </ul>
+      </section>
+      <section id="try">
+        <h2>Things to try</h2>
+        <ul>
+          <li>Ask the painter to paint, then ask for another colour. The request goes down the port, and the frames come back up it.</li>
+          <li>Scroll to the worker demo below to see a surface handed over with <code>transferControlToOffscreen()</code>.</li>
+        </ul>
+      </section>
+      <section id="traps">
+        <h2>Common mistakes</h2>
+        <ul>
+          <li>In Chrome, do not send the surface from <code>transferControlToOffscreen()</code> to a frame on another site or to a sandboxed frame. Those run in another process, and the frame crashes on its first draw. The message arrives and <code>getContext()</code> succeeds, so nothing warns you. Send it to a worker, or send bitmaps.</li>
+          <li>Once control is transferred, the page can no longer draw on that canvas or read it back.</li>
+          <li>The receiver decides the bitmap size. Tell it your size and pixel ratio over the port.</li>
+          <li>Close an <code>ImageBitmap</code> you are not going to show. It holds memory the garbage collector does not count.</li>
+        </ul>
+      </section>
+      <section id="related">
+        <h2>Read next</h2>
+        <ul class="cards">
+          <li><a href="/patterns/frozen/"><strong>Two workers that keep talking while this page is frozen</strong><span>A port given to a worker belongs to that worker's thread.</span></a></li>
+          <li><a href="/patterns/filter/"><strong>Run live video through a filter on another origin</strong><span>Video can leave your page one frame at a time and come back changed.</span></a></li>
+          <li><a href="/patterns/audio/"><strong>A worker that plays music while this page is frozen</strong><span>Sound is made on a thread of its own, and that thread accepts a port.</span></a></li>
+        </ul>
+      </section>
+      </div>
+      <nav class="pager" id="pager" aria-label="More patterns"><a href="/patterns/stream/"><small>‹ Before this</small>Send a stream to another frame</a><a class="pager-all" href="/patterns/">All patterns</a><a class="pager-next" href="/patterns/functions/"><small>After this ›</small>Pass a function to another origin</a></nav>
+    </main>
+    <footer class="small muted" style="padding-block:2rem 4rem">Port Authority, by <a href="https://paul.kinlan.me">Paul Kinlan</a>. <a href="/about/">About this site</a>.</footer>
+  </div>
+  <script type="module" src="/patterns/page.js"></script>
+  <script type="module" src="/refs.js"></script>
+</body>
+</html>

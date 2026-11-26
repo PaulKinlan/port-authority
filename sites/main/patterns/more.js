@@ -92,7 +92,7 @@ port.onmessage = ({ data }) => show.transferFromImageBitmap(data.frame);`,
     code: `const lend = (fn) => {
   const { port1, port2 } = new MessageChannel();
   port1.onmessage = (e) => fn(...e.data);
-  return port2;                              <span class="c">// send this</span>
+  return { port: port2, revoke: () => port1.close() };   <span class="c">// send port, keep revoke</span>
 };
 const borrow = (port) => (...args) => port.postMessage(args);`,
     async setup(stage, ui) {
@@ -547,7 +547,7 @@ addEventListener("pagehide", () => bank.port.postMessage({ deposit: key }, [port
 
 <span class="c">// next load</span>
 bank.port.postMessage({ withdraw: key });
-bank.port.onmessage = ({ ports }) => resume(ports[0]);`,
+bank.port.onmessage = ({ data, ports }) => data.found ? resume(ports[0]) : connectAgain();`,
     async setup(stage, ui) {
       const key = "k" + Math.random().toString(36).slice(2, 8);
       await stage.frame("feed", {

@@ -213,7 +213,7 @@
             <b>In your browser, now</b>
             <span data-probe="imagebitmap-other"></span>
           </div>
-          <p>The <a href="/patterns/filter/">video filter demo</a> sends each <code>VideoFrame</code> to a sandboxed frame. That works when the sandboxed frame shares a process with the page. In Chrome 160 on a Mac the lab recorded that it didn't arrive.</p>
+          <p>The <a href="/patterns/filter/">video filter demo</a> tries a <code>VideoFrame</code> first, sent to a sandboxed frame. That works when the sandboxed frame shares a process with the page. In Chrome 159 and 160 on a Mac it didn't arrive, so the demo notices and sends each picture as an <code>ImageBitmap</code> from then on.</p>
           <div class="now">
             <b>In your browser, now, to a sandboxed frame</b>
             <span data-probe="videoframe-sandbox"></span>
@@ -315,7 +315,11 @@
             <span data-probe="videoframe-other"></span>
             <span data-probe="datachannel-other"></span>
           </div>
-          <div class="live-set" data-demos="bite-unreadable"></div>
+          <div class="live-set" data-demos="bite-unreadable">
+          <!-- made:live -->
+          <article class="live" id="live-bite-unreadable"><h4>Running: A message that cannot be rebuilt, and a sender that finds out</h4><div class="demo"></div><p>A compiled WebAssembly module can be posted to a worker of the same page, and cannot be rebuilt in a shared worker. The call to <code>postMessage</code> succeeds either way. Sent with no checks, the module disappears and the sender waits for ever. Sent with the three checks below, the sender is told straight away: the receiver listens for <code>messageerror</code> and says so, every message is acknowledged, and the sender puts a time limit on the wait.</p></article>
+          <!-- /made:live -->
+        </div>
           <p>Every protocol on a port has to add acknowledgements and timeouts to find a failure the browser already knows about. Most of the failed cells in <a href="/lab/results/">the lab's results</a> are this kind, and <a href="/guide/#bites">the guide</a> has one running. I didn't find an open issue for it. I'd like:</p>
           <ul>
             <li>An exception at the sender when the browser can tell at send time that the destination can't accept the type.</li>
@@ -331,7 +335,12 @@
             <b>In your browser, now</b>
             <span data-probe="close-event"></span>
           </div>
-          <div class="live-set" data-demos="bite-gone alive-signals"></div>
+          <div class="live-set" data-demos="bite-gone alive-signals">
+          <!-- made:live -->
+          <article class="live" id="live-bite-gone"><h4>Running: The other end goes away, and a heartbeat notices</h4><div class="demo"></div><p>This page holds a port to a service in a frame. Remove the frame and the port looks exactly as it did: no event fires, and posting to it throws nothing. The only way to know is to ask and time the answer. Here the page pings once a second, and treats a second and a half of silence as the end.</p></article>
+          <article class="live" id="live-alive-signals"><h4>Running: Which signal notices which ending, and how quickly</h4><div class="demo"></div><p>Every way of knowing the far side has gone, side by side, measured in your browser. For each row a fresh far side is made on this site's own origin and given every signal at once: a port that only carries its goodbye, a port it answers pings on every half second, a port it beats on every half second, and a Web Lock it holds. Then it is ended in one way, and the table shows how long each signal took to say so. The last column is the port <code>close</code> event. It was added to the HTML standard in 2024, never switched on in any browser, and taken out again in October 2026.</p><p class="small"><a href="/patterns/alive-signals/">The code, and how it works ›</a></p></article>
+          <!-- /made:live -->
+        </div>
           <p>So every library that makes calls over a port needs a heartbeat, which is slow to notice, wakes background tabs, and gets it wrong when a tab is only throttled. I'd like an event that the holder of a port opts in to, which fires when the other end calls <code>close()</code>, its document or worker is destroyed, or its process crashes. It doesn't need to fire for garbage collection.</p>
           <p>The guide has <a href="/guide/#alive">five running ways to find out today</a>. Across origins, ping on a timer on a second port kept for that. Inside one origin, have the other side hold a <a href="https://developer.mozilla.org/en-US/docs/Web/API/Web_Locks_API">Web Lock</a> for life and queue for the same lock.</p>
           <ul>
@@ -351,7 +360,11 @@
         <div class="item" id="oneway">
           <h3>There is no port that works in one direction</h3>
           <p>Both ends of a <code>MessageChannel</code> can send and receive. You can't make an end that only sends or only receives, and anything can come back along a port, including another port.</p>
-          <div class="live-set" data-demos="oneway"></div>
+          <div class="live-set" data-demos="oneway">
+          <!-- made:live -->
+          <article class="live" id="live-oneway"><h4>Running: Join two sites with a port that carries messages one way only</h4><div class="demo"></div><p>A <code>MessagePort</code> always works in both directions. Whoever you give one to can post into it, and there is no setting that stops them. This page wants the library's site to publish prices to the florist's site, and wants nothing to come back. So it does not give them the two ends of one channel. It makes two channels and stands between them. What the library posts is posted on to the florist. What the florist posts stops at this page and is counted. The florist holds a real port and can call <code>postMessage</code> on it as often as it likes. A message with a port or a stream in it is refused in the forward direction too, because either one would be a way to answer.</p><p class="small"><a href="/patterns/oneway/">The code, and how it works ›</a></p></article>
+          <!-- /made:live -->
+        </div>
           <p>A one-way link is the safe way to feed data to code I don't trust: if it can't send anything out, it doesn't matter what it reads. I had to build <a href="/patterns/oneway/">the one-way port</a> on this site from two channels and code in the middle that copies messages forward and drops what comes back. It only works while the page running that code is alive, and it has to post each copy with no transfer list or a port could go forward and become a way to answer.</p>
           <p>I'd like an option on <code>MessageChannel</code> that gives a send-only end and a receive-only end, enforced by the browser after the page that made it has gone. I didn't find a proposal for this. It would allow a sandboxed frame with no network that displays private data and can't send it anywhere, and a log that many parties can write to and none can read.</p>
         </div>
@@ -359,7 +372,11 @@
         <div class="item" id="timing">
           <h3>A readable stream can signal back to its writer</h3>
           <p>Handing someone only the readable side of a stream looks like a one-way link, but it isn't. A stream asks its source for the next chunk when the reader takes one, so the writer sees the timing of every read and a reader can send bits by choosing when to read.</p>
-          <div class="live-set" data-demos="built-covert"></div>
+          <div class="live-set" data-demos="built-covert">
+          <!-- made:live -->
+          <article class="live" id="live-built-covert"><h4>Running: A stream given as read-only still lets the reader signal the writer</h4><div class="demo"></div><p>A <code>ReadableStream</code> looks one-way: the holder can read and has nothing to write into. But a stream asks its source for the next chunk only when the reader wants one, so the writer can see when each read happens. The frame here holds only a readable stream. It spells a word by choosing when to read: a short wait for a 0, a long wait for a 1. This page reads the word back from nothing but the times its own <code>pull()</code> was called. Then the same frame gets a one-way port. Messages on a port arrive when the sender posts them, and nothing the receiver does changes that, so there is nothing to read back.</p><p class="small"><a href="/patterns/oneway/#built-covert">The code, and how it works ›</a></p></article>
+          <!-- /made:live -->
+        </div>
           <p>I measured it: a sandboxed frame holding only a readable stream sent 16 bits to the writer by timing its reads, and all 16 were read correctly. <a href="/patterns/oneway/">It is running here.</a> I'm not sure this can be fixed without losing back-pressure, which is the reason to use a stream. At the least the Streams Standard and MDN should say that a transferred readable is not a one-way link.</p>
         </div>
 
@@ -381,7 +398,11 @@
         <div class="item" id="middle">
           <h3>A stream stops when the context it passed through goes away</h3>
           <p>If A sends a stream to B and B sends it on to C, the data still travels through B. When B closes, C's reader stalls and gets no error.</p>
-          <div class="live-set" data-demos="stream-intro"></div>
+          <div class="live-set" data-demos="stream-intro">
+          <!-- made:live -->
+          <article class="live" id="live-stream-intro"><h4>Running: A forwarded stream stops when the page that passed it on closes. A port keeps working.</h4><div class="demo"></div><p>You can pass a stream on, the same as a port. But a stream that was passed on keeps flowing through every context that touched it. Send one through the introducer, remove the introducer, and the reader stalls with no error and no end. So introduce with a port first, then send the stream down the direct line. Start again between the two to compare. The three boxes are frames in this page, and this page gave the source and the reader each a line to the introducer.</p><p class="small"><a href="/patterns/stream-intro/">The code, and how it works ›</a></p></article>
+          <!-- /made:live -->
+        </div>
           <p>Introducing two parties and then leaving works for a port, and it should work for a stream. Then a picker window could connect a producer to a consumer with a stream and close, which is what <a href="/hub/">the hub</a> does with ports. It runs in <a href="/guide/#streams">the streams section of the guide</a>, and there has been an issue open since 2020: <a href="https://github.com/whatwg/streams/issues/1063">whatwg/streams #1063</a>, "Transferable streams: the double transfer problem".</p>
         </div>
 
@@ -408,14 +429,22 @@
         <div class="item" id="sw">
           <h3>A service worker loses its ports when it is stopped</h3>
           <p>The browser stops a service worker when it is idle, and every port it held goes with it.</p>
-          <div class="live-set" data-demos="built-swroute"></div>
+          <div class="live-set" data-demos="built-swroute">
+          <!-- made:live -->
+          <article class="live" id="live-built-swroute"><h4>Running: The same router as a Service Worker, which forgets and asks again</h4><div class="demo"></div><p>A Service Worker can do the same job with no ports at all. Each window posts to the Service Worker, and the Service Worker reaches the others through its list of open windows. There is one difference that matters. A browser stops a Service Worker when it is idle, and it wakes with an empty table. So when this one cannot place a name, it asks every open window to say who it is, and then tries again. The button that makes it forget stands in for the browser stopping it, which a page cannot ask for.</p><p class="small"><a href="/patterns/router/#built-swroute">The code, and how it works ›</a></p></article>
+          <!-- /made:live -->
+        </div>
           <p><a href="/patterns/mounted/">Mounting another site at a path</a> and <a href="/patterns/tabserver/">a tab that serves other tabs</a> both need a service worker to hold a port, so both make the worker ask the open pages for a new port each time it wakes. I'd like the ports to survive a stop, and a message arriving on one to start the worker, the way a message from a page does. Then a service worker could be a dependable router between a site's pages and the other origins they have been introduced to.</p>
         </div>
 
         <div class="item" id="meeting">
           <h3>There is nowhere for two sites to meet</h3>
           <p>Two sites can pass a port only if one holds a reference to a window of the other: one it opened, its opener, or a frame. A hidden frame from a third origin used to work as a meeting point. Now its storage and its <code>SharedWorker</code> are separate for each top-level site, so it can't be one. That is why <a href="/hub/">the hub</a> on this site is a visible popup with its registry on a server.</p>
-          <div class="live-set" data-demos="built-picker"></div>
+          <div class="live-set" data-demos="built-picker">
+          <!-- made:live -->
+          <article class="live" id="live-built-picker"><h4>Running: A picker that connects a shop to the florist the person chose, then closes</h4><div class="demo"></div><p>Two florists have each registered with the picker. The shop holds a port to the picker and knows neither florist. The shop asks for someone who can send flowers. The picker waits for the person to choose. Then it makes a channel, sends one end to the chosen florist and the other to the shop, and keeps neither. After that the picker can be closed. The order goes from the shop to the florist on the new channel, and the florist that was not picked hears nothing. <a href="/hub/">The hub on this site</a> is this, with the list of tools kept on a server.</p><p class="small"><a href="/patterns/introduce/#built-picker">The code, and how it works ›</a></p></article>
+          <!-- /made:live -->
+        </div>
           <p>The partitioning is there to stop tracking and I'm not asking for it to be undone. I'm asking for a way through it that the person using the browser controls, which is why I worked on <a href="/reading/#intents">Web Intents</a>. I'd like a picker drawn by the browser, like the one <a href="https://developer.mozilla.org/en-US/docs/Web/API/FedCM_API">FedCM</a> has for sign-in, that lets the person choose a site for a job and hands each side one end of a <code>MessageChannel</code>.</p>
           <p>That gives "edit this image with", "pay with" and "send to" with the person's own choice of site and no server, and a site calling the person's own AI model or agent. The <a href="https://developer.mozilla.org/en-US/docs/Web/API/StorageAccessHandle/SharedWorker">Storage Access API</a> can already give a frame an unpartitioned shared worker after a prompt, but that helps one site reach itself on other sites. It doesn't introduce two sites to each other.</p>
         </div>
@@ -637,18 +666,12 @@
 
     // Demos that already exist elsewhere on the site, running here beside the gap they show.
     const find = (id) => all.find((d) => d.id === id) || built.find((d) => d.id === id) || bites.find((d) => d.id === id);
-    for (const set of document.querySelectorAll(".live-set")) {
-      for (const id of set.dataset.demos.split(" ")) {
-        const demo = find(id);
-        if (!demo) continue;
-        const href = demo.pattern ? `/patterns/${demo.pattern}/#${demo.id}` : `/patterns/${demo.id}/`;
-        const card = document.createElement("article");
-        card.className = "live"; card.id = "live-" + id;
-        card.innerHTML = `<h4>Running: ${demo.title}</h4><div class="demo"></div><p>${demo.blurb}</p>${demo.bite ? "" : `<p class="small"><a href="${href}">The code, and how it works \u203a</a></p>`}`;
-        set.append(card);
-        const el = card.querySelector(".demo");
-        new IntersectionObserver((entries, io) => { if (entries[0].isIntersecting) { io.disconnect(); mountStage(el, demo, undefined, { autoplay: false }); } }, { rootMargin: "300px" }).observe(el);
-      }
+    // The cards are already in the page, written out by scripts/patterns.mjs. This starts each one's demo.
+    for (const card of document.querySelectorAll(".live-set article.live")) {
+      const demo = find(card.id.slice(5));
+      if (!demo) continue;
+      const el = card.querySelector(".demo");
+      new IntersectionObserver((entries, io) => { if (entries[0].isIntersecting) { io.disconnect(); mountStage(el, demo, undefined, { autoplay: false }); } }, { rootMargin: "300px" }).observe(el);
     }
 
     // Tap/click-accessible details for the census table.

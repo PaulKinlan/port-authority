@@ -1,0 +1,165 @@
+<!doctype html>
+<!-- Written by scripts/patterns.mjs from the modules in /patterns/. Edit those, then run it. -->
+<html lang="en" data-pattern="reply">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Send a reply port with each request | Port Authority</title>
+  <meta name="description" content="Instead of matching replies to requests with ids, make a new channel for each request and send one end along with it. The answer comes back on a port that only this request ever ha">
+  <meta property="og:title" content="Send a reply port with each request | Port Authority">
+  <meta property="og:description" content="Instead of matching replies to requests with ids, make a new channel for each request and send one end along with it. The answer comes back on a port that only this request ever ha">
+  <meta property="og:type" content="article">
+  <meta name="twitter:card" content="summary">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/base.css">
+  <script src="/nav.js"></script>
+  <link rel="stylesheet" href="/patterns/patterns.css">
+  <link rel="stylesheet" href="/patterns/page.css">
+  <script src="/errors.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <div class="wrap">
+    <header class="site-bar">
+      <a class="wordmark" href="/">Port Authority</a>
+      <nav aria-label="Primary"><a href="/">Experiments</a><a href="/guide/">The guide</a><a href="/patterns/" aria-current="page">Port patterns</a><a href="/comlink/">Comlink today</a><a href="/ai-router/">AI router</a><a href="/lab/">The lab</a><a href="/missing/">What is missing</a><a href="/reading/">Further reading</a><a href="/hub/">Your hub</a></nav>
+    </header>
+    <main id="main">
+      <div class="stack page-head">
+        <p class="crumb"><a href="/patterns/">Port patterns</a> / <span id="group"><a href="/patterns/#reply">The six basic patterns</a></span></p>
+        <h1 id="title">Send a reply port with each request</h1>
+      </div>
+      <section class="pattern" id="demo"><div class="demo"><noscript><p class="small muted">The demo that runs here needs JavaScript. Everything else on this page reads the same without it.</p></noscript></div></section>
+      <div class="deep" id="deep">
+      <section id="what">
+        <h2>What you are looking at</h2>
+        <p>Instead of matching replies to requests with ids, make a new channel for each request and send one end along with it. The answer comes back on a port that only this request ever had. Answers can't get mixed up, and nobody else can answer in your place. The three boxes are frames in this page. This page gave each client its line to the service before the first press.</p>
+      </section>
+      <section id="code">
+        <h2>The code</h2>
+        <pre>function ask(service, question) {
+  const { port1, port2 } = new MessageChannel();
+  service.postMessage(question, [port2]);
+  return new Promise((resolve) => (port1.onmessage = (e) => { resolve(e.data); port1.close(); }));
+}</pre>
+        <h3 id="using">Using it</h3>
+        <pre><span class="c">// a writing app. The service is a worker that checks spelling.</span>
+const service = new Worker("/spelling.js");
+
+<span class="c">// two paragraphs are checked at the same time</span>
+const [intro, chapter] = await Promise.all([
+  ask(service, { text: introText }),
+  ask(service, { text: chapterText }),
+]);
+underline(introBox, intro);
+underline(chapterBox, chapter);
+
+<span class="c">// in spelling.js: answer on the port that came with the question</span>
+onmessage = async (e) =&gt; {
+  const reply = e.ports[0];
+  reply.postMessage(await mistakesIn(e.data.text));
+};
+
+<span class="c">// The short paragraph may be answered first. Each answer still reaches</span>
+<span class="c">// the ask() that sent its port. If the worker never answers, ask() waits</span>
+<span class="c">// for ever, so a real ask() also needs a timeout that closes port1.</span></pre>
+        <h3 id="case">Where you would use it</h3>
+        <p>A real case. A writing app checks spelling in a worker. The page sends each paragraph as a question of its own while the person edits, so several questions are open at once. Each question carries its own reply port, so the result for a long chapter cannot land on the short introduction, whichever the worker finishes first. The worker keeps no list of who asked. It answers on the port that came with the question and forgets it.</p>
+      </section>
+      <section id="how">
+        <h2>How it works</h2>
+        <div class="stack paras">
+          <p>Every question carries a new port, made for that one question. The service answers on it and forgets it. The answer can't be confused with any other, because that port is only used for this question.</p>
+          <p>This replaces the request id that most <code>postMessage</code> protocols use. There is no table of pending ids to keep, and a reply port can't be guessed or forged.</p>
+          <p>It also means the service does not need to know who is asking. It answers whoever holds the other end. A client can even hand its reply port to someone else, and the answer goes there.</p>
+        </div>
+      </section>
+      <section id="steps">
+        <h2>Step by step</h2>
+        <p>What each press of Next does in the demo at the top.</p>
+        <ol>
+          <li><strong>Connect Client one.</strong> Client one gets a request channel to the service.</li>
+          <li><strong>Connect Client two.</strong> Client two gets its own request channel to the service.</li>
+          <li><strong>Client one asks.</strong> Client one sends a question along with a fresh reply port. The answer returns on that reply port, then it closes.</li>
+          <li><strong>Client two asks.</strong> Client two sends a question with its own reply port. Answers return on separate ports, so they can never be mixed up.</li>
+        </ol>
+      </section>
+      <section id="uses">
+        <h2>What you could build with it</h2>
+        <p>These are built and running below.</p>
+        <article class="built" id="built-progress">
+          <h3>A long job that reports progress, and can be cancelled</h3>
+          <p class="small muted idea">The idea: Streaming answers: keep the reply port open and send progress on it until done. Cancelling: the client closes its end of the reply port and the service can stop work.</p>
+          <div class="demo"></div>
+          <h4>What you are looking at</h4>
+          <p>The reply port does not have to carry one answer. This page asks a slow service for a job and keeps the reply port open. Progress arrives on it, ten per cent at a time. To cancel, this page says so on the same port and closes it. The service stops work, because nobody is waiting for the result any more.</p>
+          <h4>The code</h4>
+          <pre>const { port1, port2 } = new MessageChannel();
+service.postMessage({ job: "render" }, [port2]);
+port1.onmessage = ({ data }) => data.done ? finish(data) : showProgress(data.percent);
+
+<span class="c">// changed your mind</span>
+port1.postMessage({ cancel: true });
+port1.close();</pre>
+          <h4>Step by step</h4>
+          <p>What each press of Next does in this demo.</p>
+          <ol>
+          <li><strong>Start a long job.</strong> The question goes out with a fresh reply port. Progress comes back on that port.</li>
+          <li><strong>Start a long job.</strong> The first job finished. Start a second one.</li>
+          <li><strong>Cancel it.</strong> This page tells the service to stop, on the reply port, and closes it. The service stops part-way.</li>
+        </ol>
+        </article>
+        <article class="built" id="built-rpc">
+          <h3>Call a function on another origin and await the answer</h3>
+          <p class="small muted idea">The idea: Any request and response protocol over ports. It is what a remote procedure call library does underneath.</p>
+          <div class="demo"></div>
+          <h4>What you are looking at</h4>
+          <p>Twelve lines turn the reply pattern into <code>await call("add", 2, 3)</code>. Each call makes a channel, sends one end with the question, and returns a promise that settles when the other end speaks. Errors come back as rejections. Three calls made at once come back to the right callers, even when the slow one finishes last, because each has its own channel.</p>
+          <h4>The code</h4>
+          <pre>const call = (method, ...args) => new Promise((resolve, reject) => {
+  const { port1, port2 } = new MessageChannel();
+  port1.onmessage = ({ data }) => { "error" in data ? reject(new Error(data.error)) : resolve(data.result); port1.close(); };
+  service.postMessage({ method, args }, [port2]);
+});
+
+await call("add", 2, 3);       <span class="c">// 5, computed on another origin</span></pre>
+          <h4>Step by step</h4>
+          <p>What each press of Next does in this demo.</p>
+          <ol>
+          <li><strong>await call("add", 2, 3).</strong> A question goes out with a reply port. The promise resolves with the answer.</li>
+          <li><strong>await call("divide", 1, 0).</strong> The service refuses. The promise rejects with its message.</li>
+          <li><strong>Three calls at once.</strong> Three questions, three wires. The slow one comes back last and still reaches the right caller.</li>
+        </ol>
+        </article>
+      </section>
+      <section id="try">
+        <h2>Things to try</h2>
+        <ul>
+          <li>Make both clients ask at once. Each gets its own answer on its own cable.</li>
+          <li>Ask several times from one client and watch a new cable appear for each question.</li>
+        </ul>
+      </section>
+      <section id="traps">
+        <h2>Common mistakes</h2>
+        <ul>
+          <li>A reply port that is never answered leaks until the page goes. Give requests a timeout.</li>
+          <li>A channel per request is cheap but it does cost something. For thousands of calls a second, batch.</li>
+        </ul>
+      </section>
+      <section id="related">
+        <h2>Read next</h2>
+        <ul class="cards">
+          <li><a href="/patterns/hello/"><strong>Open a channel and send a message through it</strong><span>new MessageChannel() gives you two entangled ports.</span></a></li>
+          <li><a href="/patterns/functions/"><strong>Pass a function to another origin</strong><span>A function cannot be cloned, but a port can stand in for one.</span></a></li>
+          <li><a href="/patterns/signer/"><strong>Let another origin sign with your key without giving it the key</strong><span>The vault makes a signing key the browser will not let anyone read, itself included.</span></a></li>
+        </ul>
+      </section>
+      </div>
+      <nav class="pager" id="pager" aria-label="More patterns"><a href="/patterns/introduce/"><small>‹ Before this</small>Connect two sites to each other, then remove yourself</a><a class="pager-all" href="/patterns/">All patterns</a><a class="pager-next" href="/patterns/attenuate/"><small>After this ›</small>Give a frame limited access, then revoke it</a></nav>
+    </main>
+    <footer class="small muted" style="padding-block:2rem 4rem">Port Authority, by <a href="https://paul.kinlan.me">Paul Kinlan</a>. <a href="/about/">About this site</a>.</footer>
+  </div>
+  <script type="module" src="/patterns/page.js"></script>
+  <script type="module" src="/refs.js"></script>
+</body>
+</html>

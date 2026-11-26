@@ -1,0 +1,132 @@
+<!doctype html>
+<!-- Written by scripts/patterns.mjs from the modules in /patterns/. Edit those, then run it. -->
+<html lang="en" data-pattern="health-beats">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Send a beat each way on two one-way ports | Port Authority</title>
+  <meta name="description" content="Each side makes a channel, keeps the end it posts into and gives the other side the end to listen on. Then it posts a beat on a timer and never reads its own port. Each side only l">
+  <meta property="og:title" content="Send a beat each way on two one-way ports | Port Authority">
+  <meta property="og:description" content="Each side makes a channel, keeps the end it posts into and gives the other side the end to listen on. Then it posts a beat on a timer and never reads its own port. Each side only l">
+  <meta property="og:type" content="article">
+  <meta name="twitter:card" content="summary">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/base.css">
+  <script src="/nav.js"></script>
+  <link rel="stylesheet" href="/patterns/patterns.css">
+  <link rel="stylesheet" href="/patterns/page.css">
+  <script src="/errors.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <div class="wrap">
+    <header class="site-bar">
+      <a class="wordmark" href="/">Port Authority</a>
+      <nav aria-label="Primary"><a href="/">Experiments</a><a href="/guide/">The guide</a><a href="/patterns/" aria-current="page">Port patterns</a><a href="/comlink/">Comlink today</a><a href="/ai-router/">AI router</a><a href="/lab/">The lab</a><a href="/missing/">What is missing</a><a href="/reading/">Further reading</a><a href="/hub/">Your hub</a></nav>
+    </header>
+    <main id="main">
+      <div class="stack page-head">
+        <p class="crumb"><a href="/patterns/">Port patterns</a> / <span id="group"><a href="/patterns/#health-beats">Knowing the other side is still there</a></span></p>
+        <h1 id="title">Send a beat each way on two one-way ports</h1>
+      </div>
+      <section class="pattern" id="demo"><div class="demo"><noscript><p class="small muted">The demo that runs here needs JavaScript. Everything else on this page reads the same without it.</p></noscript></div></section>
+      <div class="deep" id="deep">
+      <section id="what">
+        <h2>What you are looking at</h2>
+        <p>Each side makes a channel, keeps the end it posts into and gives the other side the end to listen on. Then it posts a beat on a timer and never reads its own port. Each side only listens to the other's. Both sides learn whether the other is there, with half the messages of ping and answer, and neither side's code has to match an answer to a question. Each beat says how often beats will come, and whether the page that sent it is hidden, because a browser slows the timers of a hidden page.</p>
+      </section>
+      <section id="code">
+        <h2>The code</h2>
+        <pre>import { beat, listen } from "/alive.js";
+
+<span class="c">// each side does the same</span>
+const mine = new MessageChannel();
+beat(mine.port1, { every: 1000 });           <span class="c">// post into this end, never read it</span>
+other.postMessage("beats", origin, [mine.port2]);
+<span class="c">// ...and listens on the end the other side sent</span>
+listen(theirs, { onState: (state) => show(state) });</pre>
+        <h3 id="using">Using it</h3>
+        <pre><span class="c">// a slide deck in one window, and its speaker notes in a window the deck opened</span>
+<span class="c">// both windows: take the end the other window sent, and listen on it</span>
+addEventListener("message", (e) =&gt; {
+  if (e.source !== other || e.origin !== origin || e.data !== "beats") return;
+  const theirs = e.ports[0];
+  listen(theirs, { onState: (state) =&gt; show(state) });
+});
+
+<span class="c">// show() in the deck: when the notes have gone, the button that opens them works again</span>
+const show = (state) =&gt; { openNotes.disabled = state === "alive" || state === "late"; };
+
+<span class="c">// show() in the notes window: say what has happened to the deck</span>
+function show(state) {
+  if (state === "alive") notice.textContent = "";
+  if (state === "silent") notice.textContent = "The slides are not answering. They may come back.";
+  if (state === "closed") { notice.textContent = "The slides have closed."; clearInterval(clock); }
+}
+
+<span class="c">// the deck ends the talk and stays open: keep what beat() returns, say goodbye, stop the timer</span>
+const beats = beat(mine.port1, { every: 1000 });
+endTalk.onclick = () =&gt; { beats.bye(); beats.stop(); };</pre>
+        <h3 id="case">Where you would use it</h3>
+        <p>A real case. A slide deck runs in one window and opens its speaker notes in a second window, which shows the next slide and a clock. Each window makes a channel, beats into one end and posts the other end to the other window. If the notes window is closed or its page hangs, the deck's listener reports it and the deck turns its Open notes button back on. If the deck is closed, the notes window stops its clock and says that the slides have closed. A deck that hangs while it is hidden behind another tab is called silent only after some minutes, because <code>listen()</code> allows a hidden window a minute between beats.</p>
+      </section>
+      <section id="how">
+        <h2>How it works</h2>
+        <div class="stack paras">
+          <p>A heartbeat does not need questions. Each side makes a channel, keeps the end it posts into, and gives away the end to listen on. Then it posts <code>{ beat: n, every, hidden }</code> on a timer and never reads its own port. The other side does the same.</p>
+          <p>That halves the messages, and neither side has to match answers to questions. It also means both sides know about each other. With ping and answer only the asker knows. Here the far side can tell that this page has stopped, which the demo shows when this page stops its beats.</p>
+          <p>Each beat says how often beats will come, so the listener needs no setting, and whether the page that sent it is hidden. Browsers slow the timers of hidden pages. Chrome's published rule is that a page hidden for more than five minutes, with a timer chain of five or more and no sound for 30 seconds, may run timers only once a minute. Measured below, it can happen sooner. So <code>listen()</code> allows a minute between beats from a page that said it was hidden. A worker's beats are not slowed this way.</p>
+          <p>A page that is being removed becomes hidden as it goes. An extra beat sent on <code>visibilitychange</code> would tell the listener to wait a minute just as the page disappears, so no beat is sent then.</p>
+        </div>
+      </section>
+      <section id="steps">
+        <h2>Step by step</h2>
+        <p>What each press of Next does in the demo at the top.</p>
+        <ol>
+          <li><strong>Connect.</strong> This page sends a data port and the end of its beat channel. The far side sends back the end of its own.</li>
+          <li><strong>This page: stop sending beats.</strong> This page stops its timer. The far side, which only listens, sees the beats stop and says so in its log.</li>
+          <li><strong>Remove the far side.</strong> The far side is destroyed. Its goodbye arrives on its beat port.</li>
+        </ol>
+      </section>
+      <section id="uses">
+        <h2>What you could build with it</h2>
+        <h3 class="todo">Already running</h3>
+        <ul>
+          <li>A widget that notices the page that embeds it has stopped beating, and stops its own work. <a href="#demo">See the demo at the top of this page.</a></li>
+        </ul>
+      </section>
+      <section id="try">
+        <h2>Things to try</h2>
+        <ul>
+          <li>Stop this page's beats and read the far side's log: late, then silent.</li>
+          <li>Remove the far side. Its goodbye comes on the same one-way port as its beats.</li>
+        </ul>
+      </section>
+      <section id="traps">
+        <h2>Common mistakes</h2>
+        <ul>
+          <li>A hidden page's timers can be held to once a minute in Chrome, and then a crash takes minutes to notice. If that is too slow, beat from a dedicated worker the page starts: it dies with the page and its timers kept full speed in our measurement.</li>
+          <li>Beats say the sender's timer is running. They do not say it can still do work. Pair them with timeouts on work.</li>
+        </ul>
+      </section>
+      <section id="measured">
+        <h2>Measured</h2>
+        <p class="measured">Chromium 153, real hidden tabs: a tab on its own, beating every second to a shared worker, dropped to one beat a minute between one and two minutes after it was hidden, and the listener's one-minute allowance meant it was never wrongly called silent. A tab opened by a visible tab of the same site kept a one-second pace for about six minutes before dropping to once a minute. Beats from a worker that page had started kept coming every second throughout. Answers to pings from that page slowed as well. A listener that stops hearing beats sent every 0.5 s marks the sender silent after 1.5 to 1.8 s. Other browsers are being filled in from <a href="/lab/results/">the lab's results</a>.</p>
+      </section>
+      <section id="related">
+        <h2>Read next</h2>
+        <ul class="cards">
+          <li><a href="/patterns/health-pair/"><strong>Send a second port with the first, only for health checks</strong><span>A port does not tell you when its other end has gone.</span></a></li>
+          <li><a href="/patterns/oneway/"><strong>Join two sites with a port that carries messages one way only</strong><span>A MessagePort always works in both directions.</span></a></li>
+          <li><a href="/patterns/alive-signals/"><strong>Which signal notices which ending, and how quickly</strong><span>Every way of knowing the far side has gone, side by side, measured in your browser.</span></a></li>
+        </ul>
+      </section>
+      </div>
+      <nav class="pager" id="pager" aria-label="More patterns"><a href="/patterns/health-back/"><small>‹ Before this</small>Let the far side make the health channel and send a port back</a><a class="pager-all" href="/patterns/">All patterns</a><a class="pager-next" href="/patterns/alive-signals/"><small>After this ›</small>Which signal notices which ending, and how quickly</a></nav>
+    </main>
+    <footer class="small muted" style="padding-block:2rem 4rem">Port Authority, by <a href="https://paul.kinlan.me">Paul Kinlan</a>. <a href="/about/">About this site</a>.</footer>
+  </div>
+  <script type="module" src="/patterns/page.js"></script>
+  <script type="module" src="/refs.js"></script>
+</body>
+</html>

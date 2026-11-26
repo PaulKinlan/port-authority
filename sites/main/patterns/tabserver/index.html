@@ -1,0 +1,169 @@
+<!doctype html>
+<!-- Written by scripts/patterns.mjs from the modules in /patterns/. Edit those, then run it. -->
+<html lang="en" data-pattern="tabserver">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Serve pages to other tabs from this tab | Port Authority</title>
+  <meta name="description" content="A Service Worker can answer a fetch any way it likes, including by asking someone else. This page hands the worker a port. Every request under /patterns/served/ is sent up that por">
+  <meta property="og:title" content="Serve pages to other tabs from this tab | Port Authority">
+  <meta property="og:description" content="A Service Worker can answer a fetch any way it likes, including by asking someone else. This page hands the worker a port. Every request under /patterns/served/ is sent up that por">
+  <meta property="og:type" content="article">
+  <meta name="twitter:card" content="summary">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/base.css">
+  <script src="/nav.js"></script>
+  <link rel="stylesheet" href="/patterns/patterns.css">
+  <link rel="stylesheet" href="/patterns/page.css">
+  <script src="/errors.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <div class="wrap">
+    <header class="site-bar">
+      <a class="wordmark" href="/">Port Authority</a>
+      <nav aria-label="Primary"><a href="/">Experiments</a><a href="/guide/">The guide</a><a href="/patterns/" aria-current="page">Port patterns</a><a href="/comlink/">Comlink today</a><a href="/ai-router/">AI router</a><a href="/lab/">The lab</a><a href="/missing/">What is missing</a><a href="/reading/">Further reading</a><a href="/hub/">Your hub</a></nav>
+    </header>
+    <main id="main">
+      <div class="stack page-head">
+        <p class="crumb"><a href="/patterns/">Port patterns</a> / <span id="group"><a href="/patterns/#tabserver">More things a port can carry</a></span></p>
+        <h1 id="title">Serve pages to other tabs from this tab</h1>
+      </div>
+      <section class="pattern" id="demo"><div class="demo"><noscript><p class="small muted">The demo that runs here needs JavaScript. Everything else on this page reads the same without it.</p></noscript></div></section>
+      <div class="deep" id="deep">
+      <section id="what">
+        <h2>What you are looking at</h2>
+        <p>A Service Worker can answer a fetch any way it likes, including by asking someone else. This page hands the worker a port. Every request under <code>/patterns/served/</code> is sent up that port, and whatever you type on the left is the response. The page on the right is a real navigation to a real URL, and so is the new tab.</p>
+      </section>
+      <section id="code">
+        <h2>The code</h2>
+        <pre><span class="c">// Service Worker</span>
+onfetch = (event) => event.respondWith(new Promise((resolve) => {
+  const { port1, port2 } = new MessageChannel();
+  port1.onmessage = (e) => resolve(new Response(e.data.body, { headers: e.data.headers }));
+  tabPort.postMessage({ url: event.request.url }, [port2]);
+}));</pre>
+        <h3 id="using">Using it</h3>
+        <pre><span class="c">// a site editor in the browser. The files being edited live in this tab, in a Map called files</span>
+<span class="c">// the editor tab: offer() gives the worker a port, and answers what comes up it</span>
+const offer = () =&gt; {
+  const channel = new MessageChannel();
+  channel.port1.onmessage = (event) =&gt; {              <span class="c">// one request, and its reply port</span>
+    const path = new URL(event.data.url).pathname;
+    const body = files.get(path) || "No such file in the editor";
+    event.ports[0].postMessage({ body, headers: { "content-type": typeOf(path) } });
+  };
+  registration.active.postMessage({ serve: true }, [channel.port2]);
+};
+offer();
+
+<span class="c">// the Service Worker: keep that port as tabPort</span>
+onmessage = (event) =&gt; { if (event.data.serve) tabPort = event.ports[0]; };
+
+<span class="c">// the person presses Preview. This is a real navigation, answered by the editor tab</span>
+previewButton.onclick = () =&gt; window.open("/preview/index.html");
+
+<span class="c">// The browser stops an idle Service Worker, and tabPort goes with it. When the worker</span>
+<span class="c">// wakes it posts "need-port" to its open tabs, and the editor hands over a new port.</span>
+navigator.serviceWorker.onmessage = (event) =&gt; { if (event.data === "need-port") offer(); };</pre>
+        <h3 id="case">Where you would use it</h3>
+        <p>A real case. A site editor runs in the browser and keeps the files being edited in memory, in one tab. The person presses Preview, and a second tab opens at <code>/preview/index.html</code>. The Service Worker holds no files, so it sends each URL up <code>tabPort</code> and the editor tab answers with the text as it stands, saved or not. A style sheet or a link in the preview is one more request, answered the same way. The moment to plan for is a quiet spell: the browser stops the worker, <code>tabPort</code> is lost, and the editor has to hand over a new port before the next request can be answered.</p>
+      </section>
+      <section id="how">
+        <h2>How it works</h2>
+        <div class="stack paras">
+          <p>A service worker sees every request in its scope and may answer however it likes. Here it answers by asking: it posts the URL down a port to a tab, with a reply port, and builds the response from what comes back.</p>
+          <p>The tab is now the origin server for those URLs. Other tabs, frames and even image tags get real responses at real addresses, written by JavaScript in a page you can see.</p>
+          <p>Service workers are stopped when idle and lose their variables, the port included. When this one wakes without a port it asks every open page for a new one, and waits briefly.</p>
+        </div>
+      </section>
+      <section id="steps">
+        <h2>Step by step</h2>
+        <p>What each press of Next does in the demo at the top.</p>
+        <ol>
+          <li><strong>Connect this tab to the Service Worker.</strong> This page registers the Service Worker and hands it a port so fetch requests can be forwarded here.</li>
+          <li><strong>Load the served page.</strong> The box on the right navigates to a real URL. The Service Worker forwards the request up the port to this tab, and this tab writes the response.</li>
+        </ol>
+      </section>
+      <section id="uses">
+        <h2>What you could build with it</h2>
+        <p>These are built and running below.</p>
+        <article class="built" id="built-files">
+          <h3>A website served out of this origin's private file system</h3>
+          <p class="small muted idea">The idea: Serving files from the Origin Private File System or from memory.</p>
+          <div class="demo"></div>
+          <h4>What you are looking at</h4>
+          <p>This tab writes three files into the Origin Private File System: a page, a stylesheet and a picture. Then it serves them. The box on the right is a real navigation to a real URL. The service worker passes each request up a port to this tab, the tab opens the file, and the <code>File</code> itself goes back down the port as the response. No server has these files. Rewrite the stylesheet and reload, and the site changes.</p>
+          <h4>The code</h4>
+          <pre><span class="c">// this tab, for each request the service worker passes up</span>
+port.onmessage = async ({ data, ports: [reply] }) => {
+  const name = new URL(data.url).pathname.split("/").pop() || "index.html";
+  const file = await (await root.getFileHandle(name)).getFile();
+  reply.postMessage({ body: file, headers: { "content-type": typeFor(name) } });
+};</pre>
+          <h4>Step by step</h4>
+          <p>What each press of Next does in this demo.</p>
+          <ol>
+          <li><strong>Write three files to the private file system.</strong> A page, a stylesheet and a picture, written by this tab into storage only this origin can see.</li>
+          <li><strong>Load the site from them.</strong> Three requests reach the service worker. Each is answered by this tab, from a file.</li>
+          <li><strong>Rewrite the stylesheet and reload.</strong> This tab overwrites one file. The site is loaded again and looks different.</li>
+        </ol>
+        </article>
+        <article class="built" id="built-notes">
+          <h3>One tab holds the data, and the others fetch it with fetch()</h3>
+          <p class="small muted idea">The idea: Local-first apps where a tab holds the data and others fetch it.</p>
+          <div class="demo"></div>
+          <h4>What you are looking at</h4>
+          <p>The notes exist in one place: an array in this tab's memory. The reader on the right is an ordinary page that calls <code>fetch("notes.json")</code>, as it would against any server. The request goes to the service worker, up a port to this tab, and the answer comes back as JSON. The reader does not know its server is a tab. Add a note here, fetch again there, and it has arrived.</p>
+          <h4>The code</h4>
+          <pre><span class="c">// the reader: nothing unusual</span>
+const notes = await (await fetch("notes.json")).json();
+
+<span class="c">// this tab, which is the server</span>
+port.onmessage = ({ data, ports: [reply] }) =>
+  reply.postMessage({ body: JSON.stringify(notes), headers: { "content-type": "application/json" } });</pre>
+          <h4>Step by step</h4>
+          <p>What each press of Next does in this demo.</p>
+          <ol>
+          <li><strong>Open a reader.</strong> A real page loads, and fetches the notes. This tab answers.</li>
+          <li><strong>Add a note in this tab.</strong> The note is added to an array in this tab, and nowhere else.</li>
+          <li><strong>Reader: fetch again.</strong> The reader asks again and gets the new note.</li>
+        </ol>
+        </article>
+        <h3 class="todo">Already running</h3>
+        <ul>
+          <li>Previewing a site that is being edited in the browser, with working relative links. <a href="#demo">See the demo at the top of this page.</a></li>
+        </ul>
+      </section>
+      <section id="try">
+        <h2>Things to try</h2>
+        <ul>
+          <li>Edit the HTML on the left and load the served page again.</li>
+          <li>Open the served page in a new tab, with any path you like. The tab on the left sees the path and answers.</li>
+        </ul>
+      </section>
+      <section id="traps">
+        <h2>Common mistakes</h2>
+        <ul>
+          <li>Requests fail once the serving tab closes.</li>
+          <li>A sandboxed frame with no origin is not controlled by your service worker.</li>
+          <li>What you serve runs as your origin.</li>
+        </ul>
+      </section>
+      <section id="related">
+        <h2>Read next</h2>
+        <ul class="cards">
+          <li><a href="/patterns/mounted/"><strong>Mount another site at a path on yours</strong><span>A Service Worker can answer a request by asking a port, and the other end of that port can be on another origin.</span></a></li>
+          <li><a href="/patterns/exchange/"><strong>Use a SharedWorker to connect tabs to each other</strong><span>Every tab on an origin can reach the same SharedWorker.</span></a></li>
+          <li><a href="/patterns/socket/"><strong>One connection to the server, shared by every tab</strong><span>Ten tabs of the same site usually means ten connections to the server.</span></a></li>
+        </ul>
+      </section>
+      </div>
+      <nav class="pager" id="pager" aria-label="More patterns"><a href="/patterns/tearoff/"><small>‹ Before this</small>Tear a live widget off into its own window</a><a class="pager-all" href="/patterns/">All patterns</a><a class="pager-next" href="/patterns/stream-intro/"><small>After this ›</small>A forwarded stream stops when the page that passed it on closes. A port keeps working.</a></nav>
+    </main>
+    <footer class="small muted" style="padding-block:2rem 4rem">Port Authority, by <a href="https://paul.kinlan.me">Paul Kinlan</a>. <a href="/about/">About this site</a>.</footer>
+  </div>
+  <script type="module" src="/patterns/page.js"></script>
+  <script type="module" src="/refs.js"></script>
+</body>
+</html>

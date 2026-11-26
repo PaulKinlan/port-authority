@@ -1,0 +1,170 @@
+<!doctype html>
+<!-- Written by scripts/patterns.mjs from the modules in /patterns/. Edit those, then run it. -->
+<html lang="en" data-pattern="lend">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lend someone a network connection you opened | Port Authority</title>
+  <meta name="description" content="The widget on the right is locked down so that it cannot reach the network at all. This page opens a WebSocket to the server and hands the widget the two streams that are the conne">
+  <meta property="og:title" content="Lend someone a network connection you opened | Port Authority">
+  <meta property="og:description" content="The widget on the right is locked down so that it cannot reach the network at all. This page opens a WebSocket to the server and hands the widget the two streams that are the conne">
+  <meta property="og:type" content="article">
+  <meta name="twitter:card" content="summary">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/base.css">
+  <script src="/nav.js"></script>
+  <link rel="stylesheet" href="/patterns/patterns.css">
+  <link rel="stylesheet" href="/patterns/page.css">
+  <script src="/errors.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <div class="wrap">
+    <header class="site-bar">
+      <a class="wordmark" href="/">Port Authority</a>
+      <nav aria-label="Primary"><a href="/">Experiments</a><a href="/guide/">The guide</a><a href="/patterns/" aria-current="page">Port patterns</a><a href="/comlink/">Comlink today</a><a href="/ai-router/">AI router</a><a href="/lab/">The lab</a><a href="/missing/">What is missing</a><a href="/reading/">Further reading</a><a href="/hub/">Your hub</a></nav>
+    </header>
+    <main id="main">
+      <div class="stack page-head">
+        <p class="crumb"><a href="/patterns/">Port patterns</a> / <span id="group"><a href="/patterns/#lend">Between real sites</a></span></p>
+        <h1 id="title">Lend someone a network connection you opened</h1>
+      </div>
+      <section class="pattern" id="demo"><div class="demo"><noscript><p class="small muted">The demo that runs here needs JavaScript. Everything else on this page reads the same without it.</p></noscript></div></section>
+      <div class="deep" id="deep">
+      <section id="what">
+        <h2>What you are looking at</h2>
+        <p>The widget on the right is locked down so that it cannot reach the network at all. This page opens a WebSocket to the server and hands the widget the two streams that are the connection: one to write to, one to read from. The widget is now talking to the server. It never learns the address, it cannot open a second connection, and it keeps talking only until this page closes the socket. Hand over just the readable stream and it becomes a tap that can listen and not speak.</p>
+      </section>
+      <section id="code">
+        <h2>The code</h2>
+        <pre>const socket = new WebSocketStream(url);        <span class="c">// keep it: socket.close() ends the loan</span>
+const { readable, writable } = await socket.opened;
+widget.postMessage({ readable, writable }, "*", [readable, writable]);
+
+<span class="c">// the widget, which has no network of its own</span>
+await writable.getWriter().write("hello");
+const { value } = await readable.getReader().read();   <span class="c">// the server's answer</span></pre>
+        <h3 id="using">Using it</h3>
+        <pre><span class="c">// a team chat app, and a poll plug-in from another company in a sandboxed frame</span>
+<span class="c">// the frame's policy is default-src 'none', so the plug-in cannot open a connection itself</span>
+const socket = new WebSocketStream(url);          <span class="c">// url holds the person's session token</span>
+const { readable, writable } = await socket.opened;
+widget.postMessage({ readable, writable }, "*", [readable, writable]);
+<span class="c">// where WebSocketStream is missing, wrap a WebSocket in two streams and send those</span>
+
+<span class="c">// the plug-in: send a vote, then show the results for as long as the line is open</span>
+const writer = writable.getWriter(), reader = readable.getReader();
+await writer.write(JSON.stringify({ vote: "Tuesday" }));
+for (;;) {
+  const { value, done } = await reader.read().catch(() =&gt; ({ done: true }));
+  if (done) break;                                <span class="c">// the chat app closed the socket</span>
+  show(JSON.parse(value));
+}
+
+<span class="c">// the chat app: the person removes the plug-in, or leaves the room</span>
+removeButton.onclick = () =&gt; socket.close();
+<span class="c">// The plug-in's read ends, and it has no other connection.</span></pre>
+        <h3 id="case">Where you would use it</h3>
+        <p>A real case. A team chat app lets a room add a poll plug-in written by another company. The plug-in runs in a sandboxed frame whose content security policy is <code>default-src 'none'</code>, so it cannot open a connection of its own. The chat app opens the WebSocket to the room, with the person's session token in the address, and hands the plug-in the two streams. The plug-in sends votes and reads results, and it is never given the address or the token. When the person removes the plug-in or leaves the room, the chat app closes the socket and the plug-in's streams end.</p>
+      </section>
+      <section id="how">
+        <h2>How it works</h2>
+        <div class="stack paras">
+          <p>A WebSocket seen as streams is a readable for what the server says and a writable for what you say. <code>WebSocketStream</code> gives exactly that pair, and both can be transferred.</p>
+          <p>The widget's content security policy forbids all network access. It is handed the two streams and is now in conversation with the server. It never learns the address and cannot open a second connection.</p>
+          <p>The page kept the socket object. Closing it ends the widget's access at once. Hand over only the readable and the widget can listen and not speak.</p>
+        </div>
+      </section>
+      <section id="steps">
+        <h2>Step by step</h2>
+        <p>What each press of Next does in the demo at the top.</p>
+        <ol>
+          <li><strong>Widget: try to connect by itself.</strong> The widget tries to reach the server by itself. Its rules forbid any network access.</li>
+          <li><strong>Open a connection to the server.</strong> This page opens a WebSocket.</li>
+          <li><strong>Lend the widget the connection.</strong> The two streams of that connection are handed to the widget.</li>
+          <li><strong>Widget: say hello to the server.</strong> The widget writes into the connection, and the server's answer comes back to it. It still has no network of its own.</li>
+          <li><strong>Close the connection.</strong> This page closes the socket, and the widget is cut off.</li>
+        </ol>
+      </section>
+      <section id="uses">
+        <h2>What you could build with it</h2>
+        <p>These are built and running below.</p>
+        <article class="built" id="built-tap">
+          <h3>Give a logger the incoming half of a connection only</h3>
+          <p class="small muted idea">The idea: Read-only taps for logging or debugging.</p>
+          <div class="demo"></div>
+          <h4>What you are looking at</h4>
+          <p>A WebSocket seen as streams has two halves. This page keeps the half that speaks and gives a logger only the half that listens. The logger has no network access of its own. It records everything the server says, and it has no way to send the server anything, because it was never given anything to write into.</p>
+          <h4>The code</h4>
+          <pre>const { readable, writable } = await new WebSocketStream(url).opened;
+logger.postMessage({ readable }, "*", [readable]);   <span class="c">// listening half only</span>
+const writer = writable.getWriter();                 <span class="c">// this page keeps the voice</span>
+writer.write("hello");</pre>
+          <h4>Step by step</h4>
+          <p>What each press of Next does in this demo.</p>
+          <ol>
+          <li><strong>Open a connection.</strong> This page opens a WebSocket to the server.</li>
+          <li><strong>Give the logger the listening half.</strong> Only the readable stream is handed over.</li>
+          <li><strong>This page: say something.</strong> This page speaks. The server's answer goes to the logger.</li>
+          <li><strong>Logger: try to speak.</strong> The logger has nothing to write into.</li>
+        </ol>
+        </article>
+        <article class="built" id="built-delegate">
+          <h3>Sign in on the page, then hand the open session to a worker</h3>
+          <p class="small muted idea">The idea: A page that authenticates and then delegates the open session to a worker.</p>
+          <div class="demo"></div>
+          <h4>What you are looking at</h4>
+          <p>The page signs in to an account service on another origin and gets back a port: the open session. The page does not need it. Its worker does, to keep the balance fresh in the background. So the page posts the port to the worker. The session is not copied and nobody signs in twice. The worker now holds it, and the page's own variable holds a dead port.</p>
+          <h4>The code</h4>
+          <pre>const session = await signIn(password);         <span class="c">// a port to the account service</span>
+worker.postMessage({ session }, [session]);     <span class="c">// the worker has it now</span>
+session.postMessage({ ask: "balance" });        <span class="c">// goes nowhere: this end has left</span></pre>
+          <h4>Step by step</h4>
+          <p>What each press of Next does in this demo.</p>
+          <ol>
+          <li><strong>Sign in.</strong> The page sends a password and gets a session back, as a port.</li>
+          <li><strong>Hand the session to my worker.</strong> The port moves to the worker, which starts asking for the balance.</li>
+          <li><strong>Page: try to use the session.</strong> The page still has its variable. The port behind it has gone.</li>
+        </ol>
+        </article>
+        <h3 class="todo">Already running</h3>
+        <ul>
+          <li>Sandboxed plug-ins that need one specific connection and no general network. <a href="#demo">See the demo at the top of this page.</a></li>
+        </ul>
+      </section>
+      <section id="try">
+        <h2>Things to try</h2>
+        <ul>
+          <li>Have the widget try to connect by itself first, and see it blocked.</li>
+          <li>Lend the connection, have it say hello, then close the socket.</li>
+        </ul>
+      </section>
+      <section id="traps">
+        <h2>Common mistakes</h2>
+        <ul>
+          <li>Where <code>WebSocketStream</code> is missing the demo wraps a WebSocket in streams, and then every message passes through the page.</li>
+          <li>The same idea should hold for WebTransport streams. This site has not measured that yet.</li>
+        </ul>
+      </section>
+      <section id="measured">
+        <h2>Measured</h2>
+        <p class="measured">Chromium 157: a frame with <code>default-src 'none'</code> exchanges messages with the server over streams it was handed. Other browsers are being filled in from <a href="/lab/results/">the lab's results</a>.</p>
+      </section>
+      <section id="related">
+        <h2>Read next</h2>
+        <ul class="cards">
+          <li><a href="/patterns/halves/"><strong>Send only the readable side of a stream</strong><span>A stream has a direction, and you can hand over one direction without the other.</span></a></li>
+          <li><a href="/patterns/socket/"><strong>One connection to the server, shared by every tab</strong><span>Ten tabs of the same site usually means ten connections to the server.</span></a></li>
+          <li><a href="/patterns/roundtrip/"><strong>Pipe your data through another site, and get it back</strong><span>A transform has two ends, and both can be given away.</span></a></li>
+          <li><a href="/patterns/attenuate/"><strong>Give a frame limited access, then revoke it</strong><span>Holding a port is the permission to use it.</span></a></li>
+        </ul>
+      </section>
+      </div>
+      <nav class="pager" id="pager" aria-label="More patterns"><a href="/patterns/roundtrip/"><small>‹ Before this</small>Pipe your data through another site, and get it back</a><a class="pager-all" href="/patterns/">All patterns</a><a class="pager-next" href="/patterns/oneway/"><small>After this ›</small>Join two sites with a port that carries messages one way only</a></nav>
+    </main>
+    <footer class="small muted" style="padding-block:2rem 4rem">Port Authority, by <a href="https://paul.kinlan.me">Paul Kinlan</a>. <a href="/about/">About this site</a>.</footer>
+  </div>
+  <script type="module" src="/patterns/page.js"></script>
+  <script type="module" src="/refs.js"></script>
+</body>
+</html>

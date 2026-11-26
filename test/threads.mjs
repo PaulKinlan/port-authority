@@ -3,7 +3,7 @@
 import { createRequire } from "node:module";
 const { chromium } = createRequire(import.meta.url)("playwright");
 const LIVE = process.env.LIVE;
-const root = LIVE ? process.env.LIVE_MAIN || `https://portauthority.${LIVE}` : "http://hub.localhost:8787";
+const root = LIVE ? process.env.LIVE_MAIN || `https://portauthority.${LIVE}` : `http://hub.localhost:${process.env.PORT || 8787}`;
 const shots = process.argv[2];
 const browser = await chromium.launch(process.env.HTTPS_PROXY && LIVE ? { proxy: { server: process.env.HTTPS_PROXY } } : {});
 const ctx = await browser.newContext({ viewport: { width: 1200, height: 900 } });
@@ -36,7 +36,8 @@ await click("#filter", "Connect the filter"); await wait(200);
 await click("#filter", "Start the video"); await wait(2500);
 let note = await boxText("#filter", "out");
 const first = Number(note.match(/(\d+) frames back/)?.[1] || 0);
-check("filter: frames come back from another origin", first > 10 && /empty-handed/.test(note), note.replace(/\n/g, " "));
+// A VideoFrame leaves the page empty-handed. Where the browser will not hand the filter a VideoFrame, the page moves an ImageBitmap, and says so.
+check("filter: frames come back from another origin", first > 10 && /empty-handed|sent as ImageBitmaps/.test(note), note.replace(/\n/g, " "));
 const a = (await page.locator('#filter .box[data-name="out"] canvas').screenshot()).toString("base64");
 await click("#filter", "Ask for another effect"); await wait(800);
 const b = (await page.locator('#filter .box[data-name="out"] canvas').screenshot()).toString("base64");

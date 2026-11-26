@@ -1,0 +1,210 @@
+<!doctype html>
+<!-- Written by scripts/patterns.mjs from the modules in /patterns/. Edit those, then run it. -->
+<html lang="en" data-pattern="filter">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Run live video through a filter on another origin | Port Authority</title>
+  <meta name="description" content="Video can leave your page one frame at a time and come back changed. The picture on the left is drawn by this page, and it is your camera if you turn that on. The filter lives on a">
+  <meta property="og:title" content="Run live video through a filter on another origin | Port Authority">
+  <meta property="og:description" content="Video can leave your page one frame at a time and come back changed. The picture on the left is drawn by this page, and it is your camera if you turn that on. The filter lives on a">
+  <meta property="og:type" content="article">
+  <meta name="twitter:card" content="summary">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/base.css">
+  <script src="/nav.js"></script>
+  <link rel="stylesheet" href="/patterns/patterns.css">
+  <link rel="stylesheet" href="/patterns/page.css">
+  <script src="/errors.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <div class="wrap">
+    <header class="site-bar">
+      <a class="wordmark" href="/">Port Authority</a>
+      <nav aria-label="Primary"><a href="/">Experiments</a><a href="/guide/">The guide</a><a href="/patterns/" aria-current="page">Port patterns</a><a href="/comlink/">Comlink today</a><a href="/ai-router/">AI router</a><a href="/lab/">The lab</a><a href="/missing/">What is missing</a><a href="/reading/">Further reading</a><a href="/hub/">Your hub</a></nav>
+    </header>
+    <main id="main">
+      <div class="stack page-head">
+        <p class="crumb"><a href="/patterns/">Port patterns</a> / <span id="group"><a href="/patterns/#filter">Across threads</a></span></p>
+        <h1 id="title">Run live video through a filter on another origin</h1>
+      </div>
+      <section class="pattern" id="demo"><div class="demo"><noscript><p class="small muted">The demo that runs here needs JavaScript. Everything else on this page reads the same without it.</p></noscript></div></section>
+      <div class="deep" id="deep">
+      <section id="what">
+        <h2>What you are looking at</h2>
+        <p>Video can leave your page one frame at a time and come back changed. The picture on the left is drawn by this page, and it is your camera if you turn that on. The filter lives on another origin, in a sandbox. It has no camera, cannot see this page, and holds each frame only until it sends it on. Frames are moved, not copied: after sending, this page's own handle to the frame is empty. A <code>VideoFrame</code> is the natural thing to move. A browser hands one to a worker, or to a frame of your own site. Chrome will not hand one to another process, and a sandboxed frame or a frame from another site now runs in one. So the page tries a <code>VideoFrame</code>, and if the filter cannot rebuild it, it moves an <code>ImageBitmap</code> from then on, which does cross. The note under the right-hand picture says which was used. It is a way to build video plug-ins that get pixels and nothing else.</p>
+      </section>
+      <section id="code">
+        <h2>The code</h2>
+        <pre>const frame = new VideoFrame(source, { timestamp });
+port.postMessage({ frame }, [frame]);          <span class="c">// frame is now closed here</span>
+
+<span class="c">// the filter, on its own origin</span>
+port.onmessage = ({ data }) => {
+  ctx.filter = "invert(1)"; ctx.drawImage(data.frame, 0, 0); data.frame.close();
+  const out = new VideoFrame(canvas, { timestamp: data.frame.timestamp });
+  port.postMessage({ frame: out }, [out]);
+};
+<span class="c">// a frame the browser could not rebuild here arrives as this, with nothing in it</span>
+port.onmessageerror = () => port.postMessage({ unreadable: true });
+
+<span class="c">// the page again: an ImageBitmap crosses where a VideoFrame does not</span>
+const bitmap = await createImageBitmap(source);
+port.postMessage({ bitmap }, [bitmap]);</pre>
+        <h3 id="using">Using it</h3>
+        <pre><span class="c">// a video call page, and a background blur plug-in from another company in a sandboxed frame</span>
+<span class="c">// sendNext runs for each camera picture. source is that picture, and carry is what it travels as</span>
+let carry = "VideoFrame", waiting = false;
+const sendNext = async (timestamp) =&gt; {
+  if (waiting) return;                          <span class="c">// one picture out at a time</span>
+  waiting = true;
+  if (carry === "VideoFrame") {
+    const frame = new VideoFrame(source, { timestamp });
+    port.postMessage({ frame }, [frame]);
+  } else {
+    const bitmap = await createImageBitmap(source);
+    port.postMessage({ bitmap }, [bitmap]);
+  }
+};
+port.onmessage = ({ data }) =&gt; {
+  waiting = false;
+  if (data.unreadable) { carry = "ImageBitmap"; return; }   <span class="c">// that picture is lost. Bitmaps from now on</span>
+  const picture = data.frame || data.bitmap;
+  output.drawImage(picture, 0, 0);              <span class="c">// the blurred picture, which the call sends out</span>
+  picture.close();
+};
+<span class="c">// If the plug-in stops answering, waiting stays true and the picture stops. Use a timeout to notice.</span></pre>
+        <h3 id="case">Where you would use it</h3>
+        <p>A real case. A video call page offers background blur as a plug-in made by another company. The plug-in runs in a sandboxed frame, so it has no camera and cannot read the page. The page hands it one camera picture at a time down a port, and draws what comes back on the canvas that the call sends out. In Chrome 159 the first picture, a <code>VideoFrame</code>, arrives unreadable in that frame, and the plug-in answers <code>{ unreadable: true }</code>. The page then sends each picture as an <code>ImageBitmap</code>, and the blur works from the next picture on.</p>
+      </section>
+      <section id="how">
+        <h2>How it works</h2>
+        <div class="stack paras">
+          <p>A <code>VideoFrame</code> is a handle to decoded pixels, often on the GPU. It is transferable, so one frame can be handed to another context without copying the picture.</p>
+          <p>The page makes a frame from its canvas, transfers it to the filter, and is left holding an empty handle. The filter draws the frame through an effect, closes it, makes a new frame from the result and transfers that back.</p>
+          <p>How far a <code>VideoFrame</code> can go depends on the browser. Chrome hands one to a worker and to a frame of the same site, which run in the page's own process. It will not rebuild one in another process, and a sandboxed frame, a frame from another site, a shared worker and a service worker all run in one. The sender's <code>postMessage()</code> does not throw. The receiver gets a <code>messageerror</code> event with nothing in it. So the demo listens for that, and when it comes it moves an <code>ImageBitmap</code> instead, which crosses to all of those places. The picture arrives the same either way.</p>
+          <p>The picture in the demo is drawn by the page on a canvas, sixty times a second, and each frame is made from that canvas. It is not a video file. Turn the camera on and the canvas is filled from the camera instead. Nothing else changes: the filter still has no camera and no permission to use one. It is handed frames.</p>
+          <p>One frame is in flight at a time. The next leaves when the last returns, so a slow filter lowers the frame rate and never builds a queue.</p>
+        </div>
+      </section>
+      <section id="steps">
+        <h2>Step by step</h2>
+        <p>What each press of Next does in the demo at the top.</p>
+        <ol>
+          <li><strong>Connect the filter.</strong> This page opens a channel to the filter frame on another origin.</li>
+          <li><strong>Start the video.</strong> Frames leave this page one at a time, pass through the filter, and come back changed. The note under the right-hand picture says what each frame was sent as.</li>
+          <li><strong>Ask for another effect.</strong> This page asks the filter to switch effects over the port.</li>
+          <li><strong>Remove the filter.</strong> The filter frame is destroyed and the output stops with it.</li>
+        </ol>
+      </section>
+      <section id="uses">
+        <h2>What you could build with it</h2>
+        <p>These are built and running below.</p>
+        <article class="built" id="built-watermark">
+          <h3>A captions and watermark plug-in that only ever sees pixels</h3>
+          <p class="small muted idea">The idea: Background blur, captions or watermarking supplied as a plug-in that gets pixels and nothing else.</p>
+          <div class="demo"></div>
+          <h4>What you are looking at</h4>
+          <p>The plug-in is a frame on another origin. Each frame of this page's video is handed to it, it draws a caption and a watermark on top, and hands the frame back. It has no access to the camera, the page or the network path the video came from. A frame goes as a <code>VideoFrame</code> where the browser will hand one to the plug-in, and as an <code>ImageBitmap</code> where it will not. Chrome will not hand a <code>VideoFrame</code> to another process, which is where a frame like this one runs.</p>
+          <h4>The code</h4>
+          <pre><span class="c">// the plug-in</span>
+port.onmessage = ({ data }) => {
+  ctx.drawImage(data.frame, 0, 0); data.frame.close();
+  ctx.fillText(caption, 12, height - 14);
+  const out = new VideoFrame(canvas, { timestamp: data.frame.timestamp });
+  port.postMessage({ frame: out }, [out]);
+};</pre>
+          <h4>Step by step</h4>
+          <p>What each press of Next does in this demo.</p>
+          <ol>
+          <li><strong>Start the video.</strong> Frames go to the plug-in one at a time and come back with a caption and a watermark.</li>
+          <li><strong>Change the caption.</strong> This page sends new caption text. The next frame comes back with it.</li>
+        </ol>
+        </article>
+        <article class="built" id="built-recorder">
+          <h3>A recorder that gets its own copy of a stream, and cannot touch the original</h3>
+          <p class="small muted idea">The idea: Inspecting or recording a stream in a separate context.</p>
+          <div class="demo"></div>
+          <h4>What you are looking at</h4>
+          <p>Orders flow from this page to a kitchen display on another origin. An auditor wants a record of every one. The page splits the stream in two with <code>tee()</code> and gives the second branch to a recorder on a third origin. The recorder sees every order and keeps them. It has no way to change, delay or drop what the kitchen receives, because it holds a different stream.</p>
+          <h4>The code</h4>
+          <pre>const [forKitchen, forRecorder] = orders.tee();
+kitchen.postMessage({ orders: forKitchen }, "*", [forKitchen]);
+recorder.postMessage({ orders: forRecorder }, "*", [forRecorder]);</pre>
+          <h4>Step by step</h4>
+          <p>What each press of Next does in this demo.</p>
+          <ol>
+          <li><strong>Attach the kitchen and a recorder.</strong> The order stream is split, and each origin is handed one branch.</li>
+          <li><strong>Send an order.</strong> One order is written once. Both branches carry it.</li>
+          <li><strong>Send an order.</strong> And another.</li>
+          <li><strong>Recorder: say what you hold.</strong> The recorder reports what it kept.</li>
+        </ol>
+        </article>
+        <article class="built" id="built-effect">
+          <h3>A blur that runs in a worker, so the page does not stop</h3>
+          <p class="small muted idea">The idea: Moving effects off the main thread.</p>
+          <div class="demo"></div>
+          <h4>What you are looking at</h4>
+          <p>The picture is 1600 by 900, which is 1.4 million pixels. Blurring it takes a noticeable part of a second. Run on the page, the blur holds the main thread for that long: the marker under "Main thread" stops moving and nothing on the page can respond. Run in a worker, the same function gets the same pixels and the marker keeps moving. The pixels are not copied either way. Their buffer is transferred to the worker and transferred back, so for that time the page does not have them. The number shown is the longest gap between two frames of the page while the blur ran.</p>
+          <h4>The code</h4>
+          <pre>import { blur } from "/patterns/effect.js";
+const image = ctx.getImageData(0, 0, width, height);
+
+<span class="c">// on the page: nothing else happens until this returns</span>
+blur(image.data, width, height);
+ctx.putImageData(image, 0, 0);
+
+<span class="c">// in a worker: the buffer leaves, the page carries on, the buffer comes back</span>
+worker.postMessage({ buffer: image.data.buffer, width, height }, [image.data.buffer]);
+worker.onmessage = ({ data }) =>
+  ctx.putImageData(new ImageData(new Uint8ClampedArray(data.buffer), width, height), 0, 0);
+
+<span class="c">// the worker</span>
+onmessage = ({ data }) => {
+  const pixels = blur(new Uint8ClampedArray(data.buffer), data.width, data.height);
+  postMessage({ buffer: pixels.buffer }, [pixels.buffer]);
+};</pre>
+          <h4>Step by step</h4>
+          <p>What each press of Next does in this demo.</p>
+          <ol>
+          <li><strong>Blur it on the page.</strong> The blur runs on the main thread. The marker stops until it has finished.</li>
+          <li><strong>Draw the picture again.</strong> The sharp picture is back.</li>
+          <li><strong>Blur it in a worker.</strong> The pixels go to a worker and come back blurred. The marker did not stop.</li>
+        </ol>
+        </article>
+      </section>
+      <section id="try">
+        <h2>Things to try</h2>
+        <ul>
+          <li>Start the video and cycle the effects.</li>
+          <li>Press Use my camera. The left-hand picture becomes your camera, and the filter is handed its frames. Nothing leaves your browser.</li>
+          <li>Remove the filter. The video on the right stops with it, because every frame went through there.</li>
+        </ul>
+      </section>
+      <section id="traps">
+        <h2>Common mistakes</h2>
+        <ul>
+          <li>Every frame must be closed by whoever ends up holding it, or the browser warns and video stalls.</li>
+          <li>Measured in Chrome 159: a <code>VideoFrame</code> reaches a worker and a frame of the same site. It arrives unreadable in a sandboxed frame, a frame on another site, a shared worker and a service worker. An <code>ImageBitmap</code> reaches all of them. In Chromium 157 a <code>VideoFrame</code> still reached a sandboxed frame, which is how this demo was first built.</li>
+          <li>A frame that cannot be rebuilt is not an error at the sender. Listen for <code>messageerror</code> at the receiver, or the video just stops.</li>
+        </ul>
+      </section>
+      <section id="related">
+        <h2>Read next</h2>
+        <ul class="cards">
+          <li><a href="/patterns/canvas/"><strong>Let another origin paint on your page</strong><span>The painter is a frame on another origin.</span></a></li>
+          <li><a href="/patterns/pipeline/"><strong>Back-pressure across three origins</strong><span>This page hands its stream to a frame on another origin.</span></a></li>
+          <li><a href="/patterns/zerocopy/"><strong>Move 64 MB between origins without copying it</strong><span>Post an ArrayBuffer and it is copied.</span></a></li>
+          <li><a href="/patterns/roundtrip/"><strong>Pipe your data through another site, and get it back</strong><span>A transform has two ends, and both can be given away.</span></a></li>
+        </ul>
+      </section>
+      </div>
+      <nav class="pager" id="pager" aria-label="More patterns"><a href="/patterns/frozen/"><small>‹ Before this</small>Two workers that keep talking while this page is frozen</a><a class="pager-all" href="/patterns/">All patterns</a><a class="pager-next" href="/patterns/signer/"><small>After this ›</small>Let another origin sign with your key without giving it the key</a></nav>
+    </main>
+    <footer class="small muted" style="padding-block:2rem 4rem">Port Authority, by <a href="https://paul.kinlan.me">Paul Kinlan</a>. <a href="/about/">About this site</a>.</footer>
+  </div>
+  <script type="module" src="/patterns/page.js"></script>
+  <script type="module" src="/refs.js"></script>
+</body>
+</html>

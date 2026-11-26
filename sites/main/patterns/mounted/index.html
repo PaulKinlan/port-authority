@@ -1,0 +1,181 @@
+<!doctype html>
+<!-- Written by scripts/patterns.mjs from the modules in /patterns/. Edit those, then run it. -->
+<html lang="en" data-pattern="mounted">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mount another site at a path on yours | Port Authority</title>
+  <meta name="description" content="A Service Worker can answer a request by asking a port, and the other end of that port can be on another origin. This page introduces a Service Worker to the florist's site. From t">
+  <meta property="og:title" content="Mount another site at a path on yours | Port Authority">
+  <meta property="og:description" content="A Service Worker can answer a request by asking a port, and the other end of that port can be on another origin. This page introduces a Service Worker to the florist's site. From t">
+  <meta property="og:type" content="article">
+  <meta name="twitter:card" content="summary">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/base.css">
+  <script src="/nav.js"></script>
+  <link rel="stylesheet" href="/patterns/patterns.css">
+  <link rel="stylesheet" href="/patterns/page.css">
+  <script src="/errors.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <div class="wrap">
+    <header class="site-bar">
+      <a class="wordmark" href="/">Port Authority</a>
+      <nav aria-label="Primary"><a href="/">Experiments</a><a href="/guide/">The guide</a><a href="/patterns/" aria-current="page">Port patterns</a><a href="/comlink/">Comlink today</a><a href="/ai-router/">AI router</a><a href="/lab/">The lab</a><a href="/missing/">What is missing</a><a href="/reading/">Further reading</a><a href="/hub/">Your hub</a></nav>
+    </header>
+    <main id="main">
+      <div class="stack page-head">
+        <p class="crumb"><a href="/patterns/">Port patterns</a> / <span id="group"><a href="/patterns/#mounted">Other devices, Service Workers, sockets and audio</a></span></p>
+        <h1 id="title">Mount another site at a path on yours</h1>
+      </div>
+      <section class="pattern" id="demo"><div class="demo"><noscript><p class="small muted">The demo that runs here needs JavaScript. Everything else on this page reads the same without it.</p></noscript></div></section>
+      <div class="deep" id="deep">
+      <section id="what">
+        <h2>What you are looking at</h2>
+        <p>A Service Worker can answer a request by asking a port, and the other end of that port can be on another origin. This page introduces a Service Worker to the florist's site. From then on, every request under <code>/patterns/mounted/florist/</code> is answered by the florist: pages, images, and a file whose body is a stream that the florist is still writing while this origin reads it. The florist's server is never contacted. Its page, open in a frame, is the server. The same worker script, registered again for <code>/patterns/mounted/library/</code> and given a port to the library's site, mounts that site beside it. What is mounted here runs as this origin, so mount only what you would let act as you.</p>
+      </section>
+      <section id="code">
+        <h2>The code</h2>
+        <pre><span class="c">// this page: a worker for the path, and a port to the site that will serve it</span>
+const reg = await navigator.serviceWorker.register("/mount-sw.js", { scope: "/mounted/florist/" });
+const { port1, port2 } = new MessageChannel();
+floristFrame.postMessage({ cmd: "serve" }, floristOrigin, [port1]);
+reg.active.postMessage({ mount: true }, [port2]);
+
+<span class="c">// Service Worker</span>
+origin.postMessage({ path }, [replyPort]);
+<span class="c">// the florist answers with a body that is a ReadableStream, transferred</span>
+return new Response(answer.body, answer);</pre>
+        <h3 id="using">Using it</h3>
+        <pre><span class="c">// a wedding planner's site, and one florist it trusts</span>
+<span class="c">// the florist's frame: answer each request that comes down the port</span>
+addEventListener("message", (e) =&gt; {
+  if (e.origin !== plannerOrigin || e.data?.cmd !== "serve") return;
+  e.ports[0].onmessage = ({ data, ports }) =&gt; {
+    const body = stockList(data.path);            <span class="c">// a ReadableStream the florist is still writing</span>
+    ports[0].postMessage({ status: 200, headers: { "content-type": "text/plain" }, body }, [body]);
+  };
+});
+
+<span class="c">// the planner's own pages: the florist's files have addresses on this origin</span>
+const stock = await fetch("/mounted/florist/stock.txt");
+picture.src = "/mounted/florist/tulip.svg";
+
+<span class="c">// the Service Worker was stopped and lost its port. It asks, and the page sends a new one.</span>
+<span class="c">// introduce() makes a new channel and posts its two ends, as above.</span>
+navigator.serviceWorker.addEventListener("message", (e) =&gt; { if (e.data.needMount) introduce(); });
+
+<span class="c">// the planner drops the florist</span>
+reg.active.postMessage({ unmount: true });
+<span class="c">// Requests under /mounted/florist/ now get a 503 from the worker.</span></pre>
+        <h3 id="case">Where you would use it</h3>
+        <p>A real case. A wedding planner's site works with one florist and wants the florist's stock list and pictures inside its own pages. It mounts the florist's site at <code>/mounted/florist/</code>, and the florist's page, open in a frame, answers each request. The planner's pages load those files with an ordinary <code>fetch</code> or <code>img</code> from addresses on the planner's own origin, and the planner runs no proxy. What is mounted runs as the planner's origin, so the planner does this only with a florist it would let act in its name. When the planner drops the florist it tells the worker to unmount, and requests under that path get a 503.</p>
+      </section>
+      <section id="how">
+        <h2>How it works</h2>
+        <div class="stack paras">
+          <p>The tab-as-server pattern answered requests from a tab of the same origin. The port can just as well end on another origin. This page makes a channel, gives one end to the florist's embedded page and the other to its own service worker.</p>
+          <p>Requests under one path now go down that port. The florist answers with a status, headers and a body. When the body is a <code>ReadableStream</code> it is transferred, and the service worker hands it straight to the browser as the response while the florist is still writing it.</p>
+          <p>The florist's server is never contacted. Its page, sitting in a frame, is the server. And the content it supplies is served from this origin's address.</p>
+          <p>The worker script holds no site's name. It reads the path to serve from the scope it was registered with. Registering it a second time with another scope makes a second worker with its own port, so each mounted site has a path of its own and they do not share a port.</p>
+        </div>
+      </section>
+      <section id="steps">
+        <h2>Step by step</h2>
+        <p>What each press of Next does in the demo at the top.</p>
+        <ol>
+          <li><strong>Mount the florist's site here.</strong> This page gives one end of a channel to the florist's site and the other to a Service Worker for that path.</li>
+          <li><strong>Open the catalogue.</strong> A page at an address on this origin. Its HTML, its picture and a slowly written file all come from the florist, down the port.</li>
+          <li><strong>Mount the library's site too.</strong> The same worker script is registered for a second path and given a port to the library's site.</li>
+          <li><strong>Open the library's catalogue.</strong> A second address on this origin, served by a second site.</li>
+          <li><strong>Unmount.</strong> The florist's worker drops its port. That address has nothing behind it, and the library's still works.</li>
+        </ol>
+      </section>
+      <section id="uses">
+        <h2>What you could build with it</h2>
+        <p>These are built and running below.</p>
+        <article class="built" id="built-plugins">
+          <h3>Plug-ins that each add a page, with its own picture, to a host app</h3>
+          <p class="small muted idea">The idea: Plug-ins that contribute pages and assets to a host app.</p>
+          <div class="demo"></div>
+          <h4>What you are looking at</h4>
+          <p>The host app is a real page on this site. Two plug-ins each want to add a page to it. Each plug-in here is a sandboxed frame with an opaque origin, standing in for a frame from the plug-in maker's site. Installing a plug-in means giving the service worker a port to it, and a path. From then on, requests under that path are answered by the plug-in: its page, and the picture that page asks for. No server is asked for the plug-in's page, and nothing was uploaded. The same caution applies as for any mounted site: a plug-in's page runs as this origin.</p>
+          <h4>The code</h4>
+          <pre><span class="c">// installing a plug-in: a path, and a port to whoever will answer for it</span>
+const { port1, port2 } = new MessageChannel();
+pluginFrame.postMessage({ cmd: "serve" }, "*", [port1]);
+serviceWorker.postMessage({ serve: true, prefix: "/app/calendar/" }, [port2]);</pre>
+          <h4>Step by step</h4>
+          <p>What each press of Next does in this demo.</p>
+          <ol>
+          <li><strong>Install the calendar plug-in.</strong> The service worker gets a port to the plug-in and a path to use it for. The app lists it.</li>
+          <li><strong>Open the calendar's page.</strong> A real navigation inside the app. The page and its picture come from the plug-in.</li>
+          <li><strong>Install the invoices plug-in.</strong> A second plug-in, a second port, a second path.</li>
+          <li><strong>Open the invoices' page.</strong> The other plug-in answers this one.</li>
+        </ol>
+        </article>
+        <article class="built" id="built-preview">
+          <h3>Preview a page whose files are kept by a storage provider on another origin</h3>
+          <p class="small muted idea">The idea: Serving a person's files from a storage provider's origin into an editor's preview.</p>
+          <div class="demo"></div>
+          <h4>What you are looking at</h4>
+          <p>A person's draft lives with a storage provider. The provider here is a sandboxed frame with an opaque origin, standing in for a frame from the provider's site. This editor wants to show it as a real page, with real relative links, and without copying the files here. So the provider is given a path. The preview on the right is a real navigation, and each file it asks for is fetched from the provider over a port as it is needed. Save a new version at the provider and reload: the preview has it, and the editor never held a file.</p>
+          <h4>The code</h4>
+          <pre><span class="c">// the storage provider, answering one request</span>
+port.onmessage = ({ data, ports: [reply] }) => {
+  const file = files.get(nameFrom(data.url));
+  reply.postMessage(file ? { body: file.text, headers: { "content-type": file.type } } : { status: 404, body: "no such file" });
+};</pre>
+          <h4>Step by step</h4>
+          <p>What each press of Next does in this demo.</p>
+          <ol>
+          <li><strong>Mount the provider's files for preview.</strong> The service worker gets a port to the storage provider.</li>
+          <li><strong>Open the preview.</strong> The draft loads as a real page. Its stylesheet is a second request, to the same provider.</li>
+          <li><strong>Provider: save a new version.</strong> The file changes at the provider. Nothing is sent here.</li>
+          <li><strong>Reload the preview.</strong> The preview asks again and gets the new version.</li>
+        </ol>
+        </article>
+        <h3 class="todo">Already running</h3>
+        <ul>
+          <li>Embedding a partner's app under your own URL without a reverse proxy. <a href="#demo">See the demo at the top of this page.</a></li>
+        </ul>
+      </section>
+      <section id="try">
+        <h2>Things to try</h2>
+        <ul>
+          <li>Mount, then open the catalogue. Watch the stock lines arrive with their times.</li>
+          <li>Open the mounted catalogue in a new tab and try a path that does not exist. The 404 is the florist's.</li>
+          <li>Mount the library too and open its catalogue. Then unmount the florist and open the library's again.</li>
+        </ul>
+      </section>
+      <section id="traps">
+        <h2>Common mistakes</h2>
+        <ul>
+          <li>What is mounted runs as your origin, with your cookies and storage. Mount only what you would let act as you.</li>
+          <li>The other site's frame has to stay open.</li>
+          <li>A stopped service worker forgets its port and must be introduced again.</li>
+          <li>Two mounted sites both run as your origin, so they can read each other's storage there.</li>
+        </ul>
+      </section>
+      <section id="measured">
+        <h2>Measured</h2>
+        <p class="measured">Chromium 157: two sites mounted at two paths at once, each answered by its own site. A stream made in a frame on a second origin is accepted by the service worker as a response body, and its three lines arrive about 0.45 s apart. Other browsers are being filled in from <a href="/lab/results/">the lab's results</a>.</p>
+      </section>
+      <section id="related">
+        <h2>Read next</h2>
+        <ul class="cards">
+          <li><a href="/patterns/tabserver/"><strong>Serve pages to other tabs from this tab</strong><span>A Service Worker can answer a fetch any way it likes, including by asking someone else.</span></a></li>
+          <li><a href="/patterns/introduce/"><strong>Connect two sites to each other, then remove yourself</strong><span>A port can be passed on by whoever holds it.</span></a></li>
+          <li><a href="/patterns/stream/"><strong>Send a stream to another frame</strong><span>A ReadableStream is transferable too, so you can hand another origin a live stream and it reads with back-pressure, as if the source were local.</span></a></li>
+        </ul>
+      </section>
+      </div>
+      <nav class="pager" id="pager" aria-label="More patterns"><a href="/patterns/far/"><small>‹ Before this</small>A port whose other end is on another device</a><a class="pager-all" href="/patterns/">All patterns</a><a class="pager-next" href="/patterns/socket/"><small>After this ›</small>One connection to the server, shared by every tab</a></nav>
+    </main>
+    <footer class="small muted" style="padding-block:2rem 4rem">Port Authority, by <a href="https://paul.kinlan.me">Paul Kinlan</a>. <a href="/about/">About this site</a>.</footer>
+  </div>
+  <script type="module" src="/patterns/page.js"></script>
+  <script type="module" src="/refs.js"></script>
+</body>
+</html>

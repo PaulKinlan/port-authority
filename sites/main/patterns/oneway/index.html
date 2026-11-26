@@ -1,0 +1,194 @@
+<!doctype html>
+<!-- Written by scripts/patterns.mjs from the modules in /patterns/. Edit those, then run it. -->
+<html lang="en" data-pattern="oneway">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Join two sites with a port that carries messages one way only | Port Authority</title>
+  <meta name="description" content="A MessagePort always works in both directions. Whoever you give one to can post into it, and there is no setting that stops them. This page wants the library's site to publish pric">
+  <meta property="og:title" content="Join two sites with a port that carries messages one way only | Port Authority">
+  <meta property="og:description" content="A MessagePort always works in both directions. Whoever you give one to can post into it, and there is no setting that stops them. This page wants the library's site to publish pric">
+  <meta property="og:type" content="article">
+  <meta name="twitter:card" content="summary">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/base.css">
+  <script src="/nav.js"></script>
+  <link rel="stylesheet" href="/patterns/patterns.css">
+  <link rel="stylesheet" href="/patterns/page.css">
+  <script src="/errors.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <div class="wrap">
+    <header class="site-bar">
+      <a class="wordmark" href="/">Port Authority</a>
+      <nav aria-label="Primary"><a href="/">Experiments</a><a href="/guide/">The guide</a><a href="/patterns/" aria-current="page">Port patterns</a><a href="/comlink/">Comlink today</a><a href="/ai-router/">AI router</a><a href="/lab/">The lab</a><a href="/missing/">What is missing</a><a href="/reading/">Further reading</a><a href="/hub/">Your hub</a></nav>
+    </header>
+    <main id="main">
+      <div class="stack page-head">
+        <p class="crumb"><a href="/patterns/">Port patterns</a> / <span id="group"><a href="/patterns/#oneway">Between real sites</a></span></p>
+        <h1 id="title">Join two sites with a port that carries messages one way only</h1>
+      </div>
+      <section class="pattern" id="demo"><div class="demo"><noscript><p class="small muted">The demo that runs here needs JavaScript. Everything else on this page reads the same without it.</p></noscript></div></section>
+      <div class="deep" id="deep">
+      <section id="what">
+        <h2>What you are looking at</h2>
+        <p>A <code>MessagePort</code> always works in both directions. Whoever you give one to can post into it, and there is no setting that stops them. This page wants the library's site to publish prices to the florist's site, and wants nothing to come back. So it does not give them the two ends of one channel. It makes two channels and stands between them. What the library posts is posted on to the florist. What the florist posts stops at this page and is counted. The florist holds a real port and can call <code>postMessage</code> on it as often as it likes. A message with a port or a stream in it is refused in the forward direction too, because either one would be a way to answer.</p>
+      </section>
+      <section id="code">
+        <h2>The code</h2>
+        <pre>function oneWay() {
+  const inlet = new MessageChannel(), outlet = new MessageChannel();
+  <span class="c">// forward: post it again, with no transfer list, so a port cannot ride along</span>
+  inlet.port2.onmessage = (e) => { try { outlet.port1.postMessage(e.data); } catch {} };
+  <span class="c">// backward: nothing</span>
+  outlet.port1.onmessage = () => {};
+  return { send: inlet.port1, receive: outlet.port2,
+           cut: () => { inlet.port2.close(); outlet.port1.close(); } };
+}
+
+const link = oneWay();
+library.postMessage({ cmd: "feed" }, libraryOrigin, [link.send]);
+florist.postMessage({ cmd: "feed" }, floristOrigin, [link.receive]);</pre>
+        <h3 id="using">Using it</h3>
+        <pre><span class="c">// a town's what's-on page, with the library's frame and the florist's frame in it</span>
+<span class="c">// the library: publish each event on the port it was given</span>
+addEventListener("message", (e) =&gt; {
+  if (e.origin !== townOrigin || e.data?.cmd !== "feed") return;
+  const send = e.ports[0];
+  send.postMessage({ event: "Poetry reading", at: "19:00" });
+});
+
+<span class="c">// the florist: hear each event, and try to answer</span>
+addEventListener("message", (e) =&gt; {
+  if (e.origin !== townOrigin || e.data?.cmd !== "feed") return;
+  const receive = e.ports[0];
+  receive.onmessage = ({ data }) =&gt; offerFlowersFor(data.event);
+  receive.postMessage({ advert: "10% off" });   <span class="c">// stops at the town's page. The library hears nothing.</span>
+});
+
+<span class="c">// the town's page: the florist's listing ends</span>
+link.cut();
+<span class="c">// The library's posts go nowhere now, and the florist hears nothing more.</span>
+<span class="c">// Neither site is told, so each needs a timeout of its own to notice.</span></pre>
+        <h3 id="case">Where you would use it</h3>
+        <p>A real case. A town's what's-on page embeds two other sites in frames. The library's frame publishes the day's events, and the florist's frame shows flowers to go with each one. The town wants the florist to hear the events, and wants nothing the florist posts into its port to reach the library's frame, which runs with the library's own storage. So the town's page keeps the middle of the link and gives each site one end. When the florist's listing ends, the town's page calls <code>cut()</code>, and neither site is told, so each needs a timeout to notice.</p>
+      </section>
+      <section id="how">
+        <h2>How it works</h2>
+        <div class="stack paras">
+          <p>A <code>MessageChannel</code> has two ports and each can both send and receive. There is no read-only port. Giving someone a port always gives them something to post into.</p>
+          <p>To get one direction only, use two channels and keep the middle. The sender gets one end of the first channel. The receiver gets one end of the second. The page holds the other two ends and copies messages from the first to the second. It has a listener on the second that does nothing, so what the receiver posts is taken off the queue and thrown away.</p>
+          <p>The copy is made with <code>postMessage(data)</code> and no transfer list. A <code>MessagePort</code> or a stream cannot be copied, only moved, so a message that contains one makes that call throw, and nothing is sent. This matters because a port sent forward would give the two sides a private two-way line that skips the middle. Shared memory can be copied, so the middle looks for it and refuses it.</p>
+          <p>The middle can be a page, as here, or a worker. Whoever holds it can close both ends, which cuts the link for both sides.</p>
+        </div>
+      </section>
+      <section id="steps">
+        <h2>Step by step</h2>
+        <p>What each press of Next does in the demo at the top.</p>
+        <ol>
+          <li><strong>Join them one way.</strong> This page makes two channels. The library gets an end it can post into. The florist gets an end it can hear on.</li>
+          <li><strong>Library: publish a price.</strong> The library posts a price. This page posts it on, and the florist hears it.</li>
+          <li><strong>Florist: post an order back.</strong> The florist posts into its port. The message reaches this page and goes no further. The library hears nothing.</li>
+          <li><strong>Florist: post a port back.</strong> The florist tries to open a way back by posting a port. This page closes that port.</li>
+          <li><strong>Library: send a port forward.</strong> The library tries to hand the florist a private line. A port cannot be copied, so posting the message on fails, and the florist gets nothing.</li>
+          <li><strong>Cut the link.</strong> This page closes its two ends.</li>
+          <li><strong>Library: publish a price.</strong> The library posts again. Nothing is on the other end, and the florist hears nothing.</li>
+        </ol>
+      </section>
+      <section id="uses">
+        <h2>What you could build with it</h2>
+        <p>These are built and running below.</p>
+        <article class="built" id="built-figures">
+          <h3>Give a chart widget your figures on a port it cannot answer on</h3>
+          <p class="small muted idea">The idea: Giving a third-party widget your figures to draw, on a port it cannot answer on.</p>
+          <div class="demo"></div>
+          <h4>What you are looking at</h4>
+          <p>The widget stands in for someone else's code. It is a sandboxed frame with an opaque origin and a Content Security Policy that forbids it any network access. This page sends it a month of spending to draw. The widget receives the figures on a real port, and then tries two ways to send them somewhere: a network request, and a message back into the port. The browser blocks the first. The second reaches this page's valve and stops there, and this page counts it.</p>
+          <h4>The code</h4>
+          <pre>const link = oneWay();
+widget.postMessage({ cmd: "feed" }, "*", [link.receive]);
+
+link.send.postMessage({ figures });       <span class="c">// the widget draws them</span>
+
+<span class="c">// the widget, trying</span>
+port.postMessage({ stolen: figures });    <span class="c">// stops at the valve</span>
+fetch(somewhere, { body: figures });      <span class="c">// blocked: default-src 'none'</span></pre>
+          <h4>Step by step</h4>
+          <p>What each press of Next does in this demo.</p>
+          <ol>
+          <li><strong>Give the widget a one-way port.</strong> This page makes the two channels and gives the widget the end it can hear on.</li>
+          <li><strong>Send this month's spending.</strong> The figures go down the port, and the widget draws them.</li>
+          <li><strong>Widget: try to send the figures out.</strong> The widget posts the figures back into its port and tries a network request. Neither arrives anywhere.</li>
+        </ol>
+        </article>
+        <article class="built" id="built-covert">
+          <h3>A stream given as read-only still lets the reader signal the writer</h3>
+          <p class="small muted idea">The idea: Checking whether a read-only handle is one-way before relying on it.</p>
+          <div class="demo"></div>
+          <h4>What you are looking at</h4>
+          <p>A <code>ReadableStream</code> looks one-way: the holder can read and has nothing to write into. But a stream asks its source for the next chunk only when the reader wants one, so the writer can see when each read happens. The frame here holds only a readable stream. It spells a word by choosing when to read: a short wait for a 0, a long wait for a 1. This page reads the word back from nothing but the times its own <code>pull()</code> was called. Then the same frame gets a one-way port. Messages on a port arrive when the sender posts them, and nothing the receiver does changes that, so there is nothing to read back.</p>
+          <h4>The code</h4>
+          <pre><span class="c">// the writer sees when the reader reads</span>
+const readable = new ReadableStream({
+  pull(controller) { times.push(performance.now()); controller.enqueue("tick"); },
+}, { highWaterMark: 0 });
+frame.postMessage({ readable }, "*", [readable]);
+
+<span class="c">// the reader, holding only the readable, sends bits with its timing</span>
+for (const bit of bits) { await wait(bit ? 360 : 120); await reader.read(); }</pre>
+          <h4>Step by step</h4>
+          <p>What each press of Next does in this demo.</p>
+          <ol>
+          <li><strong>Give the frame a read-only stream.</strong> The frame gets a stream it can read. It has nothing to write into.</li>
+          <li><strong>Frame: spell a word by when it reads.</strong> The frame reads slowly or quickly, one bit per read. This page works the word out from the times its source was asked.</li>
+          <li><strong>Give the frame a one-way port.</strong> Now the same ticks go to the frame as messages on a one-way port.</li>
+          <li><strong>Frame: try the same on the port.</strong> The frame takes its messages on the same rhythm as before. This page sends on its own clock and sees no difference.</li>
+        </ol>
+        </article>
+        <h3 class="todo">Already running</h3>
+        <ul>
+          <li>A price or news feed from one site to another, where the subscriber must not be able to send anything to the publisher. <a href="#demo">See the demo at the top of this page.</a></li>
+        </ul>
+      </section>
+      <section id="try">
+        <h2>Things to try</h2>
+        <ul>
+          <li>Join them, publish a price, then have the florist post an order back and watch the count.</li>
+          <li>Have the library send a port forward and read the florist's log: nothing arrives.</li>
+          <li>Cut the link and publish again.</li>
+        </ul>
+      </section>
+      <section id="traps">
+        <h2>Common mistakes</h2>
+        <ul>
+          <li>Only the port is one-way. A frame can still call <code>parent.postMessage</code>, make network requests or navigate itself. Close those with a sandbox, a content security policy and by not listening.</li>
+          <li>A readable stream is not a one-way link. The reader chooses when to read, and the writer can see that. <a href="#built-covert">The timing demo below</a> reads a word out of it.</li>
+          <li>Forwarding with a transfer list, or forwarding <code>event.ports</code>, lets a port through, and then it is no longer one-way.</li>
+          <li>Every message passes through the middle and is copied twice. For large buffers that costs time.</li>
+          <li>If the page in the middle closes, the link is gone.</li>
+          <li>Two contexts that share a thread can still signal by keeping it busy, whatever joins them. A frame in the same process as the page delays the page's timers when it loops.</li>
+        </ul>
+      </section>
+      <section id="measured">
+        <h2>Measured</h2>
+        <p class="measured">Chromium 157, between two real origins: 0 of the messages posted by the receiving site reached the sending site, and a message carrying a port was refused with a <code>DataCloneError</code>. Through a transferred <code>ReadableStream</code>, a reader in a sandboxed frame sent 16 bits to the writer by timing its reads, and all 16 were read correctly. Other browsers are being filled in from <a href="/lab/results/">the lab's results</a>.</p>
+      </section>
+      <section id="related">
+        <h2>Read next</h2>
+        <ul class="cards">
+          <li><a href="/patterns/halves/"><strong>Send only the readable side of a stream</strong><span>A stream has a direction, and you can hand over one direction without the other.</span></a></li>
+          <li><a href="/patterns/attenuate/"><strong>Give a frame limited access, then revoke it</strong><span>Holding a port is the permission to use it.</span></a></li>
+          <li><a href="/patterns/introduce/"><strong>Connect two sites to each other, then remove yourself</strong><span>A port can be passed on by whoever holds it.</span></a></li>
+          <li><a href="/patterns/lend/"><strong>Lend someone a network connection you opened</strong><span>The widget on the right is locked down so that it cannot reach the network at all.</span></a></li>
+        </ul>
+      </section>
+      </div>
+      <nav class="pager" id="pager" aria-label="More patterns"><a href="/patterns/lend/"><small>‹ Before this</small>Lend someone a network connection you opened</a><a class="pager-all" href="/patterns/">All patterns</a><a class="pager-next" href="/patterns/far/"><small>After this ›</small>A port whose other end is on another device</a></nav>
+    </main>
+    <footer class="small muted" style="padding-block:2rem 4rem">Port Authority, by <a href="https://paul.kinlan.me">Paul Kinlan</a>. <a href="/about/">About this site</a>.</footer>
+  </div>
+  <script type="module" src="/patterns/page.js"></script>
+  <script type="module" src="/refs.js"></script>
+</body>
+</html>

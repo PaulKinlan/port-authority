@@ -85,7 +85,11 @@
 .controls .reset { margin-left: auto; border-color: transparent; }
 .pattern { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1.2rem; padding-block: clamp(2.5rem, 6vw, 4.5rem); border-top: 2px solid var(--ink); }
 .pattern > :is(h2, h3) { font-size: var(--step-2); }
-.pattern .text { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr)); align-items: start; }
+/* The words, then the code under them at the full width of the page, so that a long line of code is not cut off.
+   (Side by side, the code had half the page or less, and most of the patterns' code did not fit in it.) */
+.pattern .text { display: grid; gap: 1rem; grid-template-columns: minmax(0, 1fr); }
+.pattern .text > p { max-width: 68ch; margin: 0; }
+.pattern .text > pre { min-width: 0; margin: 0; }
 .census { border-collapse: collapse; width: 100%; min-width: 38rem; font-size: var(--step--1); }
 .census th, .census td { text-align: left; padding: 0.6rem 0.8rem 0.6rem 0; border-top: 1px solid var(--line); vertical-align: top; }
 .census thead th { border-top: 0; font-family: var(--display); font-size: var(--step-0); }
@@ -121,4 +125,9 @@
   .caption { min-height: 0; font-size: 0.85rem; line-height: 1.35; }
   .steps .fwd { flex: 1 1 auto; min-width: 0; white-space: normal; line-height: 1.2; padding: 0.55em 0.8em; }
   .controls button { font-size: var(--step--1); }
+}
+
+/* A demo box is empty until its script runs. Hold some room for it, so the words below do not jump far when it arrives. */
+@media (scripting: enabled) {
+  .demo:not(:has(.stage-el)) { min-height: 14rem; }
 }

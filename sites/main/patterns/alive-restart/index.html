@@ -1,0 +1,140 @@
+<!doctype html>
+<!-- Written by scripts/patterns.mjs from the modules in /patterns/. Edit those, then run it. -->
+<html lang="en" data-pattern="alive-restart">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Restart a worker that has stopped answering, and ask again | Port Authority</title>
+  <meta name="description" content="A worker counts prime numbers for this page. It is given a port for the work and a port to answer health pings on. If it stops answering, because it is stuck in a loop or has close">
+  <meta property="og:title" content="Restart a worker that has stopped answering, and ask again | Port Authority">
+  <meta property="og:description" content="A worker counts prime numbers for this page. It is given a port for the work and a port to answer health pings on. If it stops answering, because it is stuck in a loop or has close">
+  <meta property="og:type" content="article">
+  <meta name="twitter:card" content="summary">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/base.css">
+  <script src="/nav.js"></script>
+  <link rel="stylesheet" href="/patterns/patterns.css">
+  <link rel="stylesheet" href="/patterns/page.css">
+  <script src="/errors.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <div class="wrap">
+    <header class="site-bar">
+      <a class="wordmark" href="/">Port Authority</a>
+      <nav aria-label="Primary"><a href="/">Experiments</a><a href="/guide/">The guide</a><a href="/patterns/" aria-current="page">Port patterns</a><a href="/comlink/">Comlink today</a><a href="/ai-router/">AI router</a><a href="/lab/">The lab</a><a href="/missing/">What is missing</a><a href="/reading/">Further reading</a><a href="/hub/">Your hub</a></nav>
+    </header>
+    <main id="main">
+      <div class="stack page-head">
+        <p class="crumb"><a href="/patterns/">Port patterns</a> / <span id="group"><a href="/patterns/#alive-restart">Knowing the other side is still there</a></span></p>
+        <h1 id="title">Restart a worker that has stopped answering, and ask again</h1>
+      </div>
+      <section class="pattern" id="demo"><div class="demo"><noscript><p class="small muted">The demo that runs here needs JavaScript. Everything else on this page reads the same without it.</p></noscript></div></section>
+      <div class="deep" id="deep">
+      <section id="what">
+        <h2>What you are looking at</h2>
+        <p>A worker counts prime numbers for this page. It is given a port for the work and a port to answer health pings on. If it stops answering, because it is stuck in a loop or has closed itself, the page waits for three missed pings, terminates it, starts a new one and sends it every question that was not answered. Nothing about health is in the work protocol, so the restart is invisible to the code that asked: it gets its answer, later than usual.</p>
+      </section>
+      <section id="code">
+        <h2>The code</h2>
+        <pre>function start() {
+  const worker = new Worker("/patterns/alive-worker.js", { type: "module" });
+  const work = new MessageChannel(), health = new MessageChannel();
+  worker.postMessage({ ports: true }, [work.port2, health.port2]);
+  current = work.port1;                            <span class="c">// questions go to the newest worker</span>
+  work.port1.onmessage = ({ data }) => { pending.get(data.id).resolve(data.count); pending.delete(data.id); };
+  watch(health.port1, { every: 500, misses: 3, onState(state) {
+    if (state !== "silent") return;
+    worker.terminate();
+    start();                                       <span class="c">// a new worker</span>
+    for (const [id, ask] of pending) current.postMessage({ id, n: ask.n }); <span class="c">// ask again</span>
+  } });
+}</pre>
+        <h3 id="using">Using it</h3>
+        <pre><span class="c">// a document scanner. A text-recognition library in a worker counts the words on page n.</span>
+const pending = new Map();           <span class="c">// every question that has no answer yet</span>
+let current, next = 0;               <span class="c">// current: work.port1 of the newest worker</span>
+start();
+
+<span class="c">// the rest of the app calls this and nothing else</span>
+const wordsOnPage = (n) =&gt; new Promise((resolve) =&gt; {
+  const id = ++next;
+  pending.set(id, { n, resolve });   <span class="c">// kept until answered, so that start() can ask again</span>
+  current.postMessage({ id, n });
+});
+
+<span class="c">// page 12 is asked for and the worker hangs. Three pings are missed, and start() runs again.</span>
+wordCount.textContent = await wordsOnPage(12);   <span class="c">// this line waited longer, and saw nothing else</span>
+
+<span class="c">// the worker: pings on one port, work on the other. answer() is from /alive.js.</span>
+onmessage = ({ ports: [work, health] }) =&gt; {
+  answer(health);
+  work.onmessage = ({ data: { id, n } }) =&gt; work.postMessage({ id, count: countWords(n) });
+};</pre>
+        <h3 id="case">Where you would use it</h3>
+        <p>A real case. A document scanner app counts the words on each scanned page with a text-recognition library that runs in a worker. The library is not the app's own code, and now and then it stops answering part way through a page. The app keeps every unanswered question in <code>pending</code>, and the worker answers health pings on a second port. After three missed pings the app terminates the worker, starts another and asks again, so the code that called <code>wordsOnPage(12)</code> gets its number after a longer wait. Counting the words on a page twice does no harm, which is what makes asking again safe.</p>
+      </section>
+      <section id="how">
+        <h2>How it works</h2>
+        <div class="stack paras">
+          <p>A page that depends on a worker keeps a list of questions it has asked and not had answered. The worker answers health pings on a second port. When three pings go unanswered, the page terminates the worker, starts a new one and sends it every question on the list.</p>
+          <p><code>terminate()</code> works on a worker that is stuck in a loop, so the page can always get rid of it. A worker that called <code>close()</code> on itself, or crashed, gives no sign at all, and is caught the same way.</p>
+          <p>The code that asked only sees an answer that took longer. It never learns there was a second worker, because health checks are on their own port and the work protocol knows nothing about them.</p>
+          <p>Asking again is only safe for questions that can be asked twice. Counting primes can. Charging a card cannot. For work like that, give each question an id the far side remembers, so that a repeat is recognised and not done twice.</p>
+        </div>
+      </section>
+      <section id="steps">
+        <h2>Step by step</h2>
+        <p>What each press of Next does in the demo at the top.</p>
+        <ol>
+          <li><strong>Start the worker.</strong> This page starts a worker and sends it two ports: one for prime calculations and one for health pings.</li>
+          <li><strong>Ask: primes below 5 million.</strong> The question goes on the work port and the answer comes back on it.</li>
+          <li><strong>Make the worker hang.</strong> The worker is sent into a loop that never ends. It cannot answer pings or work.</li>
+          <li><strong>Ask: primes below 5 million.</strong> This question waits. After three missed pings the page terminates the worker, starts a new one, and asks it again.</li>
+          <li><strong>Make the worker close itself.</strong> The worker calls close(). Nothing is said to this page. The pings go unanswered and it is replaced.</li>
+        </ol>
+      </section>
+      <section id="uses">
+        <h2>What you could build with it</h2>
+        <h3 class="todo">Already running</h3>
+        <ul>
+          <li>A pool of workers that replaces any worker that stops answering, without the callers noticing. <a href="#demo">See the demo at the top of this page.</a></li>
+        </ul>
+      </section>
+      <section id="try">
+        <h2>Things to try</h2>
+        <ul>
+          <li>Make the worker hang, then ask. The question waits about two seconds and is answered by worker number 2.</li>
+          <li>Make it close itself. Nothing is said, and it is replaced as soon as three pings go unanswered.</li>
+        </ul>
+      </section>
+      <section id="traps">
+        <h2>Common mistakes</h2>
+        <ul>
+          <li>Only resend work that is safe to do twice, or that the far side can recognise as a repeat.</li>
+          <li>A worker that is slow, not stuck, will be killed too if its pings wait behind long work. Answer pings between chunks of work, or run work in a second worker.</li>
+          <li>Give up after a few restarts in a row. A worker that fails at startup would otherwise be restarted for ever.</li>
+        </ul>
+      </section>
+      <section id="measured">
+        <h2>Measured</h2>
+        <p class="measured">Chromium 153: a worker stuck in an endless loop was terminated and replaced 1.5 to 2 seconds after it stopped answering pings sent every 0.5 s, and the replacement answered the waiting question. Other browsers are being filled in from <a href="/lab/results/">the lab's results</a>.</p>
+      </section>
+      <section id="related">
+        <h2>Read next</h2>
+        <ul class="cards">
+          <li><a href="/patterns/alive-signals/"><strong>Which signal notices which ending, and how quickly</strong><span>Every way of knowing the far side has gone, side by side, measured in your browser.</span></a></li>
+          <li><a href="/patterns/health-pair/"><strong>Send a second port with the first, only for health checks</strong><span>A port does not tell you when its other end has gone.</span></a></li>
+          <li><a href="/patterns/swpair/"><strong>Join the service workers of two sites with a port</strong><span>The florist's site and the library's site each have a service worker.</span></a></li>
+          <li><a href="/patterns/reply/"><strong>Send a reply port with each request</strong><span>Instead of matching replies to requests with ids, make a new channel for each request and send one end along with it.</span></a></li>
+        </ul>
+      </section>
+      </div>
+      <nav class="pager" id="pager" aria-label="More patterns"><a href="/patterns/alive-signals/"><small>‹ Before this</small>Which signal notices which ending, and how quickly</a><a class="pager-all" href="/patterns/">All patterns</a><span></span></nav>
+    </main>
+    <footer class="small muted" style="padding-block:2rem 4rem">Port Authority, by <a href="https://paul.kinlan.me">Paul Kinlan</a>. <a href="/about/">About this site</a>.</footer>
+  </div>
+  <script type="module" src="/patterns/page.js"></script>
+  <script type="module" src="/refs.js"></script>
+</body>
+</html>

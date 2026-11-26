@@ -1,0 +1,160 @@
+<!doctype html>
+<!-- Written by scripts/patterns.mjs from the modules in /patterns/. Edit those, then run it. -->
+<html lang="en" data-pattern="stream">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Send a stream to another frame | Port Authority</title>
+  <meta name="description" content="A ReadableStream is transferable too, so you can hand another origin a live stream and it reads with back-pressure, as if the source were local. Chrome and Firefox can do this toda">
+  <meta property="og:title" content="Send a stream to another frame | Port Authority">
+  <meta property="og:description" content="A ReadableStream is transferable too, so you can hand another origin a live stream and it reads with back-pressure, as if the source were local. Chrome and Firefox can do this toda">
+  <meta property="og:type" content="article">
+  <meta name="twitter:card" content="summary">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/base.css">
+  <script src="/nav.js"></script>
+  <link rel="stylesheet" href="/patterns/patterns.css">
+  <link rel="stylesheet" href="/patterns/page.css">
+  <script src="/errors.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <div class="wrap">
+    <header class="site-bar">
+      <a class="wordmark" href="/">Port Authority</a>
+      <nav aria-label="Primary"><a href="/">Experiments</a><a href="/guide/">The guide</a><a href="/patterns/" aria-current="page">Port patterns</a><a href="/comlink/">Comlink today</a><a href="/ai-router/">AI router</a><a href="/lab/">The lab</a><a href="/missing/">What is missing</a><a href="/reading/">Further reading</a><a href="/hub/">Your hub</a></nav>
+    </header>
+    <main id="main">
+      <div class="stack page-head">
+        <p class="crumb"><a href="/patterns/">Port patterns</a> / <span id="group"><a href="/patterns/#stream">The six basic patterns</a></span></p>
+        <h1 id="title">Send a stream to another frame</h1>
+      </div>
+      <section class="pattern" id="demo"><div class="demo"><noscript><p class="small muted">The demo that runs here needs JavaScript. Everything else on this page reads the same without it.</p></noscript></div></section>
+      <div class="deep" id="deep">
+      <section id="what">
+        <h2>What you are looking at</h2>
+        <p>A <code>ReadableStream</code> is transferable too, so you can hand another origin a live stream and it reads with back-pressure, as if the source were local. Chrome and Firefox can do this today.</p>
+      </section>
+      <section id="code">
+        <h2>The code</h2>
+        <pre>const stream = new ReadableStream({ pull(controller) { controller.enqueue(nextChunk()); } });
+port.postMessage({ stream }, [stream]);
+
+<span class="c">// other side</span>
+port.onmessage = async ({ data }) => { for await (const chunk of data.stream) use(chunk); };</pre>
+        <h3 id="using">Using it</h3>
+        <pre><span class="c">// a spreadsheet app sends a large sheet to a chart tool, a frame from another company</span>
+let next = 0;
+const nextChunk = () =&gt; sheet.rows.slice(next, (next += 500));
+const stream = new ReadableStream({
+  pull(controller) {                    <span class="c">// runs when the reader has room for more</span>
+    if (next &gt;= sheet.rows.length) return controller.close();
+    controller.enqueue(nextChunk());
+  },
+});
+try { port.postMessage({ stream }, [stream]); }
+catch { tellPerson("This browser cannot send a stream."); }
+
+<span class="c">// the chart tool</span>
+async function use(rows) { await chart.add(rows); }
+port.onmessage = async ({ data }) =&gt; {
+  for await (const chunk of data.stream) await use(chunk);  <span class="c">// a slow use() slows pull()</span>
+  chart.finish();                       <span class="c">// reached after controller.close()</span>
+};</pre>
+        <h3 id="case">Where you would use it</h3>
+        <p>A real case. A spreadsheet app lets the person send a sheet to a chart tool from another company, which runs in a frame. The sheet has a million rows, so the app hands the frame a stream and cuts the next 500 rows each time the stream asks for more. The frame draws rows as they arrive, and when it falls behind, the app is asked less often. When the rows run out the app closes the stream and the frame's loop ends. This works in Chrome and Firefox today.</p>
+      </section>
+      <section id="how">
+        <h2>How it works</h2>
+        <div class="stack paras">
+          <p>A <code>ReadableStream</code> can go in the transfer list. The far side receives a stream it can read, and the near side keeps producing into it. Chunks cross as they are made, so the reader starts before the writer has finished.</p>
+          <p>What a stream adds over a plain port is back-pressure. The stream asks the source for more only when the reader has room. A slow reader on another origin slows the producer on yours, with no code from you.</p>
+          <p>The stream is moved, not copied. After the transfer the original is locked and the sender cannot read from it.</p>
+        </div>
+      </section>
+      <section id="steps">
+        <h2>Step by step</h2>
+        <p>What each press of Next does in the demo at the top.</p>
+        <ol>
+          <li><strong>Open a channel.</strong> A channel is made between this page and the reader frame.</li>
+          <li><strong>Send a stream.</strong> A ReadableStream is transferred over the port. The frame reads it chunk by chunk while this page is still producing it.</li>
+        </ol>
+      </section>
+      <section id="uses">
+        <h2>What you could build with it</h2>
+        <p>These are built and running below.</p>
+        <article class="built" id="built-typing">
+          <h3>An answer that appears in another origin as it is written</h3>
+          <p class="small muted idea">The idea: Feeding live data, such as model output, to an embedded viewer.</p>
+          <div class="demo"></div>
+          <h4>What you are looking at</h4>
+          <p>A language model answers a word at a time. This page stands in for one, and hands the answer to a viewer on another origin as a stream. The viewer shows each word as it arrives. It does not poll and is not sent a message per word by hand: it reads a stream, and when this page stops, the stream ends and the viewer knows the answer is complete.</p>
+          <h4>The code</h4>
+          <pre>const answer = new ReadableStream({ async pull(controller) {
+  const word = await nextWord();
+  word ? controller.enqueue(word) : controller.close();
+} });
+viewer.postMessage({ answer }, "*", [answer]);
+
+<span class="c">// the viewer</span>
+for await (const word of answer) page.append(word + " ");</pre>
+          <h4>Step by step</h4>
+          <p>What each press of Next does in this demo.</p>
+          <ol>
+          <li><strong>Stream an answer to the viewer.</strong> The answer is handed over as a stream before it has been written. Words appear on the other origin as they are produced.</li>
+          <li><strong>Stop writing.</strong> This page ends the stream early. The viewer is told it is over.</li>
+        </ol>
+        </article>
+        <article class="built" id="built-bigfile">
+          <h3>Stream 64 MB to a worker a megabyte at a time</h3>
+          <p class="small muted idea">The idea: Handing a large download or a generated file to a worker or another origin without holding it all in memory. Progress reporting, by counting the chunks.</p>
+          <div class="demo"></div>
+          <h4>What you are looking at</h4>
+          <p>This page produces a large file a megabyte at a time and gives the worker a stream of it. The worker reads, adds up a checksum and asks for more. The page makes the next megabyte only when asked, so neither side ever holds more than a chunk or two. The progress bar needs no extra messages, because it counts the chunks.</p>
+          <h4>The code</h4>
+          <pre>const file = new ReadableStream({ pull(controller) {
+  made < TOTAL ? controller.enqueue(nextMegabyte()) : controller.close();   <span class="c">// only when asked</span>
+} });
+worker.postMessage({ file }, [file]);
+
+<span class="c">// the worker</span>
+for await (const chunk of file) { sum = checksum(sum, chunk); postMessage({ read: chunk.length }); }</pre>
+          <h4>Step by step</h4>
+          <p>What each press of Next does in this demo.</p>
+          <ol>
+          <li><strong>Stream 64 MB to the worker.</strong> The worker is handed a stream. Each megabyte is made when the worker asks for it, and checked as it lands.</li>
+        </ol>
+        </article>
+      </section>
+      <section id="try">
+        <h2>Things to try</h2>
+        <ul>
+          <li>Send a stream and watch chunks arrive one at a time while the page is still producing.</li>
+          <li>Start again and send two. Each is independent.</li>
+        </ul>
+      </section>
+      <section id="traps">
+        <h2>Common mistakes</h2>
+        <ul>
+          <li>If a stream is passed on through a middle context, it keeps flowing through that context. Remove the middle and the reader stalls with no error.</li>
+          <li>A write to a transferred <code>WritableStream</code> can resolve before the far side has refused it.</li>
+        </ul>
+      </section>
+      <section id="related">
+        <h2>Read next</h2>
+        <ul class="cards">
+          <li><a href="/patterns/pipeline/"><strong>Back-pressure across three origins</strong><span>This page hands its stream to a frame on another origin.</span></a></li>
+          <li><a href="/patterns/stream-intro/"><strong>A forwarded stream stops when the page that passed it on closes. A port keeps working.</strong><span>You can pass a stream on, the same as a port.</span></a></li>
+          <li><a href="/patterns/halves/"><strong>Send only the readable side of a stream</strong><span>A stream has a direction, and you can hand over one direction without the other.</span></a></li>
+          <li><a href="/patterns/roundtrip/"><strong>Pipe your data through another site, and get it back</strong><span>A transform has two ends, and both can be given away.</span></a></li>
+        </ul>
+      </section>
+      </div>
+      <nav class="pager" id="pager" aria-label="More patterns"><a href="/patterns/exchange/"><small>‹ Before this</small>Use a SharedWorker to connect tabs to each other</a><a class="pager-all" href="/patterns/">All patterns</a><a class="pager-next" href="/patterns/canvas/"><small>After this ›</small>Let another origin paint on your page</a></nav>
+    </main>
+    <footer class="small muted" style="padding-block:2rem 4rem">Port Authority, by <a href="https://paul.kinlan.me">Paul Kinlan</a>. <a href="/about/">About this site</a>.</footer>
+  </div>
+  <script type="module" src="/patterns/page.js"></script>
+  <script type="module" src="/refs.js"></script>
+</body>
+</html>

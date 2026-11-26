@@ -1,0 +1,171 @@
+<!doctype html>
+<!-- Written by scripts/patterns.mjs from the modules in /patterns/. Edit those, then run it. -->
+<html lang="en" data-pattern="reload">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Keep a port across a page reload | Port Authority</title>
+  <meta name="description" content="A port cannot be saved. IndexedDB, sessionStorage and history state all refuse it, because a port can be moved but never copied. But you can leave it with a SharedWorker. As this f">
+  <meta property="og:title" content="Keep a port across a page reload | Port Authority">
+  <meta property="og:description" content="A port cannot be saved. IndexedDB, sessionStorage and history state all refuse it, because a port can be moved but never copied. But you can leave it with a SharedWorker. As this f">
+  <meta property="og:type" content="article">
+  <meta name="twitter:card" content="summary">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/base.css">
+  <script src="/nav.js"></script>
+  <link rel="stylesheet" href="/patterns/patterns.css">
+  <link rel="stylesheet" href="/patterns/page.css">
+  <script src="/errors.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <div class="wrap">
+    <header class="site-bar">
+      <a class="wordmark" href="/">Port Authority</a>
+      <nav aria-label="Primary"><a href="/">Experiments</a><a href="/guide/">The guide</a><a href="/patterns/" aria-current="page">Port patterns</a><a href="/comlink/">Comlink today</a><a href="/ai-router/">AI router</a><a href="/lab/">The lab</a><a href="/missing/">What is missing</a><a href="/reading/">Further reading</a><a href="/hub/">Your hub</a></nav>
+    </header>
+    <main id="main">
+      <div class="stack page-head">
+        <p class="crumb"><a href="/patterns/">Port patterns</a> / <span id="group"><a href="/patterns/#reload">More things a port can carry</a></span></p>
+        <h1 id="title">Keep a port across a page reload</h1>
+      </div>
+      <section class="pattern" id="demo"><div class="demo"><noscript><p class="small muted">The demo that runs here needs JavaScript. Everything else on this page reads the same without it.</p></noscript></div></section>
+      <div class="deep" id="deep">
+      <section id="what">
+        <h2>What you are looking at</h2>
+        <p>A port cannot be saved. IndexedDB, sessionStorage and history state all refuse it, because a port can be moved but never copied. But you can leave it with a SharedWorker. As this frame unloads it posts its port to the worker, and when it loads again it asks for it back. The worker is created with <code>extendedLifetime</code>, so it outlives the page even when that page was its only client. The feed doesn't notice. Ticks sent during the reload waited in the port, and the count has no gaps. The dark cable is the frame's own connection to the worker. The other one is the port that is kept, which this page made and gave to the feed and the frame.</p>
+      </section>
+      <section id="code">
+        <h2>The code</h2>
+        <pre>const bank = new SharedWorker("/bank.js", { extendedLifetime: true });
+addEventListener("pagehide", () => bank.port.postMessage({ deposit: key }, [port]));
+
+<span class="c">// next load</span>
+bank.port.postMessage({ withdraw: key });
+bank.port.onmessage = ({ data, ports }) => data.found ? resume(ports[0]) : connectAgain();</pre>
+        <h3 id="using">Using it</h3>
+        <pre><span class="c">// a notes app that the person has connected to their calendar, open in another tab</span>
+<span class="c">// /bank.js: hold a port under a key until a page asks for it</span>
+const kept = new Map();
+onconnect = ({ ports: [client] }) =&gt; {
+  client.onmessage = ({ data, ports }) =&gt; {
+    if (data.deposit) return kept.set(data.deposit, ports[0]);
+    const port = kept.get(data.withdraw);
+    kept.delete(data.withdraw);
+    client.postMessage({ found: !!port }, port ? [port] : []);
+  };
+};
+
+<span class="c">// the notes app: a key that this tab keeps across a reload</span>
+const key = sessionStorage.portKey || (sessionStorage.portKey = crypto.randomUUID());
+
+<span class="c">// on load: take the port back, or ask the person to connect again if the bank has nothing</span>
+const resume = (port) =&gt; { port.onmessage = (e) =&gt; showEvent(e.data); };
+bank.port.onmessage = ({ data, ports }) =&gt; data.found ? resume(ports[0]) : connectAgain();
+
+<span class="c">// What the calendar sent during the reload waited in the port, and arrives now in order.</span>
+<span class="c">// The bank is empty on a first visit, and after a crash, when pagehide did not run.</span>
+<span class="c">// A deposit can arrive after the withdraw, so a real bank waits a moment before it says no.</span></pre>
+        <h3 id="case">Where you would use it</h3>
+        <p>A real case. A notes app is connected to a calendar that is open in another tab. The person made that connection by hand, through a chooser, and the port is all the notes app has of it. When the person presses reload, the page deposits the port as it goes and the new page withdraws it, so the person is not asked to connect a second time. If the bank comes back empty, as it does after a crash or where the worker did not live through the reload, the app asks the person to connect again.</p>
+      </section>
+      <section id="how">
+        <h2>How it works</h2>
+        <div class="stack paras">
+          <p>A port dies with the page that holds it, and it cannot be saved: IndexedDB, session storage and history state all refuse it. But it can be transferred, and a SharedWorker outlives a reload.</p>
+          <p>In <code>pagehide</code> the page posts its port to a SharedWorker, which holds it. The new page connects to the same worker and asks for the port back. Messages sent in between wait in the port's queue.</p>
+          <p>The far side doesn't notice. It sees a short pause and then the messages carry on.</p>
+        </div>
+      </section>
+      <section id="steps">
+        <h2>Step by step</h2>
+        <p>What each press of Next does in the demo at the top.</p>
+        <ol>
+          <li><strong>Connect the feed to the frame.</strong> A channel is opened between the feed on another origin and the frame, and ticks begin arriving.</li>
+          <li><strong>Reload the frame.</strong> The frame deposits its port in the SharedWorker bank on pagehide, reloads, and withdraws it with zero gaps.</li>
+        </ol>
+      </section>
+      <section id="uses">
+        <h2>What you could build with it</h2>
+        <p>These are built and running below.</p>
+        <article class="built" id="built-upgrade">
+          <h3>Replace a running widget with its next version, and keep its connection</h3>
+          <p class="small muted idea">The idea: Handing a live port from an old version of a page to a new one.</p>
+          <div class="demo"></div>
+          <h4>What you are looking at</h4>
+          <p>Version 1 of a chat widget is holding a port to a service that sends it numbered messages. Version 2 is ready. Loading it the usual way would mean dropping the connection and making another, and losing whatever arrived in between. Here version 1 stops listening, hands its port to version 2, and is removed. Messages that arrive during the swap wait in the port. The service is never told that anything changed.</p>
+          <h4>The code</h4>
+          <pre><span class="c">// version 1, when asked to step aside</span>
+port.onmessage = null;                                       <span class="c">// stop reading: what arrives now will wait</span>
+parent.postMessage({ handover: true, last }, "*", [port]);
+
+<span class="c">// version 2</span>
+port.onmessage = ({ data }) => { /* carries on from last + 1 */ };</pre>
+          <h4>Step by step</h4>
+          <p>What each press of Next does in this demo.</p>
+          <ol>
+          <li><strong>Connect version 1 to the service.</strong> The service starts sending numbered messages down a port.</li>
+          <li><strong>Load version 2 and hand over.</strong> Version 1 gives up its port and is removed. Version 2 picks up at the next message.</li>
+        </ol>
+        </article>
+        <article class="built" id="built-shop">
+          <h3>A connection granted once, kept across every page of a site</h3>
+          <p class="small muted idea">The idea: Keeping a granted connection through a navigation in a multi-page site.</p>
+          <div class="demo"></div>
+          <h4>What you are looking at</h4>
+          <p>The box on the right is a small site with three pages, and each link is a real navigation that throws the old page away. On the first page it was granted a port to an order feed on another origin. On the way out of each page it leaves that port with a shared worker, and on the way in it collects it. The feed keeps sending throughout. Updates sent while no page existed wait in the port, so none are missed.</p>
+          <h4>The code</h4>
+          <pre><span class="c">// on every page of the site</span>
+const bank = new SharedWorker("/bank.js", { extendedLifetime: true });
+bank.port.postMessage({ withdraw: "orders" });                 <span class="c">// is one waiting for me?</span>
+bank.port.onmessage = ({ ports }) => ports[0] ? resume(ports[0]) : askToBeGranted();
+addEventListener("pagehide", () => bank.port.postMessage({ deposit: "orders" }, [port]));</pre>
+          <h4>Step by step</h4>
+          <p>What each press of Next does in this demo.</p>
+          <ol>
+          <li><strong>Go to the next page.</strong> A real navigation, from Shop to Basket. The new page collects the port.</li>
+          <li><strong>Go to the next page.</strong> And again, to Account. The count has no gaps.</li>
+        </ol>
+        </article>
+        <h3 class="todo">Already running</h3>
+        <ul>
+          <li>Single-page apps that must survive a hard refresh without re-asking the person for permission. <a href="#demo">See the demo at the top of this page.</a></li>
+        </ul>
+      </section>
+      <section id="try">
+        <h2>Things to try</h2>
+        <ul>
+          <li>Try to store a port in IndexedDB and read the refusal.</li>
+          <li>Reload the frame and check the count: no gaps and no repeats.</li>
+          <li>Reload several times in a row.</li>
+        </ul>
+      </section>
+      <section id="traps">
+        <h2>Common mistakes</h2>
+        <ul>
+          <li>The worker must be created with <code>extendedLifetime: true</code> or it dies with its last page, taking the port with it.</li>
+          <li><code>pagehide</code> does not run on a crash or a killed tab. The port is lost then.</li>
+          <li>On a different site the worker is partitioned. This is for one origin's own pages.</li>
+        </ul>
+      </section>
+      <section id="measured">
+        <h2>Measured</h2>
+        <p class="measured">Chromium 157: the count from the feed shows no gap across a reload of the receiving frame. Other browsers are being filled in from <a href="/lab/results/">the lab's results</a>.</p>
+      </section>
+      <section id="related">
+        <h2>Read next</h2>
+        <ul class="cards">
+          <li><a href="/patterns/exchange/"><strong>Use a SharedWorker to connect tabs to each other</strong><span>Every tab on an origin can reach the same SharedWorker.</span></a></li>
+          <li><a href="/patterns/tearoff/"><strong>Tear a live widget off into its own window</strong><span>A port works the same in whichever window holds it.</span></a></li>
+          <li><a href="/patterns/socket/"><strong>One connection to the server, shared by every tab</strong><span>Ten tabs of the same site usually means ten connections to the server.</span></a></li>
+        </ul>
+      </section>
+      </div>
+      <nav class="pager" id="pager" aria-label="More patterns"><a href="/patterns/pipeline/"><small>‹ Before this</small>Back-pressure across three origins</a><a class="pager-all" href="/patterns/">All patterns</a><a class="pager-next" href="/patterns/router/"><small>After this ›</small>A worker that routes between windows that have never met</a></nav>
+    </main>
+    <footer class="small muted" style="padding-block:2rem 4rem">Port Authority, by <a href="https://paul.kinlan.me">Paul Kinlan</a>. <a href="/about/">About this site</a>.</footer>
+  </div>
+  <script type="module" src="/patterns/page.js"></script>
+  <script type="module" src="/refs.js"></script>
+</body>
+</html>

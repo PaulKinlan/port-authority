@@ -30,45 +30,628 @@
       <div class="stack" id="key" style="padding-bottom:2rem; --gap:.8rem">
         <h2 style="font-size:var(--step-1)">How to read the diagrams</h2>
         <p class="small">Windows, frames and workers are drawn differently, and each page and frame shows its address. There is a key under each diagram.</p>
-        <div data-legend></div>
+        <div data-legend>
+        <!-- made:legend -->
+        <ul class="stage-legend full" aria-label="What the shapes mean"><li><svg class="glyph" viewBox="0 0 24 18" width="24" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="miter" stroke-linecap="round"><rect x="1.5" y="1.5" width="21" height="15" rx="3.5"/><path d="M1.5 6.2h21"/><circle cx="4.7" cy="3.9" r=".7" fill="currentColor" stroke="none"/><circle cx="7.3" cy="3.9" r=".7" fill="currentColor" stroke="none"/></svg><span><strong>Window</strong> A top-level page in a tab or window of its own. Its address is in the bar at the top.</span></li><li><svg class="glyph" viewBox="0 0 24 18" width="24" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="miter" stroke-linecap="round"><rect x="1.5" y="1.5" width="21" height="15" stroke-width="1" stroke-dasharray="2 2"/><rect x="6" y="5" width="12" height="8"/></svg><span><strong>&lt;iframe&gt;</strong> A page embedded in this one. Its address is written underneath. One marked sandbox with the address about:srcdoc has no site behind it: this page wrote its HTML, and the sandbox gives it an opaque origin, which matches no other origin. It stands in for code from someone else.</span></li><li><svg class="glyph" viewBox="0 0 24 18" width="24" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="miter" stroke-linecap="round"><path d="M5.5 1.5h13l4 4v7l-4 4h-13l-4-4v-7z"/></svg><span><strong>Worker</strong> A background thread that belongs to one page. The script it runs is written underneath.</span></li><li><svg class="glyph" viewBox="0 0 24 18" width="24" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="miter" stroke-linecap="round"><path d="M4.5 1.5h10.5l3.5 3.5v5.5L15 14H4.5L1 10.5V5z"/><path d="M21 6.5l2 2V13l-3.5 3.5H9.5L8 15"/></svg><span><strong>SharedWorker</strong> One background thread that every page of a site can connect to.</span></li><li><svg class="glyph" viewBox="0 0 24 18" width="24" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="miter" stroke-linecap="round"><path d="M5.5 1.5h13l4 4v7l-4 4h-13l-4-4v-7z"/><path d="M2.5 6.2h19M8 2.2 6 5.6M12 2.2l-2 3.4M16 2.2l-2 3.4M20 3l-2 2.6" stroke-width="1"/></svg><span><strong>Service Worker</strong> A background thread that answers network requests for one part of a site. The browser starts and stops it.</span></li><li><svg class="glyph" viewBox="0 0 24 18" width="24" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="miter" stroke-linecap="round"><path d="M5.5 1.5h13l4 4v7l-4 4h-13l-4-4v-7z"/><path d="M5 9h2l1.5-4 2.5 8 2.5-6 1.5 2H19" stroke-width="1.2"/></svg><span><strong>AudioWorklet</strong> Code that runs on the thread that produces sound.</span></li><li><svg class="glyph" viewBox="0 0 24 18" width="24" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="miter" stroke-linecap="round"><rect x="6.5" y="1" width="11" height="16" rx="2.5"/><path d="M10.5 14.3h3"/></svg><span><strong>Another device</strong> A browser on a different machine.</span></li><li><svg class="glyph" viewBox="0 0 24 18" width="24" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="miter" stroke-linecap="round"><rect x="2.5" y="3.5" width="19" height="11" rx="1.5" stroke-width="1"/></svg><span><strong>In this page</strong> Something the page draws itself. It is not a separate page or thread.</span></li><li><svg class="glyph" viewBox="0 0 24 18" width="24" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="miter" stroke-linecap="round"><path d="M3.5 5q8.5 12 17 0"/><circle cx="3.5" cy="5" r="2.2" fill="currentColor"/><circle cx="20.5" cy="5" r="2.2" fill="currentColor"/></svg><span><strong>MessageChannel</strong> A solid cable is one channel. The plug at each end is one of its two ports, and a moving dot is a message. The line a page has to its own worker, and a tab has to a shared worker, is a pair of ports too.</span></li><li><svg class="glyph" viewBox="0 0 24 18" width="24" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="miter" stroke-linecap="round"><path d="M2 9h16" stroke-dasharray="4 2.5"/><path d="M17 5.5l5 3.5-5 3.5z" fill="currentColor"/></svg><span><strong>Stream</strong> A dashed line marked stream is a ReadableStream or WritableStream that was transferred. Chunks go one way, towards the arrow.</span></li><li><svg class="glyph" viewBox="0 0 24 18" width="24" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="miter" stroke-linecap="round"><path d="M2 9h20" stroke-dasharray="4 2.5"/></svg><span><strong>postMessage, no channel</strong> A dashed line marked postMessage is a message sent straight to a window or a service worker. Neither side keeps a port.</span></li><li><svg class="glyph" viewBox="0 0 24 18" width="24" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="miter" stroke-linecap="round"><path d="M2 9h16" stroke-dasharray="4 2.5"/><path d="M17 5.5l5 3.5-5 3.5z" fill="currentColor"/></svg><span><strong>fetch</strong> A dashed line marked fetch is a network request that a service worker answers.</span></li><li><svg class="glyph" viewBox="0 0 24 18" width="24" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="miter" stroke-linecap="round"><path d="M2 9h20" stroke-dasharray="4 2.5"/></svg><span><strong>WebRTC data channel</strong> A dashed line marked WebRTC is a direct connection to another device. Each side wraps its end so that it can be used as a MessagePort.</span></li></ul>
+        <!-- /made:legend -->
+        </div>
       </div>
-      <nav class="contents" id="contents" aria-label="All the patterns" style="padding-bottom:2rem"></nav>
+      <nav class="contents" id="contents" aria-label="All the patterns" style="padding-bottom:2rem">
+        <!-- made:contents -->
+        <div><h3>The six basic patterns</h3><ol><li><a href="/patterns/hello/">Open a channel and send a message through it</a></li><li><a href="/patterns/introduce/">Connect two sites to each other, then remove yourself</a></li><li><a href="/patterns/reply/">Send a reply port with each request</a></li><li><a href="/patterns/attenuate/">Give a frame limited access, then revoke it</a></li><li><a href="/patterns/exchange/">Use a SharedWorker to connect tabs to each other</a></li><li><a href="/patterns/stream/">Send a stream to another frame</a></li></ol></div>
+        <div><h3>More things a port can carry</h3><ol><li><a href="/patterns/canvas/">Let another origin paint on your page</a></li><li><a href="/patterns/functions/">Pass a function to another origin</a></li><li><a href="/patterns/zerocopy/">Move 64 MB between origins without copying it</a></li><li><a href="/patterns/tearoff/">Tear a live widget off into its own window</a></li><li><a href="/patterns/tabserver/">Serve pages to other tabs from this tab</a></li><li><a href="/patterns/stream-intro/">A forwarded stream stops when the page that passed it on closes. A port keeps working.</a></li><li><a href="/patterns/pipeline/">Back-pressure across three origins</a></li><li><a href="/patterns/reload/">Keep a port across a page reload</a></li><li><a href="/patterns/router/">A worker that routes between windows that have never met</a></li></ol></div>
+        <div><h3>Across threads</h3><ol><li><a href="/patterns/frozen/">Two workers that keep talking while this page is frozen</a></li><li><a href="/patterns/filter/">Run live video through a filter on another origin</a></li><li><a href="/patterns/signer/">Let another origin sign with your key without giving it the key</a></li></ol></div>
+        <div><h3>Between real sites</h3><ol><li><a href="/patterns/keycopy/">Send a key to another site: it gets a copy you cannot take back</a></li><li><a href="/patterns/halves/">Send only the readable side of a stream</a></li><li><a href="/patterns/roundtrip/">Pipe your data through another site, and get it back</a></li><li><a href="/patterns/lend/">Lend someone a network connection you opened</a></li><li><a href="/patterns/oneway/">Join two sites with a port that carries messages one way only</a></li></ol></div>
+        <div><h3>Other devices, Service Workers, sockets and audio</h3><ol><li><a href="/patterns/far/">A port whose other end is on another device</a></li><li><a href="/patterns/mounted/">Mount another site at a path on yours</a></li><li><a href="/patterns/socket/">One connection to the server, shared by every tab</a></li><li><a href="/patterns/audio/">A worker that plays music while this page is frozen</a></li><li><a href="/patterns/swpair/">Join the service workers of two sites with a port</a></li></ol></div>
+        <div><h3>Knowing the other side is still there</h3><ol><li><a href="/patterns/health-pair/">Send a second port with the first, only for health checks</a></li><li><a href="/patterns/health-back/">Let the far side make the health channel and send a port back</a></li><li><a href="/patterns/health-beats/">Send a beat each way on two one-way ports</a></li><li><a href="/patterns/alive-signals/">Which signal notices which ending, and how quickly</a></li><li><a href="/patterns/alive-restart/">Restart a worker that has stopped answering, and ask again</a></li></ol></div>
+        <div><h3>Also on this page</h3><ol><li><a href="#sync">Block on a port: a synchronous call with no await</a></li><li><a href="#census">What will go down a port in your browser</a></li></ol></div>
+        <!-- /made:contents -->
+      </nav>
 
       <div class="stack" id="basics" style="padding-block:clamp(2rem,5vw,3.5rem) 1.5rem; --gap:1rem; border-top:2px solid var(--ink)">
         <h2 style="font-size:var(--step-3)">The six basic patterns</h2>
         <p>Everything else on this site is built from these. Press <strong>Next</strong> on any diagram to step through it one connection and one message at a time.</p>
       </div>
-      <div id="patterns"></div>
+      <div id="patterns">
+        <!-- made:patterns -->
+        <section class="pattern" id="hello">
+          <h3><a href="/patterns/hello/">Open a channel and send a message through it</a></h3>
+          <div class="demo"></div>
+          <div class="text">
+            <p><code>new MessageChannel()</code> gives you two entangled ports. Keep one, post the other to anyone you can already reach. From then on the two of you have a line of your own. What goes down it is not a window message, so a script that listens for <code>window.postMessage</code> messages does not see it.</p>
+            <pre>const { port1, port2 } = new MessageChannel();
+frame.contentWindow.postMessage("here", "*", [port2]); <span class="c">// port2 is moved, not copied</span>
+port1.onmessage = (e) => console.log(e.data);
+port1.postMessage("ping");</pre>
+            <p class="more"><a class="button quiet" href="/patterns/hello/">The full page on this: how it works, what to build, common mistakes ›</a></p>
+          </div>
+        </section>
+        <section class="pattern" id="introduce">
+          <h3><a href="/patterns/introduce/">Connect two sites to each other, then remove yourself</a></h3>
+          <div class="demo"></div>
+          <div class="text">
+            <p>A port can be passed on by whoever holds it. So a third party that knows two sites can make a channel, give each of them an end, and step away. The three windows are three different sites, and each address is in its bar. So that you can see all three at once, each is shown as a frame inside this page. A site cannot go and find the introducer. Two windows that have nothing to do with each other cannot reach each other in a browser at all. A first line exists only because one window opened the other, or one is a frame inside the other. So an introducer is a window a site opens, or a window that opens the sites, or a page that holds them as frames. This page stands in for that: it holds all three, and hands Site A and Site B their first lines. Close the introducer and the other two do not notice. This is how <a href="/hub/">the hub</a> works.</p>
+            <pre><span class="c">// in the introducer, which holds a port to each side</span>
+const { port1, port2 } = new MessageChannel();
+toLeft.postMessage({ meet: "right" }, [port1]);
+toRight.postMessage({ meet: "left" }, [port2]);
+<span class="c">// nothing else to do. It can close.</span></pre>
+            <p class="more"><a class="button quiet" href="/patterns/introduce/">The full page on this: how it works, what to build, common mistakes ›</a></p>
+          </div>
+        </section>
+        <section class="pattern" id="reply">
+          <h3><a href="/patterns/reply/">Send a reply port with each request</a></h3>
+          <div class="demo"></div>
+          <div class="text">
+            <p>Instead of matching replies to requests with ids, make a new channel for each request and send one end along with it. The answer comes back on a port that only this request ever had. Answers can't get mixed up, and nobody else can answer in your place. The three boxes are frames in this page. This page gave each client its line to the service before the first press.</p>
+            <pre>function ask(service, question) {
+  const { port1, port2 } = new MessageChannel();
+  service.postMessage(question, [port2]);
+  return new Promise((resolve) => (port1.onmessage = (e) => { resolve(e.data); port1.close(); }));
+}</pre>
+            <p class="more"><a class="button quiet" href="/patterns/reply/">The full page on this: how it works, what to build, common mistakes ›</a></p>
+          </div>
+        </section>
+        <section class="pattern" id="attenuate">
+          <h3><a href="/patterns/attenuate/">Give a frame limited access, then revoke it</a></h3>
+          <div class="demo"></div>
+          <div class="text">
+            <p>Holding a port is the permission to use it. The owner here doesn't hand out its real port. It makes a new channel, keeps one end, and only answers <code>read</code> on it. To revoke, it closes its end. It needs no account, token or list of who is allowed. The two boxes are frames in this page and have no line to each other at the start, so the owner hands the new port to this page, which passes it to the guest.</p>
+            <pre>function readOnly(counter) {
+  const { port1, port2 } = new MessageChannel();
+  port1.onmessage = (e) => port1.postMessage(e.data === "read" ? counter.value : "denied");
+  return { port: port2, revoke: () => port1.close() };
+}</pre>
+            <p class="more"><a class="button quiet" href="/patterns/attenuate/">The full page on this: how it works, what to build, common mistakes ›</a></p>
+          </div>
+        </section>
+        <section class="pattern" id="exchange">
+          <h3><a href="/patterns/exchange/">Use a SharedWorker to connect tabs to each other</a></h3>
+          <div class="demo"></div>
+          <div class="text">
+            <p>Every tab on an origin can reach the same SharedWorker. Here it keeps a port to each tab and does one job: when a tab joins, it makes a channel between that tab and every other, then stays out of it. The tabs talk directly. Open a third in a new tab and it joins the same mesh.</p>
+            <pre><span class="c">// in the SharedWorker</span>
+const peers = new Set();
+onconnect = ({ ports: [port] }) => {
+  port.onmessage = ({ data: { name } }) => {     <span class="c">// each tab says its name once</span>
+    for (const other of peers) {
+      const { port1, port2 } = new MessageChannel();
+      port.postMessage({ meet: other.name }, [port1]);
+      other.port.postMessage({ meet: name }, [port2]);
+    }
+    peers.add({ name, port });
+  };
+};</pre>
+            <p class="more"><a class="button quiet" href="/patterns/exchange/">The full page on this: how it works, what to build, common mistakes ›</a></p>
+          </div>
+        </section>
+        <section class="pattern" id="stream">
+          <h3><a href="/patterns/stream/">Send a stream to another frame</a></h3>
+          <div class="demo"></div>
+          <div class="text">
+            <p>A <code>ReadableStream</code> is transferable too, so you can hand another origin a live stream and it reads with back-pressure, as if the source were local. Chrome and Firefox can do this today.</p>
+            <pre>const stream = new ReadableStream({ pull(controller) { controller.enqueue(nextChunk()); } });
+port.postMessage({ stream }, [stream]);
+
+<span class="c">// other side</span>
+port.onmessage = async ({ data }) => { for await (const chunk of data.stream) use(chunk); };</pre>
+            <p class="more"><a class="button quiet" href="/patterns/stream/">The full page on this: how it works, what to build, common mistakes ›</a></p>
+          </div>
+        </section>
+        <!-- /made:patterns -->
+      </div>
 
       <div class="stack" id="further" style="padding-block:clamp(3rem,8vw,5rem) 2rem; --gap:1.2rem; border-top:2px solid var(--ink)">
         <h2 style="font-size:var(--step-3)">More things a port can carry</h2>
         <p>What a port can carry and where it can end up. These use newer parts of the platform, so some won't work in every browser.</p>
       </div>
-      <div id="more"></div>
+      <div id="more">
+        <!-- made:more -->
+        <section class="pattern" id="canvas">
+          <h3><a href="/patterns/canvas/">Let another origin paint on your page</a></h3>
+          <div class="demo"></div>
+          <div class="text">
+            <p>The painter is a frame on another origin. It draws on a canvas of its own and sends each finished frame down a port as an <code>ImageBitmap</code>, which is moved and not copied. This page shows each one in a canvas it owns. The painter cannot read or touch anything here. Handing over the canvas's own drawing surface would be shorter, but Chrome crashes a frame in another process that draws on one, so that is kept for workers.</p>
+            <pre><span class="c">// the other origin: draw, then send the finished frame</span>
+const mine = new OffscreenCanvas(width, height);
+const ctx = mine.getContext("2d");
+requestAnimationFrame(async function draw(t) {
+  paint(ctx, t);
+  const frame = await createImageBitmap(mine);
+  port.postMessage({ frame }, [frame]);       <span class="c">// moved</span>
+  requestAnimationFrame(draw);
+});
+
+<span class="c">// this page: show it</span>
+const show = canvas.getContext("bitmaprenderer");
+port.onmessage = ({ data }) => show.transferFromImageBitmap(data.frame);</pre>
+            <p class="more"><a class="button quiet" href="/patterns/canvas/">The full page on this: how it works, what to build, common mistakes ›</a></p>
+          </div>
+        </section>
+        <section class="pattern" id="functions">
+          <h3><a href="/patterns/functions/">Pass a function to another origin</a></h3>
+          <div class="demo"></div>
+          <div class="text">
+            <p>A function cannot be cloned, but a port can stand in for one. Wrap the function in a channel, send the other end, and the receiver gets something it can call. Arguments can be functions too, the same way. Close the port and the function stops existing for them. This is how Comlink works underneath.</p>
+            <pre>const lend = (fn) => {
+  const { port1, port2 } = new MessageChannel();
+  port1.onmessage = (e) => fn(...e.data);
+  return { port: port2, revoke: () => port1.close() };   <span class="c">// send port, keep revoke</span>
+};
+const borrow = (port) => (...args) => port.postMessage(args);</pre>
+            <p class="more"><a class="button quiet" href="/patterns/functions/">The full page on this: how it works, what to build, common mistakes ›</a></p>
+          </div>
+        </section>
+        <section class="pattern" id="zerocopy">
+          <h3><a href="/patterns/zerocopy/">Move 64 MB between origins without copying it</a></h3>
+          <div class="demo"></div>
+          <div class="text">
+            <p>Post an <code>ArrayBuffer</code> and it is copied. Put it in the transfer list and the memory itself changes hands: the sender's buffer drops to zero bytes and the cost stops depending on size. Each button sends 64 MB to another origin and back, and times the round trip.</p>
+            <pre>port.postMessage(buffer);            <span class="c">// structured clone: a copy each way</span>
+port.postMessage(buffer, [buffer]);  <span class="c">// transfer: buffer.byteLength is now 0</span></pre>
+            <p class="more"><a class="button quiet" href="/patterns/zerocopy/">The full page on this: how it works, what to build, common mistakes ›</a></p>
+          </div>
+        </section>
+        <section class="pattern" id="tearoff">
+          <h3><a href="/patterns/tearoff/">Tear a live widget off into its own window</a></h3>
+          <div class="demo"></div>
+          <div class="text">
+            <p>A port works the same in whichever window holds it. The meter here is fed by a service on another origin. Tear it off and the port is posted to a new window, which carries on from the next tick with no reconnect. Put it back and it returns the port.</p>
+            <pre>const win = window.open("/meter.html", "", "popup");
+<span class="c">// once it says it is ready</span>
+win.postMessage({ feed: port }, location.origin, [port]);</pre>
+            <p class="more"><a class="button quiet" href="/patterns/tearoff/">The full page on this: how it works, what to build, common mistakes ›</a></p>
+          </div>
+        </section>
+        <section class="pattern" id="tabserver">
+          <h3><a href="/patterns/tabserver/">Serve pages to other tabs from this tab</a></h3>
+          <div class="demo"></div>
+          <div class="text">
+            <p>A Service Worker can answer a fetch any way it likes, including by asking someone else. This page hands the worker a port. Every request under <code>/patterns/served/</code> is sent up that port, and whatever you type on the left is the response. The page on the right is a real navigation to a real URL, and so is the new tab.</p>
+            <pre><span class="c">// Service Worker</span>
+onfetch = (event) => event.respondWith(new Promise((resolve) => {
+  const { port1, port2 } = new MessageChannel();
+  port1.onmessage = (e) => resolve(new Response(e.data.body, { headers: e.data.headers }));
+  tabPort.postMessage({ url: event.request.url }, [port2]);
+}));</pre>
+            <p class="more"><a class="button quiet" href="/patterns/tabserver/">The full page on this: how it works, what to build, common mistakes ›</a></p>
+          </div>
+        </section>
+        <section class="pattern" id="stream-intro">
+          <h3><a href="/patterns/stream-intro/">A forwarded stream stops when the page that passed it on closes. A port keeps working.</a></h3>
+          <div class="demo"></div>
+          <div class="text">
+            <p>You can pass a stream on, the same as a port. But a stream that was passed on keeps flowing through every context that touched it. Send one through the introducer, remove the introducer, and the reader stalls with no error and no end. So introduce with a port first, then send the stream down the direct line. Start again between the two to compare. The three boxes are frames in this page, and this page gave the source and the reader each a line to the introducer.</p>
+            <pre><span class="c">// fragile: the middle is now part of the pipe for ever</span>
+toMiddle.postMessage({ stream }, [stream]);
+
+<span class="c">// sturdy: the middle only introduces</span>
+const direct = await introducedPort();
+direct.postMessage({ stream }, [stream]);</pre>
+            <p class="more"><a class="button quiet" href="/patterns/stream-intro/">The full page on this: how it works, what to build, common mistakes ›</a></p>
+          </div>
+        </section>
+        <section class="pattern" id="pipeline">
+          <h3><a href="/patterns/pipeline/">Back-pressure across three origins</a></h3>
+          <div class="demo"></div>
+          <div class="text">
+            <p>This page hands its stream to a frame on another origin. That frame transforms it and hands the result to a frame on a third origin, down a port it holds to that frame. Nothing is buffered without limit: pause the reader and, a few chunks later, the source stops being asked for more.</p>
+            <pre><span class="c">// the transformer, on its own origin</span>
+port.onmessage = ({ data }) => {
+  const out = data.readable.pipeThrough(new TransformStream({ transform: shout }));
+  toReader.postMessage({ readable: out }, [out]);   <span class="c">// a port to the third origin</span>
+};</pre>
+            <p class="more"><a class="button quiet" href="/patterns/pipeline/">The full page on this: how it works, what to build, common mistakes ›</a></p>
+          </div>
+        </section>
+        <section class="pattern" id="reload">
+          <h3><a href="/patterns/reload/">Keep a port across a page reload</a></h3>
+          <div class="demo"></div>
+          <div class="text">
+            <p>A port cannot be saved. IndexedDB, sessionStorage and history state all refuse it, because a port can be moved but never copied. But you can leave it with a SharedWorker. As this frame unloads it posts its port to the worker, and when it loads again it asks for it back. The worker is created with <code>extendedLifetime</code>, so it outlives the page even when that page was its only client. The feed doesn't notice. Ticks sent during the reload waited in the port, and the count has no gaps. The dark cable is the frame's own connection to the worker. The other one is the port that is kept, which this page made and gave to the feed and the frame.</p>
+            <pre>const bank = new SharedWorker("/bank.js", { extendedLifetime: true });
+addEventListener("pagehide", () => bank.port.postMessage({ deposit: key }, [port]));
+
+<span class="c">// next load</span>
+bank.port.postMessage({ withdraw: key });
+bank.port.onmessage = ({ data, ports }) => data.found ? resume(ports[0]) : connectAgain();</pre>
+            <p class="more"><a class="button quiet" href="/patterns/reload/">The full page on this: how it works, what to build, common mistakes ›</a></p>
+          </div>
+        </section>
+        <section class="pattern" id="router">
+          <h3><a href="/patterns/router/">A worker that routes between windows that have never met</a></h3>
+          <div class="demo"></div>
+          <div class="text">
+            <p>The three windows above the router know two things each: their own name, and how to reach the router. None of them has a reference to another, and none of them holds a port of another's. To reach the kitchen, the orders window posts a message to the router addressed to "kitchen". The router looks the name up and passes the message on, with the sender's name attached. Address a name nobody has and the router says so. The router here is a SharedWorker. Each box is a real page of this site, and the link opens a fourth window that can join in.</p>
+            <pre><span class="c">// every window: say who you are, then address others by name</span>
+const { port } = new SharedWorker("/router-worker.js");
+port.postMessage({ iam: "orders" });
+port.postMessage({ to: "kitchen", text: "two tulip bunches" });
+port.onmessage = ({ data }) => show(data.from, data.text);
+
+<span class="c">// the router: a table of names, and nothing else</span>
+onconnect = ({ ports: [port] }) => {
+  port.onmessage = ({ data }) => {
+    if (data.iam) return table.set(data.iam, port);
+    const target = table.get(data.to);
+    target ? target.postMessage({ from: nameOf(port), text: data.text })
+           : port.postMessage({ undelivered: data.to });
+  };
+};</pre>
+            <p class="more"><a class="button quiet" href="/patterns/router/">The full page on this: how it works, what to build, common mistakes ›</a></p>
+          </div>
+        </section>
+        <!-- /made:more -->
+      </div>
 
       <div class="stack" id="threads-intro" style="padding-block:clamp(3rem,8vw,5rem) 2rem; --gap:1.2rem; border-top:2px solid var(--ink)">
         <h2 style="font-size:var(--step-3)">Across threads</h2>
         <p>A port can be held by a worker, and it can carry video frames or requests to sign with a key.</p>
       </div>
-      <div id="threads"></div>
+      <div id="threads">
+        <!-- made:threads -->
+        <section class="pattern" id="frozen">
+          <h3><a href="/patterns/frozen/">Two workers that keep talking while this page is frozen</a></h3>
+          <div class="demo"></div>
+          <div class="text">
+            <p>A port given to a worker belongs to that worker's thread. Introduce two workers to each other and their messages never touch the page again. Freeze this page for three seconds: its own counter stops, the buttons go dead, and the two workers carry on. You can watch them do it, because each one paints its numbers into a canvas whose drawing surface it was handed, and a transferred canvas does not wait for the page either.</p>
+            <pre>const { port1, port2 } = new MessageChannel();
+workerA.postMessage({}, [port1]);
+workerB.postMessage({}, [port2]);
+<span class="c">// this page is now out of the conversation, and can stall without harm</span>
+while (performance.now() < until) {}</pre>
+            <p class="more"><a class="button quiet" href="/patterns/frozen/">The full page on this: how it works, what to build, common mistakes ›</a></p>
+          </div>
+        </section>
+        <section class="pattern" id="filter">
+          <h3><a href="/patterns/filter/">Run live video through a filter on another origin</a></h3>
+          <div class="demo"></div>
+          <div class="text">
+            <p>Video can leave your page one frame at a time and come back changed. The picture on the left is drawn by this page, and it is your camera if you turn that on. The filter lives on another origin, in a sandbox. It has no camera, cannot see this page, and holds each frame only until it sends it on. Frames are moved, not copied: after sending, this page's own handle to the frame is empty. A <code>VideoFrame</code> is the natural thing to move. A browser hands one to a worker, or to a frame of your own site. Chrome will not hand one to another process, and a sandboxed frame or a frame from another site now runs in one. So the page tries a <code>VideoFrame</code>, and if the filter cannot rebuild it, it moves an <code>ImageBitmap</code> from then on, which does cross. The note under the right-hand picture says which was used. It is a way to build video plug-ins that get pixels and nothing else.</p>
+            <pre>const frame = new VideoFrame(source, { timestamp });
+port.postMessage({ frame }, [frame]);          <span class="c">// frame is now closed here</span>
+
+<span class="c">// the filter, on its own origin</span>
+port.onmessage = ({ data }) => {
+  ctx.filter = "invert(1)"; ctx.drawImage(data.frame, 0, 0); data.frame.close();
+  const out = new VideoFrame(canvas, { timestamp: data.frame.timestamp });
+  port.postMessage({ frame: out }, [out]);
+};
+<span class="c">// a frame the browser could not rebuild here arrives as this, with nothing in it</span>
+port.onmessageerror = () => port.postMessage({ unreadable: true });
+
+<span class="c">// the page again: an ImageBitmap crosses where a VideoFrame does not</span>
+const bitmap = await createImageBitmap(source);
+port.postMessage({ bitmap }, [bitmap]);</pre>
+            <p class="more"><a class="button quiet" href="/patterns/filter/">The full page on this: how it works, what to build, common mistakes ›</a></p>
+          </div>
+        </section>
+        <section class="pattern" id="signer">
+          <h3><a href="/patterns/signer/">Let another origin sign with your key without giving it the key</a></h3>
+          <div class="demo"></div>
+          <div class="text">
+            <p>The vault makes a signing key the browser will not let anyone read, itself included. It gives this page a port that signs. This page lends the shop a weaker port: orders only, three uses. The shop gets real signatures that anyone can check against the public key, and at no point does the key, or the full port, move.</p>
+            <pre><span class="c">// the vault</span>
+const { privateKey, publicKey } = await crypto.subtle.generateKey(ECDSA, false, ["sign", "verify"]);
+port.onmessage = async ({ data }) => port.postMessage({ id: data.id, signature: await sign(privateKey, data.text) });
+
+<span class="c">// this page, lending less than it has</span>
+lent.onmessage = ({ data }) => {
+  if (uses-- > 0 && data.text.startsWith("order:")) vault.postMessage(data); else refuse(data);
+};</pre>
+            <p class="more"><a class="button quiet" href="/patterns/signer/">The full page on this: how it works, what to build, common mistakes ›</a></p>
+          </div>
+        </section>
+        <!-- /made:threads -->
+      </div>
 
       <div class="stack" id="origins-intro" style="padding-block:clamp(3rem,8vw,5rem) 2rem; --gap:1.2rem; border-top:2px solid var(--ink)">
         <h2 style="font-size:var(--step-3)">Between real sites</h2>
         <p>Most frames on this page are sandboxed frames that this page wrote. Each has an opaque origin, so it is cross-origin to this page and to every other frame, but it is not a site: it has no address and no storage. In this part the outer boxes are the florist's and the library's actual sites, embedded here, each with its own address and its own storage. They show what you hand over and whether you can get it back.</p>
       </div>
-      <div id="origins"></div>
+      <div id="origins">
+        <!-- made:origins -->
+        <section class="pattern" id="keycopy">
+          <h3><a href="/patterns/keycopy/">Send a key to another site: it gets a copy you cannot take back</a></h3>
+          <div class="demo"></div>
+          <div class="text">
+            <p>A <code>CryptoKey</code> can be posted to another origin. This page makes a signing key that cannot be read, and sends the key itself to the florist's site. The florist can now sign as you. It cannot read the key either, but it can keep it: it saves the key in its own IndexedDB, and after a reload it still has it. Nothing this page does can undo that. Compare <a href="/patterns/signer/">the signer pattern</a>, where the key stays put and only a port travels.</p>
+            <pre>const { privateKey } = await crypto.subtle.generateKey(ECDSA, false, ["sign"]);
+floristWindow.postMessage({ key: privateKey }, floristOrigin);   <span class="c">// a copy, not a move</span>
+
+<span class="c">// the florist, on its own origin</span>
+await db.put(key, "theirs");                 <span class="c">// kept, for as long as it likes</span>
+await crypto.subtle.sign(ECDSA, key, bytes); <span class="c">// signs as you</span></pre>
+            <p class="more"><a class="button quiet" href="/patterns/keycopy/">The full page on this: how it works, what to build, common mistakes ›</a></p>
+          </div>
+        </section>
+        <section class="pattern" id="halves">
+          <h3><a href="/patterns/halves/">Send only the readable side of a stream</a></h3>
+          <div class="demo"></div>
+          <div class="text">
+            <p>A stream has a direction, and you can hand over one direction without the other. The library's site gets only something to read from: it can listen and has nothing to speak into. The florist's site gets only something to write into: it can post notes through the slot and cannot see what else is inside. The owner can cut either one off. Close the feed and the listener is told it has ended. Shut the box and the next write fails.</p>
+            <pre><span class="c">// listen only</span>
+library.postMessage({ readable }, origin, [readable]);
+
+<span class="c">// write only</span>
+const writable = new WritableStream({ start(c) { box = c; }, write: keep });
+florist.postMessage({ writable }, origin, [writable]);
+box.error(new Error("shut"));               <span class="c">// later: their next write fails</span></pre>
+            <p class="more"><a class="button quiet" href="/patterns/halves/">The full page on this: how it works, what to build, common mistakes ›</a></p>
+          </div>
+        </section>
+        <section class="pattern" id="roundtrip">
+          <h3><a href="/patterns/roundtrip/">Pipe your data through another site, and get it back</a></h3>
+          <div class="demo"></div>
+          <div class="text">
+            <p>A transform has two ends, and both can be given away. The library's site makes one that blacks out email addresses and long numbers, and hands this page the end to write into and the end to read from. From here it is an ordinary <code>pipeThrough</code>: your lines go in, cross to the library's origin, are changed by code this page never loads or sees, and come back. Back-pressure crosses with them.</p>
+            <pre><span class="c">// the library, on its own origin</span>
+const { readable, writable } = new TransformStream({ transform: redact });
+parent.postMessage({ readable, writable }, "*", [readable, writable]);
+
+<span class="c">// this page</span>
+myLines.pipeThrough({ readable, writable }).pipeTo(screen);</pre>
+            <p class="more"><a class="button quiet" href="/patterns/roundtrip/">The full page on this: how it works, what to build, common mistakes ›</a></p>
+          </div>
+        </section>
+        <section class="pattern" id="lend">
+          <h3><a href="/patterns/lend/">Lend someone a network connection you opened</a></h3>
+          <div class="demo"></div>
+          <div class="text">
+            <p>The widget on the right is locked down so that it cannot reach the network at all. This page opens a WebSocket to the server and hands the widget the two streams that are the connection: one to write to, one to read from. The widget is now talking to the server. It never learns the address, it cannot open a second connection, and it keeps talking only until this page closes the socket. Hand over just the readable stream and it becomes a tap that can listen and not speak.</p>
+            <pre>const socket = new WebSocketStream(url);        <span class="c">// keep it: socket.close() ends the loan</span>
+const { readable, writable } = await socket.opened;
+widget.postMessage({ readable, writable }, "*", [readable, writable]);
+
+<span class="c">// the widget, which has no network of its own</span>
+await writable.getWriter().write("hello");
+const { value } = await readable.getReader().read();   <span class="c">// the server's answer</span></pre>
+            <p class="more"><a class="button quiet" href="/patterns/lend/">The full page on this: how it works, what to build, common mistakes ›</a></p>
+          </div>
+        </section>
+        <section class="pattern" id="oneway">
+          <h3><a href="/patterns/oneway/">Join two sites with a port that carries messages one way only</a></h3>
+          <div class="demo"></div>
+          <div class="text">
+            <p>A <code>MessagePort</code> always works in both directions. Whoever you give one to can post into it, and there is no setting that stops them. This page wants the library's site to publish prices to the florist's site, and wants nothing to come back. So it does not give them the two ends of one channel. It makes two channels and stands between them. What the library posts is posted on to the florist. What the florist posts stops at this page and is counted. The florist holds a real port and can call <code>postMessage</code> on it as often as it likes. A message with a port or a stream in it is refused in the forward direction too, because either one would be a way to answer.</p>
+            <pre>function oneWay() {
+  const inlet = new MessageChannel(), outlet = new MessageChannel();
+  <span class="c">// forward: post it again, with no transfer list, so a port cannot ride along</span>
+  inlet.port2.onmessage = (e) => { try { outlet.port1.postMessage(e.data); } catch {} };
+  <span class="c">// backward: nothing</span>
+  outlet.port1.onmessage = () => {};
+  return { send: inlet.port1, receive: outlet.port2,
+           cut: () => { inlet.port2.close(); outlet.port1.close(); } };
+}
+
+const link = oneWay();
+library.postMessage({ cmd: "feed" }, libraryOrigin, [link.send]);
+florist.postMessage({ cmd: "feed" }, floristOrigin, [link.receive]);</pre>
+            <p class="more"><a class="button quiet" href="/patterns/oneway/">The full page on this: how it works, what to build, common mistakes ›</a></p>
+          </div>
+        </section>
+        <!-- /made:origins -->
+      </div>
 
       <div class="stack" id="places-intro" style="padding-block:clamp(3rem,8vw,5rem) 2rem; --gap:1.2rem; border-top:2px solid var(--ink)">
         <h2 style="font-size:var(--step-3)">Other devices, Service Workers, sockets and audio</h2>
         <p>The other end of a port can be on another device, behind a path on your own site, in a worker that every tab shares, or on the thread that makes sound. The code that holds the port doesn't change.</p>
       </div>
-      <div id="places"></div>
+      <div id="places">
+        <!-- made:places -->
+        <section class="pattern" id="far">
+          <h3><a href="/patterns/far/">A port whose other end is on another device</a></h3>
+          <div class="demo"></div>
+          <div class="text">
+            <p>This page meets another device through a pairing code, the two connect directly with WebRTC, and each side wraps its end of that connection in a <code>MessagePort</code>. Then this page hands its port on. The counter at the end of the yellow cable is a sandboxed frame that was given a port and knows nothing more. Your phone is now pressing its buttons. The server carried a few messages so the two could find each other, and nothing since. The port carries more than text: bytes, other ports and streams can be posted into it, and each is rebuilt on the other device. See <a href="/patterns/far/#built-farfile">sending a photo as a stream</a> and <a href="/patterns/far/#built-farports">lending a port to another device</a>.</p>
+            <pre><span class="c">// this page shows a pairing code. onPort is given a real MessagePort</span>
+far({ code, host: true, onPort(port) {
+  counterFrame.postMessage({ cmd: "port" }, "*", [port]);   <span class="c">// give it away like any other port</span>
+} });
+
+<span class="c">// the other device, with the same code: ordinary port code</span>
+far({ code, onPort(port) {
+  port.postMessage({ do: "add" });
+  port.onmessage = ({ data }) => show(data.count);
+} });</pre>
+            <p class="more"><a class="button quiet" href="/patterns/far/">The full page on this: how it works, what to build, common mistakes ›</a></p>
+          </div>
+        </section>
+        <section class="pattern" id="mounted">
+          <h3><a href="/patterns/mounted/">Mount another site at a path on yours</a></h3>
+          <div class="demo"></div>
+          <div class="text">
+            <p>A Service Worker can answer a request by asking a port, and the other end of that port can be on another origin. This page introduces a Service Worker to the florist's site. From then on, every request under <code>/patterns/mounted/florist/</code> is answered by the florist: pages, images, and a file whose body is a stream that the florist is still writing while this origin reads it. The florist's server is never contacted. Its page, open in a frame, is the server. The same worker script, registered again for <code>/patterns/mounted/library/</code> and given a port to the library's site, mounts that site beside it. What is mounted here runs as this origin, so mount only what you would let act as you.</p>
+            <pre><span class="c">// this page: a worker for the path, and a port to the site that will serve it</span>
+const reg = await navigator.serviceWorker.register("/mount-sw.js", { scope: "/mounted/florist/" });
+const { port1, port2 } = new MessageChannel();
+floristFrame.postMessage({ cmd: "serve" }, floristOrigin, [port1]);
+reg.active.postMessage({ mount: true }, [port2]);
+
+<span class="c">// Service Worker</span>
+origin.postMessage({ path }, [replyPort]);
+<span class="c">// the florist answers with a body that is a ReadableStream, transferred</span>
+return new Response(answer.body, answer);</pre>
+            <p class="more"><a class="button quiet" href="/patterns/mounted/">The full page on this: how it works, what to build, common mistakes ›</a></p>
+          </div>
+        </section>
+        <section class="pattern" id="socket">
+          <h3><a href="/patterns/socket/">One connection to the server, shared by every tab</a></h3>
+          <div class="demo"></div>
+          <div class="text">
+            <p>Ten tabs of the same site usually means ten connections to the server. Here no tab has one. A SharedWorker holds the only WebSocket, and each tab holds a port to the worker. A tab speaks by posting to its port. The worker numbers each question, and the answer with that number goes back down the port of the tab that asked, so replies are never mixed up. Close a tab and the worker notices and carries on. Drop the connection and the worker opens another and asks again anything that was not answered. The tabs have no code for any of that. The two boxes on the outside are real pages of this site, and the link opens a third in a real tab that joins the same socket.</p>
+            <pre><span class="c">// every tab</span>
+const { port } = new SharedWorker("/socket-worker.js");
+port.postMessage({ say: "hello" });
+port.onmessage = ({ data }) => show(data.answer);
+
+<span class="c">// the worker: one socket, and a note of who asked what</span>
+port.onmessage = ({ data }) => {
+  const id = ++ids;
+  pending.set(id, { port, text: data.say });
+  socket.send(JSON.stringify({ id, text: data.say }));
+};
+socket.onmessage = ({ data }) => {
+  const { id, text } = JSON.parse(data);
+  pending.get(id).port.postMessage({ answer: text });
+  pending.delete(id);
+};
+<span class="c">// a dropped connection: open another and ask again what is still waiting</span>
+socket.onclose = () => setTimeout(connect, 300);</pre>
+            <p class="more"><a class="button quiet" href="/patterns/socket/">The full page on this: how it works, what to build, common mistakes ›</a></p>
+          </div>
+        </section>
+        <section class="pattern" id="audio">
+          <h3><a href="/patterns/audio/">A worker that plays music while this page is frozen</a></h3>
+          <div class="demo"></div>
+          <div class="text">
+            <p>Sound is made on a thread of its own, and that thread accepts a port. This page starts an audio processor and a worker, gives each one end of a channel, and steps away. The worker writes the tune and sends each note straight to the audio thread, which plays it and says so. Freeze this page for three seconds: the buttons stop working and its counter stops, but the music keeps time because none of it passes through here. The audio thread has no DOM, no timers and no network. A port is the only way to reach it, and anything that holds the other end can.</p>
+            <pre>const node = new AudioWorkletNode(audio, "bell");
+const { port1, port2 } = new MessageChannel();
+composerWorker.postMessage({}, [port1]);
+node.port.postMessage({}, [port2]);        <span class="c">// the audio thread now holds a port</span>
+
+<span class="c">// the worker, every beat. The page is not involved.</span>
+port.postMessage({ freq: 440 });</pre>
+            <p class="more"><a class="button quiet" href="/patterns/audio/">The full page on this: how it works, what to build, common mistakes ›</a></p>
+          </div>
+        </section>
+        <section class="pattern" id="swpair">
+          <h3><a href="/patterns/swpair/">Join the service workers of two sites with a port</a></h3>
+          <div class="demo"></div>
+          <div class="text">
+            <p>The florist's site and the library's site each have a service worker. A service worker can post to pages of its own site and to nothing else, so the two cannot reach each other. A port can be carried between them. The florist's worker makes a channel, keeps one port and gives the other to its page. The page sends that port over a line it holds to the library's page, and the library's page gives it to the library's worker. Now each worker holds one end of the same channel, and they ask each other questions with no page taking part. The answers are read from each site's own Cache Storage. A browser stops a service worker that has been idle for about thirty seconds, and the port is lost with it. Nothing tells the other worker. So each question has a time limit of 1.5 seconds. When it passes, the asking worker closes its port, makes a new channel, and has the pages carry one end across again. In the diagram this page gave the two pages their line. On the real web the florist's page opens the library's window and gives it one, which the link under the demo does.</p>
+            <pre><span class="c">// florist's service worker: make a channel, keep one port, give the other to my page</span>
+const { port1, port2 } = new MessageChannel();
+peer = port1;
+client.postMessage({ pair: "carry" }, [port2]);
+
+<span class="c">// florist's page: it opened the library's window earlier and gave it one end of a channel.</span>
+<span class="c">// The port from the worker goes over that port.</span>
+navigator.serviceWorker.onmessage = (event) =>
+  lineToLibraryPage.postMessage({ carry: true }, [event.ports[0]]);
+
+<span class="c">// library's page: give the port to its own worker. This starts the worker if it was stopped.</span>
+lineToFloristPage.onmessage = (event) =>
+  registration.active.postMessage({ pair: "peer", from: "florist" }, [event.ports[0]]);
+
+<span class="c">// library's service worker: this port now reaches the florist's worker directly</span>
+onmessage = (event) => { peer = event.ports[0]; peer.onmessage = answer; peer.postMessage({ hello: "library" }); };
+
+<span class="c">// either worker, later: a question, with a time limit, because a stopped worker says nothing</span>
+const reply = new MessageChannel();
+peer.postMessage({ ask: "Dune" }, [reply.port2]);
+const answer = await firstMessageOrTimeout(reply.port1, 1500);
+if (!answer) { peer.close(); peer = null; await join(); <span class="c">/* a new channel, carried across again */</span> }</pre>
+            <p class="more"><a class="button quiet" href="/patterns/swpair/">The full page on this: how it works, what to build, common mistakes ›</a></p>
+          </div>
+        </section>
+        <!-- /made:places -->
+      </div>
 
       <div class="stack" id="alive-intro" style="padding-block:clamp(3rem,8vw,5rem) 2rem; --gap:1.2rem; border-top:2px solid var(--ink)">
         <h2 style="font-size:var(--step-3)">Knowing the other side is still there</h2>
         <p>A port does not tell you when its other end has gone. The page that held it can be closed, navigated, frozen or stuck, and posting into the port still works but nothing comes back. These demos put health checks on a second port, so the code that does the work doesn't have to know about them.</p>
       </div>
-      <div id="alive"></div>
+      <div id="alive">
+        <!-- made:alive -->
+        <section class="pattern" id="health-pair">
+          <h3><a href="/patterns/health-pair/">Send a second port with the first, only for health checks</a></h3>
+          <div class="demo"></div>
+          <div class="text">
+            <p>A port does not tell you when its other end has gone. Posting into it still works, and nothing comes back. So this page sends the far side two ports at once. The first carries the work: a flower name goes in, a price comes out, and that is the whole protocol. The second carries pings and their answers and nothing else. The page pings once a second. One missed answer is late. Three in a row and the page treats the far side as gone. A page that is closing says goodbye on the health port as it goes, so most endings are seen at once and the pings are there for the ones that are not.</p>
+            <pre>import { watch, answer } from "/alive.js";
+
+<span class="c">// this page</span>
+const data = new MessageChannel(), health = new MessageChannel();
+frame.postMessage("ports", origin, [data.port2, health.port2]);
+watch(health.port1, { every: 1000, misses: 3,
+  onState: (state) => state === "silent" || state === "closed" ? giveUp() : null });
+
+<span class="c">// the far side</span>
+onmessage = ({ ports: [data, health] }) => {
+  data.onmessage = (e) => data.postMessage(price(e.data)); <span class="c">// no health logic here</span>
+  answer(health);  <span class="c">// answers pings, and says goodbye on pagehide</span>
+};</pre>
+            <p class="more"><a class="button quiet" href="/patterns/health-pair/">The full page on this: how it works, what to build, common mistakes ›</a></p>
+          </div>
+        </section>
+        <section class="pattern" id="health-back">
+          <h3><a href="/patterns/health-back/">Let the far side make the health channel and send a port back</a></h3>
+          <div class="demo"></div>
+          <div class="text">
+            <p>Here the page sends only one port, the one for work, the same as it would with no health checks at all. When the far side receives it, it makes a channel of its own for health checks and sends one end back. Each side set up exactly one channel. The page does not have to know in advance that the far side does health checks: if a port comes back, it watches it. If none comes, it carries on without. The far side decides how it is watched.</p>
+            <pre><span class="c">// this page: one port, as usual</span>
+const data = new MessageChannel();
+frame.postMessage("port", origin, [data.port2]);
+addEventListener("message", (e) => {
+  if (e.source === frame && e.data === "health") watch(e.ports[0], { onState });
+});
+
+<span class="c">// the far side: make the health channel, keep one end, send the other back</span>
+onmessage = ({ source, ports: [data] }) => {
+  serve(data);
+  const health = new MessageChannel();
+  answer(health.port1);
+  source.postMessage("health", "*", [health.port2]);
+};</pre>
+            <p class="more"><a class="button quiet" href="/patterns/health-back/">The full page on this: how it works, what to build, common mistakes ›</a></p>
+          </div>
+        </section>
+        <section class="pattern" id="health-beats">
+          <h3><a href="/patterns/health-beats/">Send a beat each way on two one-way ports</a></h3>
+          <div class="demo"></div>
+          <div class="text">
+            <p>Each side makes a channel, keeps the end it posts into and gives the other side the end to listen on. Then it posts a beat on a timer and never reads its own port. Each side only listens to the other's. Both sides learn whether the other is there, with half the messages of ping and answer, and neither side's code has to match an answer to a question. Each beat says how often beats will come, and whether the page that sent it is hidden, because a browser slows the timers of a hidden page.</p>
+            <pre>import { beat, listen } from "/alive.js";
+
+<span class="c">// each side does the same</span>
+const mine = new MessageChannel();
+beat(mine.port1, { every: 1000 });           <span class="c">// post into this end, never read it</span>
+other.postMessage("beats", origin, [mine.port2]);
+<span class="c">// ...and listens on the end the other side sent</span>
+listen(theirs, { onState: (state) => show(state) });</pre>
+            <p class="more"><a class="button quiet" href="/patterns/health-beats/">The full page on this: how it works, what to build, common mistakes ›</a></p>
+          </div>
+        </section>
+        <section class="pattern" id="alive-signals">
+          <h3><a href="/patterns/alive-signals/">Which signal notices which ending, and how quickly</a></h3>
+          <div class="demo"></div>
+          <div class="text">
+            <p>Every way of knowing the far side has gone, side by side, measured in your browser. For each row a fresh far side is made on this site's own origin and given every signal at once: a port that only carries its goodbye, a port it answers pings on every half second, a port it beats on every half second, and a Web Lock it holds. Then it is ended in one way, and the table shows how long each signal took to say so. The last column is the port <code>close</code> event. It was added to the HTML standard in 2024, never switched on in any browser, and taken out again in October 2026.</p>
+            <pre><span class="c">// the far side holds a lock with a name only it uses, and tells the page the name</span>
+const name = "alive-" + crypto.randomUUID();
+navigator.locks.request(name, () => new Promise(() => {}));  <span class="c">// never let go</span>
+
+<span class="c">// this page queues for the same lock. It is granted when the holder is destroyed.</span>
+await navigator.locks.request(name, () => {});
+farSideIsGone();</pre>
+            <p class="more"><a class="button quiet" href="/patterns/alive-signals/">The full page on this: how it works, what to build, common mistakes ›</a></p>
+          </div>
+        </section>
+        <section class="pattern" id="alive-restart">
+          <h3><a href="/patterns/alive-restart/">Restart a worker that has stopped answering, and ask again</a></h3>
+          <div class="demo"></div>
+          <div class="text">
+            <p>A worker counts prime numbers for this page. It is given a port for the work and a port to answer health pings on. If it stops answering, because it is stuck in a loop or has closed itself, the page waits for three missed pings, terminates it, starts a new one and sends it every question that was not answered. Nothing about health is in the work protocol, so the restart is invisible to the code that asked: it gets its answer, later than usual.</p>
+            <pre>function start() {
+  const worker = new Worker("/patterns/alive-worker.js", { type: "module" });
+  const work = new MessageChannel(), health = new MessageChannel();
+  worker.postMessage({ ports: true }, [work.port2, health.port2]);
+  current = work.port1;                            <span class="c">// questions go to the newest worker</span>
+  work.port1.onmessage = ({ data }) => { pending.get(data.id).resolve(data.count); pending.delete(data.id); };
+  watch(health.port1, { every: 500, misses: 3, onState(state) {
+    if (state !== "silent") return;
+    worker.terminate();
+    start();                                       <span class="c">// a new worker</span>
+    for (const [id, ask] of pending) current.postMessage({ id, n: ask.n }); <span class="c">// ask again</span>
+  } });
+}</pre>
+            <p class="more"><a class="button quiet" href="/patterns/alive-restart/">The full page on this: how it works, what to build, common mistakes ›</a></p>
+          </div>
+        </section>
+        <!-- /made:alive -->
+      </div>
 
       <section class="pattern" id="sync">
         <h2>Block on a port: a synchronous call with no await</h2>
@@ -106,34 +689,20 @@
     <footer class="small muted" style="padding-block:2rem 4rem">Port Authority, by <a href="https://paul.kinlan.me">Paul Kinlan</a>. <a href="/about/">About this site</a>.</footer>
   </div>
   <script type="module">
+    // Everything there is to read is already in this page, written out by scripts/patterns.mjs. This starts the demos.
     import { mount } from "/patterns/demos.js";
-    import { groups } from "/patterns/all.js";
-    import { legend } from "/wire.js";
+    import { all } from "/patterns/all.js";
     import { runCensus } from "/patterns/census.js";
-
-    document.querySelector("[data-legend]").innerHTML = legend();
-
-    // Each pattern is shown briefly on this page and has a full page of its own.
-    const tocGroups = groups.map((group) => `<div><h3>${group.title}</h3><ol>${group.demos.map((d) => `<li><a href="/patterns/${d.id}/">${d.title}</a></li>`).join("")}</ol></div>`);
-    tocGroups.push(`<div><h3>Also on this page</h3><ol><li><a href="#sync">Block on a port: a synchronous call with no await</a></li><li><a href="#census">What will go down a port in your browser</a></li></ol></div>`);
-    document.getElementById("contents").innerHTML = tocGroups.join("");
 
     const census = document.querySelector("table.census");
     new IntersectionObserver((entries, io) => { if (entries[0].isIntersecting) { io.disconnect(); runCensus(census); } }, { rootMargin: "200px" }).observe(census);
 
-    // Render all 33 patterns from all.js so every pattern has an anchor and live preview here.
-    for (const group of groups) {
-      const container = document.getElementById(group.id);
-      if (!container) continue;
-      for (const demo of group.demos) {
-        const section = document.createElement("section");
-        section.className = "pattern";
-        section.id = demo.id;
-        section.innerHTML = `<h3><a href="/patterns/${demo.id}/">${demo.title}</a></h3><div class="demo"></div><div class="text"><p>${demo.blurb}</p><pre>${demo.code}</pre><p class="more"><a class="button quiet" href="/patterns/${demo.id}/">The full page on this: how it works, what to build, common mistakes \u203a</a></p></div>`;
-        container.append(section);
-        // Start each demo when it scrolls near, so dozens of frames do not all boot at once.
-        new IntersectionObserver((entries, io) => { if (entries[0].isIntersecting) { io.disconnect(); mount(section.querySelector(".demo"), demo); } }, { rootMargin: "300px" }).observe(section);
-      }
+    // Start each demo when it scrolls near, so dozens of frames do not all boot at once.
+    for (const demo of all) {
+      const section = document.getElementById(demo.id);
+      const box = section?.querySelector(":scope > .demo");
+      if (!box) continue;
+      new IntersectionObserver((entries, io) => { if (entries[0].isIntersecting) { io.disconnect(); mount(box, demo); } }, { rootMargin: "300px" }).observe(section);
     }
   </script>
   <script type="module" src="/refs.js"></script>

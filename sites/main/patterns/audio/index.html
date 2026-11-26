@@ -1,0 +1,168 @@
+<!doctype html>
+<!-- Written by scripts/patterns.mjs from the modules in /patterns/. Edit those, then run it. -->
+<html lang="en" data-pattern="audio">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>A worker that plays music while this page is frozen | Port Authority</title>
+  <meta name="description" content="Sound is made on a thread of its own, and that thread accepts a port. This page starts an audio processor and a worker, gives each one end of a channel, and steps away. The worker ">
+  <meta property="og:title" content="A worker that plays music while this page is frozen | Port Authority">
+  <meta property="og:description" content="Sound is made on a thread of its own, and that thread accepts a port. This page starts an audio processor and a worker, gives each one end of a channel, and steps away. The worker ">
+  <meta property="og:type" content="article">
+  <meta name="twitter:card" content="summary">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/base.css">
+  <script src="/nav.js"></script>
+  <link rel="stylesheet" href="/patterns/patterns.css">
+  <link rel="stylesheet" href="/patterns/page.css">
+  <script src="/errors.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <div class="wrap">
+    <header class="site-bar">
+      <a class="wordmark" href="/">Port Authority</a>
+      <nav aria-label="Primary"><a href="/">Experiments</a><a href="/guide/">The guide</a><a href="/patterns/" aria-current="page">Port patterns</a><a href="/comlink/">Comlink today</a><a href="/ai-router/">AI router</a><a href="/lab/">The lab</a><a href="/missing/">What is missing</a><a href="/reading/">Further reading</a><a href="/hub/">Your hub</a></nav>
+    </header>
+    <main id="main">
+      <div class="stack page-head">
+        <p class="crumb"><a href="/patterns/">Port patterns</a> / <span id="group"><a href="/patterns/#audio">Other devices, Service Workers, sockets and audio</a></span></p>
+        <h1 id="title">A worker that plays music while this page is frozen</h1>
+      </div>
+      <section class="pattern" id="demo"><div class="demo"><noscript><p class="small muted">The demo that runs here needs JavaScript. Everything else on this page reads the same without it.</p></noscript></div></section>
+      <div class="deep" id="deep">
+      <section id="what">
+        <h2>What you are looking at</h2>
+        <p>Sound is made on a thread of its own, and that thread accepts a port. This page starts an audio processor and a worker, gives each one end of a channel, and steps away. The worker writes the tune and sends each note straight to the audio thread, which plays it and says so. Freeze this page for three seconds: the buttons stop working and its counter stops, but the music keeps time because none of it passes through here. The audio thread has no DOM, no timers and no network. A port is the only way to reach it, and anything that holds the other end can.</p>
+      </section>
+      <section id="code">
+        <h2>The code</h2>
+        <pre>const node = new AudioWorkletNode(audio, "bell");
+const { port1, port2 } = new MessageChannel();
+composerWorker.postMessage({}, [port1]);
+node.port.postMessage({}, [port2]);        <span class="c">// the audio thread now holds a port</span>
+
+<span class="c">// the worker, every beat. The page is not involved.</span>
+port.postMessage({ freq: 440 });</pre>
+        <h3 id="using">Using it</h3>
+        <pre><span class="c">// a step sequencer. The page loaded bell.js with audio.audioWorklet.addModule("/bell.js").</span>
+<span class="c">// It runs on the audio thread and takes the port that came through node.port.</span>
+class Bell extends AudioWorkletProcessor {
+  constructor() {
+    super();
+    this.port.onmessage = ({ ports: [notes] }) =&gt; {
+      notes.onmessage = ({ data }) =&gt; { this.freq = data.freq; notes.postMessage({ played: true }); };
+    };
+  }
+  process(inputs, outputs) { <span class="c">/* write a tone at this.freq into outputs[0] */</span> return true; }
+}
+registerProcessor("bell", Bell);
+
+<span class="c">// the composer worker takes the other port and sends one note for each step of the pattern</span>
+onmessage = ({ ports: [port] }) =&gt; {
+  port.onmessage = () =&gt; { played++; };          <span class="c">// the audio thread says it played the note</span>
+  setInterval(() =&gt; port.postMessage({ freq: pattern[step++ % pattern.length] }), 125);
+};
+
+<span class="c">// the page holds no port. It wires the node to the speakers, and stops by ending both sides.</span>
+node.connect(audio.destination);
+stopButton.onclick = () =&gt; { composerWorker.terminate(); audio.close(); };</pre>
+        <h3 id="case">Where you would use it</h3>
+        <p>A real case. A step sequencer runs in a browser tab. The page draws the grid of notes, a worker holds the pattern and sends each note, and an <code>AudioWorkletProcessor</code> makes the sound. When the person presses Play, the page makes one channel and gives one port to the worker and the other to the processor. Later the page is busy for a second, because the person opens a long list of saved patterns. The worker still sends each note and the audio thread still plays it, because the page's only part was to hand out the two ports.</p>
+      </section>
+      <section id="how">
+        <h2>How it works</h2>
+        <div class="stack paras">
+          <p>An <code>AudioWorkletProcessor</code> runs on the audio rendering thread. It has no DOM, no timers and no network. It does have a <code>MessagePort</code> to its node, and it accepts further ports posted through that.</p>
+          <p>The page makes a channel and gives one end to a worker and the other to the processor. The worker sends a note every 230 ms. The processor plays it and reports back on the same port.</p>
+          <p>The page is not in that path, so freezing it changes nothing you can hear. The worker even shows its own state, by painting into a canvas it was handed.</p>
+        </div>
+      </section>
+      <section id="uses">
+        <h2>What you could build with it</h2>
+        <p>These are built and running below.</p>
+        <article class="built" id="built-pcm">
+          <h3>A decoder worker that hands sound straight to the speakers</h3>
+          <p class="small muted idea">The idea: A decoder worker feeding samples straight to output.</p>
+          <div class="demo"></div>
+          <h4>What you are looking at</h4>
+          <p>A worker produces sound a tenth of a second at a time, as a decoder would, and moves each block of samples down a port to the audio thread. The audio thread plays them and reports how far it has got, and the worker uses that to stay about half a second ahead. This page introduced the two and holds nothing. Freeze it for three seconds and the sound carries on without a gap, because no sample ever passes through here.</p>
+          <h4>The code</h4>
+          <pre><span class="c">// the worker: stay half a second ahead of what has been played</span>
+port.onmessage = ({ data }) => {
+  while (sent - data.played < sampleRate / 2) {
+    const block = decodeNext();                       <span class="c">// a Float32Array</span>
+    port.postMessage({ block }, [block.buffer]);      <span class="c">// moved to the audio thread</span>
+    sent += block.length;
+  }
+};</pre>
+          <h4>Step by step</h4>
+          <p>What each press of Next does in this demo.</p>
+          <ol>
+          <li><strong>Start the decoder.</strong> The worker and the audio thread are introduced. Blocks of sound start to flow between them.</li>
+          <li><strong>Freeze this page for 3 seconds.</strong> The page stops. The worker keeps decoding and the audio thread keeps playing.</li>
+          <li><strong>Stop the sound.</strong> The audio is closed.</li>
+        </ol>
+        </article>
+        <article class="built" id="built-meter">
+          <h3>A level meter drawn by a worker, fed from the audio thread</h3>
+          <p class="small muted idea">The idea: Meters and analysers that report from the audio thread to a worker.</p>
+          <div class="demo"></div>
+          <h4>What you are looking at</h4>
+          <p>A tone swells and fades. A processor on the audio thread measures how loud it is, twenty times a second, and posts each reading down a port. The other end is held by a worker, which draws the meter into a canvas it was handed. The readings go from the audio thread to the worker to the screen. Freeze this page and the meter keeps moving, in time with what you hear.</p>
+          <h4>The code</h4>
+          <pre><span class="c">// on the audio thread</span>
+process([input]) {
+  const level = Math.sqrt(input[0].reduce((sum, s) => sum + s * s, 0) / input[0].length);
+  meterPort.postMessage({ level });        <span class="c">// the other end is in a worker</span>
+  return true;
+}</pre>
+          <h4>Step by step</h4>
+          <p>What each press of Next does in this demo.</p>
+          <ol>
+          <li><strong>Start the tone and the meter.</strong> The audio thread and the meter's worker are given one end each of a channel.</li>
+          <li><strong>Freeze this page for 3 seconds.</strong> The page stops. The meter does not.</li>
+          <li><strong>Stop the sound.</strong> The audio is closed.</li>
+        </ol>
+        </article>
+        <h3 class="todo">Already running</h3>
+        <ul>
+          <li>Sequencers and synths whose timing must not depend on the page. <a href="#demo">See the demo at the top of this page.</a></li>
+        </ul>
+      </section>
+      <section id="try">
+        <h2>Things to try</h2>
+        <ul>
+          <li>Start the music, then freeze the page and listen.</li>
+          <li>Read the note count after the freeze: about thirteen in three seconds, none lost.</li>
+        </ul>
+      </section>
+      <section id="traps">
+        <h2>Common mistakes</h2>
+        <ul>
+          <li>Browsers only start sound after a real press.</li>
+          <li>The audio thread must never wait. Keep its handler tiny.</li>
+          <li>Measured in Chromium 157: the audio thread accepts ports, buffers and streams, and little else.</li>
+        </ul>
+      </section>
+      <section id="measured">
+        <h2>Measured</h2>
+        <p class="measured">Chromium 157: 13 notes played during a 3 second main-thread freeze. Other browsers are being filled in from <a href="/lab/results/">the lab's results</a>.</p>
+      </section>
+      <section id="related">
+        <h2>Read next</h2>
+        <ul class="cards">
+          <li><a href="/patterns/frozen/"><strong>Two workers that keep talking while this page is frozen</strong><span>A port given to a worker belongs to that worker's thread.</span></a></li>
+          <li><a href="/patterns/canvas/"><strong>Let another origin paint on your page</strong><span>The painter is a frame on another origin.</span></a></li>
+          <li><a href="/patterns/filter/"><strong>Run live video through a filter on another origin</strong><span>Video can leave your page one frame at a time and come back changed.</span></a></li>
+        </ul>
+      </section>
+      </div>
+      <nav class="pager" id="pager" aria-label="More patterns"><a href="/patterns/socket/"><small>‹ Before this</small>One connection to the server, shared by every tab</a><a class="pager-all" href="/patterns/">All patterns</a><a class="pager-next" href="/patterns/swpair/"><small>After this ›</small>Join the service workers of two sites with a port</a></nav>
+    </main>
+    <footer class="small muted" style="padding-block:2rem 4rem">Port Authority, by <a href="https://paul.kinlan.me">Paul Kinlan</a>. <a href="/about/">About this site</a>.</footer>
+  </div>
+  <script type="module" src="/patterns/page.js"></script>
+  <script type="module" src="/refs.js"></script>
+</body>
+</html>

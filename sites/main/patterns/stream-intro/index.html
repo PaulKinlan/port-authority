@@ -1,0 +1,131 @@
+<!doctype html>
+<!-- Written by scripts/patterns.mjs from the modules in /patterns/. Edit those, then run it. -->
+<html lang="en" data-pattern="stream-intro">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>A forwarded stream stops when the page that passed it on closes. A port keeps working. | Port Authority</title>
+  <meta name="description" content="You can pass a stream on, the same as a port. But a stream that was passed on keeps flowing through every context that touched it. Send one through the introducer, remove the intro">
+  <meta property="og:title" content="A forwarded stream stops when the page that passed it on closes. A port keeps working. | Port Authority">
+  <meta property="og:description" content="You can pass a stream on, the same as a port. But a stream that was passed on keeps flowing through every context that touched it. Send one through the introducer, remove the intro">
+  <meta property="og:type" content="article">
+  <meta name="twitter:card" content="summary">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/base.css">
+  <script src="/nav.js"></script>
+  <link rel="stylesheet" href="/patterns/patterns.css">
+  <link rel="stylesheet" href="/patterns/page.css">
+  <script src="/errors.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <div class="wrap">
+    <header class="site-bar">
+      <a class="wordmark" href="/">Port Authority</a>
+      <nav aria-label="Primary"><a href="/">Experiments</a><a href="/guide/">The guide</a><a href="/patterns/" aria-current="page">Port patterns</a><a href="/comlink/">Comlink today</a><a href="/ai-router/">AI router</a><a href="/lab/">The lab</a><a href="/missing/">What is missing</a><a href="/reading/">Further reading</a><a href="/hub/">Your hub</a></nav>
+    </header>
+    <main id="main">
+      <div class="stack page-head">
+        <p class="crumb"><a href="/patterns/">Port patterns</a> / <span id="group"><a href="/patterns/#stream-intro">More things a port can carry</a></span></p>
+        <h1 id="title">A forwarded stream stops when the page that passed it on closes. A port keeps working.</h1>
+      </div>
+      <section class="pattern" id="demo"><div class="demo"><noscript><p class="small muted">The demo that runs here needs JavaScript. Everything else on this page reads the same without it.</p></noscript></div></section>
+      <div class="deep" id="deep">
+      <section id="what">
+        <h2>What you are looking at</h2>
+        <p>You can pass a stream on, the same as a port. But a stream that was passed on keeps flowing through every context that touched it. Send one through the introducer, remove the introducer, and the reader stalls with no error and no end. So introduce with a port first, then send the stream down the direct line. Start again between the two to compare. The three boxes are frames in this page, and this page gave the source and the reader each a line to the introducer.</p>
+      </section>
+      <section id="code">
+        <h2>The code</h2>
+        <pre><span class="c">// fragile: the middle is now part of the pipe for ever</span>
+toMiddle.postMessage({ stream }, [stream]);
+
+<span class="c">// sturdy: the middle only introduces</span>
+const direct = await introducedPort();
+direct.postMessage({ stream }, [stream]);</pre>
+        <h3 id="using">Using it</h3>
+        <pre><span class="c">// a photo editor, a "Save to" chooser window it opened, and the storage site the person picks</span>
+<span class="c">// the chooser: make a channel, give one end to each side, keep neither</span>
+const { port1, port2 } = new MessageChannel();
+toEditor.postMessage({}, [port1]);
+toStorage.postMessage({}, [port2]);
+
+<span class="c">// the editor: introducedPort() waits for that port to arrive from the chooser</span>
+const introducedPort = () =&gt; new Promise((resolve) =&gt; { toMiddle.onmessage = (e) =&gt; resolve(e.ports[0]); });
+const direct = await introducedPort();
+const stream = exportPhoto();                 <span class="c">// a ReadableStream of bytes</span>
+direct.postMessage({ stream }, [stream]);
+
+<span class="c">// the storage site: a port arrives from the chooser, then the stream arrives on that port</span>
+toMiddle.onmessage = (e) =&gt; {
+  e.ports[0].onmessage = async ({ data }) =&gt; {
+    const reader = data.stream.getReader();
+    for (;;) { const { value, done } = await reader.read(); if (done) break; await save(value); }
+  };
+};
+
+<span class="c">// The person closes the chooser. The export carries on, because no chunk passes through the chooser.</span>
+<span class="c">// Sent with toMiddle.postMessage, the same stream would stall here, with no error and no end.</span></pre>
+        <h3 id="case">Where you would use it</h3>
+        <p>A real case. A photo editor exports a large file to a storage site that the person picks in a chooser window the editor opened. The chooser opened the storage site's upload page, so it is the only one with a line to both. If the export stream is passed through the chooser, the upload stalls when the person closes the chooser, and neither side gets an error. So the chooser makes a channel and posts one end to each side, and the editor sends the stream down that port. The person can then close the chooser and the upload carries on.</p>
+      </section>
+      <section id="how">
+        <h2>How it works</h2>
+        <div class="stack paras">
+          <p>Introduce two parties with a port and you can leave. Do the same with a stream and you cannot. This demo lets you try both ways, one after the other.</p>
+          <p>A port passed through a middle context is re-homed: the two ends find each other and the middle drops out. A stream passed through a middle context is piped: every chunk still travels through the middle, which has to stay alive to carry it.</p>
+          <p>When the middle goes away the reader of the stream is not told. It gets no error and no end, and just stalls. The port carries on.</p>
+        </div>
+      </section>
+      <section id="steps">
+        <h2>Step by step</h2>
+        <p>What each press of Next does in the demo at the top.</p>
+        <ol>
+          <li><strong>Connect Source and Reader to the introducer.</strong> Source and Reader each get a line to the introducer. They have no direct line to each other yet.</li>
+          <li><strong>Stream through the introducer.</strong> Source sends a stream to the introducer, which forwards it to Reader. Every chunk now flows through the middle.</li>
+          <li><strong>Remove the introducer.</strong> The introducer is destroyed, and the reader stalls with no error and no end.</li>
+        </ol>
+      </section>
+      <section id="uses">
+        <h2>What you could build with it</h2>
+        <h3 class="todo">Already running</h3>
+        <ul>
+          <li>For a long-lived connection through a broker, send a port and let the far side make its stream over that. <a href="#demo">See the demo at the top of this page.</a></li>
+        </ul>
+      </section>
+      <section id="try">
+        <h2>Things to try</h2>
+        <ul>
+          <li>Stream through the introducer, then remove the introducer. The reader stalls.</li>
+          <li>Start again, introduce first and stream directly, then remove the introducer. The stream carries on.</li>
+          <li>Read the stalled reader's log: it never learns why.</li>
+        </ul>
+      </section>
+      <section id="traps">
+        <h2>Common mistakes</h2>
+        <ul>
+          <li>It is easy to build a broker that forwards streams and works until the broker tab closes.</li>
+          <li>A stalled stream needs a timeout of your own to detect.</li>
+        </ul>
+      </section>
+      <section id="measured">
+        <h2>Measured</h2>
+        <p class="measured">Chromium 157: a forwarded stream stalls with no error when the forwarding frame is removed. A forwarded port is unaffected. Other browsers are being filled in from <a href="/lab/results/">the lab's results</a>.</p>
+      </section>
+      <section id="related">
+        <h2>Read next</h2>
+        <ul class="cards">
+          <li><a href="/patterns/introduce/"><strong>Connect two sites to each other, then remove yourself</strong><span>A port can be passed on by whoever holds it.</span></a></li>
+          <li><a href="/patterns/stream/"><strong>Send a stream to another frame</strong><span>A ReadableStream is transferable too, so you can hand another origin a live stream and it reads with back-pressure, as if the source were local.</span></a></li>
+          <li><a href="/patterns/pipeline/"><strong>Back-pressure across three origins</strong><span>This page hands its stream to a frame on another origin.</span></a></li>
+        </ul>
+      </section>
+      </div>
+      <nav class="pager" id="pager" aria-label="More patterns"><a href="/patterns/tabserver/"><small>‹ Before this</small>Serve pages to other tabs from this tab</a><a class="pager-all" href="/patterns/">All patterns</a><a class="pager-next" href="/patterns/pipeline/"><small>After this ›</small>Back-pressure across three origins</a></nav>
+    </main>
+    <footer class="small muted" style="padding-block:2rem 4rem">Port Authority, by <a href="https://paul.kinlan.me">Paul Kinlan</a>. <a href="/about/">About this site</a>.</footer>
+  </div>
+  <script type="module" src="/patterns/page.js"></script>
+  <script type="module" src="/refs.js"></script>
+</body>
+</html>

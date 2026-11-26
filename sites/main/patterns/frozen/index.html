@@ -1,0 +1,145 @@
+<!doctype html>
+<!-- Written by scripts/patterns.mjs from the modules in /patterns/. Edit those, then run it. -->
+<html lang="en" data-pattern="frozen">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Two workers that keep talking while this page is frozen | Port Authority</title>
+  <meta name="description" content="A port given to a worker belongs to that worker's thread. Introduce two workers to each other and their messages never touch the page again. Freeze this page for three seconds: its">
+  <meta property="og:title" content="Two workers that keep talking while this page is frozen | Port Authority">
+  <meta property="og:description" content="A port given to a worker belongs to that worker's thread. Introduce two workers to each other and their messages never touch the page again. Freeze this page for three seconds: its">
+  <meta property="og:type" content="article">
+  <meta name="twitter:card" content="summary">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/base.css">
+  <script src="/nav.js"></script>
+  <link rel="stylesheet" href="/patterns/patterns.css">
+  <link rel="stylesheet" href="/patterns/page.css">
+  <script src="/errors.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <div class="wrap">
+    <header class="site-bar">
+      <a class="wordmark" href="/">Port Authority</a>
+      <nav aria-label="Primary"><a href="/">Experiments</a><a href="/guide/">The guide</a><a href="/patterns/" aria-current="page">Port patterns</a><a href="/comlink/">Comlink today</a><a href="/ai-router/">AI router</a><a href="/lab/">The lab</a><a href="/missing/">What is missing</a><a href="/reading/">Further reading</a><a href="/hub/">Your hub</a></nav>
+    </header>
+    <main id="main">
+      <div class="stack page-head">
+        <p class="crumb"><a href="/patterns/">Port patterns</a> / <span id="group"><a href="/patterns/#frozen">Across threads</a></span></p>
+        <h1 id="title">Two workers that keep talking while this page is frozen</h1>
+      </div>
+      <section class="pattern" id="demo"><div class="demo"><noscript><p class="small muted">The demo that runs here needs JavaScript. Everything else on this page reads the same without it.</p></noscript></div></section>
+      <div class="deep" id="deep">
+      <section id="what">
+        <h2>What you are looking at</h2>
+        <p>A port given to a worker belongs to that worker's thread. Introduce two workers to each other and their messages never touch the page again. Freeze this page for three seconds: its own counter stops, the buttons go dead, and the two workers carry on. You can watch them do it, because each one paints its numbers into a canvas whose drawing surface it was handed, and a transferred canvas does not wait for the page either.</p>
+      </section>
+      <section id="code">
+        <h2>The code</h2>
+        <pre>const { port1, port2 } = new MessageChannel();
+workerA.postMessage({}, [port1]);
+workerB.postMessage({}, [port2]);
+<span class="c">// this page is now out of the conversation, and can stall without harm</span>
+while (performance.now() < until) {}</pre>
+        <h3 id="using">Using it</h3>
+        <pre><span class="c">// a live prices page: workerA parses what a socket sends, workerB draws the chart</span>
+const workerA = new Worker("/parse.js"), workerB = new Worker("/draw.js");
+const surface = chart.transferControlToOffscreen();
+workerB.postMessage({ surface }, [surface]);       <span class="c">// then the channel: port1 to workerA, port2 to workerB</span>
+
+<span class="c">// /parse.js, workerA: port1 arrives here. Parsed prices go straight to the other worker</span>
+const socket = new WebSocket("wss://prices.example/live");
+onmessage = ({ ports: [toDraw] }) =&gt; { socket.onmessage = (e) =&gt; toDraw.postMessage(parse(e.data)); };
+
+<span class="c">// /draw.js, workerB: the canvas arrives first, then port2</span>
+let ctx = null;
+onmessage = ({ data, ports: [fromParse] }) =&gt; {
+  if (data.surface) ctx = data.surface.getContext("2d");
+  if (fromParse) fromParse.onmessage = (e) =&gt; draw(ctx, e.data);
+};
+
+<span class="c">// the page: the person sorts a table of 50,000 rows, and the main thread is busy</span>
+rows.sort(byPrice);
+<span class="c">// The table does not respond until the sort ends. The chart keeps moving all the while.</span></pre>
+        <h3 id="case">Where you would use it</h3>
+        <p>A real case. A prices page has a long table and a live chart. One worker holds the socket and parses what arrives, and a second worker draws the chart on a canvas the page handed it. The page introduces the two workers once and keeps no port. When the person sorts the table, the page's thread is busy and the page does not respond, but parsed prices still go from one worker to the other and the chart still moves. If the prices went through the page, the chart would stop for as long as the sort took.</p>
+      </section>
+      <section id="how">
+        <h2>How it works</h2>
+        <div class="stack paras">
+          <p>Each worker has its own thread and its own event loop. A port given to a worker is serviced by that worker's thread. So two workers that hold the two ends of a channel exchange messages without the page's thread being involved at all.</p>
+          <p>The demo shows this by blocking the page in a tight loop for three seconds. The page's own counter stops and its buttons do nothing. The two workers keep counting.</p>
+          <p>You can see them count because each paints into a canvas whose surface it was handed. A transferred canvas is presented by the worker, not the page.</p>
+        </div>
+      </section>
+      <section id="steps">
+        <h2>Step by step</h2>
+        <p>What each press of Next does in the demo at the top.</p>
+        <ol>
+          <li><strong>Introduce the two workers.</strong> Each worker gets one end of a channel. This page keeps neither.</li>
+        </ol>
+      </section>
+      <section id="uses">
+        <h2>What you could build with it</h2>
+        <p>This one is built and running below.</p>
+        <article class="built" id="built-relay">
+          <h3>A decoder worker feeding a renderer worker, while the page is busy</h3>
+          <p class="small muted idea">The idea: A decoder worker feeding a renderer worker. Keeping a pipeline smooth while the page does layout or garbage collection.</p>
+          <div class="demo"></div>
+          <h4>What you are looking at</h4>
+          <p>One worker makes video frames. Another paints them into a canvas it was handed. This page introduces the two with a channel and steps away, so frames go from one worker straight to the other and never touch the page's thread. Freeze the page for three seconds, as a long layout or a garbage collection would, and the picture keeps moving.</p>
+          <h4>The code</h4>
+          <pre>const { port1, port2 } = new MessageChannel();
+decoder.postMessage({ out: port1 }, [port1]);
+renderer.postMessage({ in: port2, surface }, [port2, surface]);
+
+<span class="c">// the decoder: each frame's memory is moved to the renderer</span>
+out.postMessage({ pixels }, [pixels.buffer]);</pre>
+          <h4>Step by step</h4>
+          <p>What each press of Next does in this demo.</p>
+          <ol>
+          <li><strong>Connect the decoder to the renderer.</strong> Each worker gets one end of a channel. Frames start to flow between them.</li>
+          <li><strong>Freeze this page for 3 seconds.</strong> The page's counter stops. The picture does not.</li>
+        </ol>
+        </article>
+        <h3 class="todo">Already running</h3>
+        <ul>
+          <li>Any worker pool where workers hand work to each other. <a href="/patterns/frozen/#built-relay">See a decoder worker handing frames to a renderer worker.</a></li>
+        </ul>
+      </section>
+      <section id="try">
+        <h2>Things to try</h2>
+        <ul>
+          <li>Introduce the workers, then freeze the page. Watch the page's tick count against the workers' message count.</li>
+          <li>Freeze before introducing: nothing moves anywhere, because nobody has a channel yet.</li>
+        </ul>
+      </section>
+      <section id="traps">
+        <h2>Common mistakes</h2>
+        <ul>
+          <li>A worker created from the page still needs the page to exist. It survives a freeze, but not the page closing.</li>
+          <li>Workers talking directly are harder to observe. Have them report counts, as these do.</li>
+        </ul>
+      </section>
+      <section id="measured">
+        <h2>Measured</h2>
+        <p class="measured">Chromium 157: during a 3 second main-thread freeze the page ticked 0 times and the workers went on exchanging a message every 100 ms. Other browsers are being filled in from <a href="/lab/results/">the lab's results</a>.</p>
+      </section>
+      <section id="related">
+        <h2>Read next</h2>
+        <ul class="cards">
+          <li><a href="/patterns/audio/"><strong>A worker that plays music while this page is frozen</strong><span>Sound is made on a thread of its own, and that thread accepts a port.</span></a></li>
+          <li><a href="/patterns/canvas/"><strong>Let another origin paint on your page</strong><span>The painter is a frame on another origin.</span></a></li>
+          <li><a href="/patterns/exchange/"><strong>Use a SharedWorker to connect tabs to each other</strong><span>Every tab on an origin can reach the same SharedWorker.</span></a></li>
+        </ul>
+      </section>
+      </div>
+      <nav class="pager" id="pager" aria-label="More patterns"><a href="/patterns/router/"><small>‹ Before this</small>A worker that routes between windows that have never met</a><a class="pager-all" href="/patterns/">All patterns</a><a class="pager-next" href="/patterns/filter/"><small>After this ›</small>Run live video through a filter on another origin</a></nav>
+    </main>
+    <footer class="small muted" style="padding-block:2rem 4rem">Port Authority, by <a href="https://paul.kinlan.me">Paul Kinlan</a>. <a href="/about/">About this site</a>.</footer>
+  </div>
+  <script type="module" src="/patterns/page.js"></script>
+  <script type="module" src="/refs.js"></script>
+</body>
+</html>

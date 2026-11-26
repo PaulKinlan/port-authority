@@ -3,7 +3,7 @@ import { createRequire } from "node:module";
 import { spawn } from "node:child_process";
 const { chromium } = createRequire(import.meta.url)("playwright");
 const LIVE = process.env.LIVE; // e.g. kinlan-test.workers.dev
-const base = (name) => LIVE ? (name === "hub" && process.env.LIVE_MAIN) || `https://${name === "hub" ? "portauthority" : "pa-" + name}.${LIVE}` : `http://${name}.localhost:8787`;
+const base = (name) => LIVE ? (name === "hub" && process.env.LIVE_MAIN) || `https://${name === "hub" ? "portauthority" : "pa-" + name}.${LIVE}` : `http://${name}.localhost:${process.env.PORT || 8787}`;
 const browser = await chromium.launch(process.env.HTTPS_PROXY && process.env.LIVE ? { proxy: { server: process.env.HTTPS_PROXY } } : {});
 const ctx = await browser.newContext();
 let failed = 0;

@@ -106,7 +106,7 @@ while (performance.now() < until) {}`,
   {
     id: "filter",
     title: "Run live video through a filter on another origin",
-    blurb: "A <code>VideoFrame</code> is transferable, so video can leave your page one frame at a time and come back changed. The filter here lives on another origin in a sandbox. It has no camera, cannot see this page, and holds each frame only until it sends it on. Frames are moved, not copied: after sending, this page's own handle to the frame is empty. It is a way to build video plug-ins that get pixels and nothing else.",
+    blurb: "Video can leave your page one frame at a time and come back changed. The picture on the left is drawn by this page, and it is your camera if you turn that on. The filter lives on another origin, in a sandbox. It has no camera, cannot see this page, and holds each frame only until it sends it on. Frames are moved, not copied: after sending, this page's own handle to the frame is empty. A <code>VideoFrame</code> is the natural thing to move. A browser hands one to a worker, or to a frame of your own site. Chrome will not hand one to another process, and a sandboxed frame or a frame from another site now runs in one. So the page tries a <code>VideoFrame</code>, and if the filter cannot rebuild it, it moves an <code>ImageBitmap</code> from then on, which does cross. The note under the right-hand picture says which was used. It is a way to build video plug-ins that get pixels and nothing else.",
     code: `const frame = new VideoFrame(source, { timestamp });
 port.postMessage({ frame }, [frame]);          <span class="c">// frame is now closed here</span>
 
@@ -115,9 +115,15 @@ port.onmessage = ({ data }) => {
   ctx.filter = "invert(1)"; ctx.drawImage(data.frame, 0, 0); data.frame.close();
   const out = new VideoFrame(canvas, { timestamp: data.frame.timestamp });
   port.postMessage({ frame: out }, [out]);
-};`,
+};
+<span class="c">// a frame the browser could not rebuild here arrives as this, with nothing in it</span>
+port.onmessageerror = () => port.postMessage({ unreadable: true });
+
+<span class="c">// the page again: an ImageBitmap crosses where a VideoFrame does not</span>
+const bitmap = await createImageBitmap(source);
+port.postMessage({ bitmap }, [bitmap]);`,
     async setup(stage, ui) {
-      const src = stage.box("page", { html: `<canvas width="320" height="180" style="width:100%;height:100%;display:block" aria-label="The source video, drawn by this page"></canvas>` });
+      const src = stage.box("page", { html: `<canvas width="320" height="180" style="width:100%;height:100%;display:block" aria-label="The source video: drawn by this page, or your camera"></canvas><p class="small" data-source style="position:absolute;inset:auto 0 0 0;margin:0;padding:.35rem .6rem;background:var(--panel)">A picture this page draws. It is not a video file.</p>` });
       await stage.frame("filter", {
         title: "Filter on another origin", color: "yellow",
         script: () => {
@@ -126,10 +132,13 @@ port.onmessage = ({ data }) => {
             const effects = ["invert(1) hue-rotate(40deg)", "mosaic", "grayscale(1) contrast(2.2)", "blur(3px) saturate(3)"];
             let effect = 0, canvas = null, ctx = null, small = null, done = 0;
             log("connected, waiting for frames");
+            // The browser could not rebuild what was sent. It says so with this event, and gives no reason. Tell the page.
+            port.onmessageerror = () => { log("a frame arrived that could not be rebuilt here"); send(port, "there", { unreadable: true }); };
             port.onmessage = ({ data }) => {
               if (data.next) { effect = (effect + 1) % effects.length; return log("effect: " + effects[effect]); }
-              const frame = data.frame;
-              if (!canvas) { canvas = new OffscreenCanvas(frame.displayWidth, frame.displayHeight); ctx = canvas.getContext("2d"); small = new OffscreenCanvas(40, 22); }
+              // The picture comes as a VideoFrame, or as an ImageBitmap where a VideoFrame cannot cross. Both draw the same way.
+              const frame = data.frame || data.bitmap;
+              if (!canvas) { canvas = new OffscreenCanvas(frame.displayWidth || frame.width, frame.displayHeight || frame.height); ctx = canvas.getContext("2d"); small = new OffscreenCanvas(40, 22); }
               if (effects[effect] === "mosaic") {
                 small.getContext("2d").drawImage(frame, 0, 0, small.width, small.height);
                 ctx.filter = "none"; ctx.imageSmoothingEnabled = false;
@@ -137,8 +146,9 @@ port.onmessage = ({ data }) => {
               } else { ctx.filter = effects[effect]; ctx.drawImage(frame, 0, 0); }
               const timestamp = frame.timestamp;
               frame.close();
-              const out = new VideoFrame(canvas, { timestamp });
-              send(port, "there", { frame: out }, [out]);
+              // It goes back as what it came as.
+              if (data.frame) { const out = new VideoFrame(canvas, { timestamp }); send(port, "there", { frame: out }, [out]); }
+              else { const out = canvas.transferToImageBitmap(); send(port, "there", { bitmap: out }, [out]); }
               if (++done % 30 === 0) log(`filtered ${done} frames, kept none`);
             };
           });
@@ -153,8 +163,18 @@ port.onmessage = ({ data }) => {
         ui.unsupported("This browser does not support WebCodecs VideoFrame.");
         return;
       }
+      // The picture is this page's own drawing, or the person's camera. Either way each frame is made from the canvas on the left.
+      const says = src.node.querySelector("[data-source]");
+      let camera = null;      // { video, stream } while the camera is on
+      const stopCamera = () => { if (!camera) return; for (const track of camera.stream.getTracks()) track.stop(); camera = null; };
       const paint = (t) => {
         const { width: w, height: h } = source;
+        if (camera && camera.video.readyState >= 2 && camera.video.videoWidth) {
+          // Fill the canvas with the camera's picture, cropped to fit.
+          const vw = camera.video.videoWidth, vh = camera.video.videoHeight, scale = Math.max(w / vw, h / vh);
+          sctx.drawImage(camera.video, (w - vw * scale) / 2, (h - vh * scale) / 2, vw * scale, vh * scale);
+          return;
+        }
         sctx.fillStyle = "#0f1c3f"; sctx.fillRect(0, 0, w, h);
         for (let i = 0; i < 6; i++) {
           sctx.fillStyle = ["#f5b700", "#e0364c", "#0e9f8e"][i % 3];
@@ -165,33 +185,71 @@ port.onmessage = ({ data }) => {
       let alive = true, running = false, waiting = false, shown = 0, closedHere = null, port = null, rafId = 0;
       const loop = (t) => { if (!alive || !source.isConnected) return; paint(t); if (running && !waiting && port) sendFrame(t); rafId = requestAnimationFrame(loop); };
       rafId = requestAnimationFrame(loop);
-      stage.cleanup(() => { alive = false; running = false; cancelAnimationFrame(rafId); port?.close(); });
+      stage.cleanup(() => { alive = false; running = false; cancelAnimationFrame(rafId); port?.close(); stopCamera(); });
+      // What each picture is sent as. A VideoFrame first. If the filter says it could not rebuild one, an ImageBitmap from then on.
+      let carry = "VideoFrame";
       // One frame in flight at a time: the next leaves when the last comes back.
-      const sendFrame = (t) => {
+      const sendFrame = async (t) => {
+        waiting = true;
         try {
-          const frame = new VideoFrame(source, { timestamp: Math.round(t * 1000) });
-          port.postMessage({ frame }, [frame]);
-          closedHere = frame.codedWidth === 0;
-          frame.close();   // already empty after the transfer, and harmless to say so
-          waiting = true;
+          if (carry === "VideoFrame") {
+            const frame = new VideoFrame(source, { timestamp: Math.round(t * 1000) });
+            port.postMessage({ frame }, [frame]);
+            closedHere = frame.codedWidth === 0;
+            frame.close();   // already empty after the transfer, and harmless to say so
+          } else {
+            const bitmap = await createImageBitmap(source);
+            if (!port || !alive) return bitmap.close();
+            port.postMessage({ bitmap }, [bitmap]);
+            closedHere = bitmap.width === 0;
+          }
           if (shown % 6 === 0) stage.pulse("there", "page");
-        } catch (err) { running = false; note.textContent = `This browser cannot do it: ${err.message}`; }
+        } catch (err) { waiting = false; running = false; note.textContent = `This browser cannot do it: ${err.message}`; }
       };
       const next = ui.button("Ask for another effect", () => port?.postMessage({ next: true }), true);
       // Stop sending first, and let the frame that is out there come home, so none is lost inside a dead context.
       let removing = false;
-      const remove = () => { stage.remove("filter"); note.textContent += " The filter is gone and the video stops with it."; };
+      const remove = () => { stage.remove("filter"); stopCamera(); note.textContent += " The filter is gone and the video stops with it."; };
       const kill = ui.button("Remove the filter", (btn) => { alive = false; running = false; btn.disabled = next.disabled = true; waiting ? (removing = true) : remove(); }, true);
       const startBtn = ui.button("Start the video", (btn) => { running = true; btn.disabled = true; next.disabled = kill.disabled = false; }, true);
+      // The camera is the person's to turn on. Its picture is drawn on the left, and from there it is a frame like any other.
+      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        ui.button("Use my camera", async (btn) => {
+          if (camera) { stopCamera(); btn.textContent = "Use my camera"; says.textContent = "A picture this page draws. It is not a video file."; return; }
+          btn.disabled = true;
+          try {
+            const stream = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 640 }, height: { ideal: 360 } }, audio: false });
+            const video = document.createElement("video");
+            video.muted = true; video.playsInline = true; video.srcObject = stream;
+            await video.play();
+            if (!source.isConnected) { for (const track of stream.getTracks()) track.stop(); return; }
+            camera = { video, stream };
+            btn.textContent = "Stop my camera";
+            says.textContent = "Your camera. Its frames go to the filter in this page and nowhere else.";
+          } catch (err) {
+            says.textContent = (err && err.name === "NotAllowedError" ? "The camera was not allowed." : "The camera could not be used.") + " This is still the picture the page draws.";
+          }
+          btn.disabled = false;
+        });
+      }
       ui.button("Connect the filter", (btn) => {
         btn.disabled = true;
         const channel = new MessageChannel();
         port = channel.port1;
         port.onmessage = ({ data }) => {
-          octx.drawImage(data.frame, 0, 0); data.frame.close();
+          if (data.unreadable) {
+            // The filter is in another process, and this browser will not hand a VideoFrame to one. An ImageBitmap does cross.
+            carry = "ImageBitmap";
+            waiting = false;
+            return;
+          }
+          const picture = data.frame || data.bitmap;
+          octx.drawImage(picture, 0, 0); picture.close();
           waiting = false;
           if (removing) { removing = false; setTimeout(remove); }
-          note.textContent = `${++shown} frames back from the filter${closedHere ? ". Each one left this page empty-handed." : "."}`;
+          note.textContent = carry === "VideoFrame"
+            ? `${++shown} frames back from the filter${closedHere ? ". Each one left this page empty-handed." : "."}`
+            : `${++shown} frames back from the filter, sent as ImageBitmaps. A VideoFrame could not cross to it.`;
         };
         stage.post("filter", { cmd: "port" }, [channel.port2]);
         stage.cable("there", "page", "filter", "yellow");

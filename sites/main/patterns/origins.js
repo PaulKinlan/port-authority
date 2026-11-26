@@ -140,7 +140,8 @@ myLines.pipeThrough({ readable, writable }).pipeTo(screen);`,
     id: "lend",
     title: "Lend someone a network connection you opened",
     blurb: "The widget on the right is locked down so that it cannot reach the network at all. This page opens a WebSocket to the server and hands the widget the two streams that are the connection: one to write to, one to read from. The widget is now talking to the server. It never learns the address, it cannot open a second connection, and it keeps talking only until this page closes the socket. Hand over just the readable stream and it becomes a tap that can listen and not speak.",
-    code: `const { readable, writable } = await new WebSocketStream(url).opened;
+    code: `const socket = new WebSocketStream(url);        <span class="c">// keep it: socket.close() ends the loan</span>
+const { readable, writable } = await socket.opened;
 widget.postMessage({ readable, writable }, "*", [readable, writable]);
 
 <span class="c">// the widget, which has no network of its own</span>

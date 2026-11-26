@@ -1,0 +1,171 @@
+<!doctype html>
+<!-- Written by scripts/patterns.mjs from the modules in /patterns/. Edit those, then run it. -->
+<html lang="en" data-pattern="exchange">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Use a SharedWorker to connect tabs to each other | Port Authority</title>
+  <meta name="description" content="Every tab on an origin can reach the same SharedWorker. Here it keeps a port to each tab and does one job: when a tab joins, it makes a channel between that tab and every other, th">
+  <meta property="og:title" content="Use a SharedWorker to connect tabs to each other | Port Authority">
+  <meta property="og:description" content="Every tab on an origin can reach the same SharedWorker. Here it keeps a port to each tab and does one job: when a tab joins, it makes a channel between that tab and every other, th">
+  <meta property="og:type" content="article">
+  <meta name="twitter:card" content="summary">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/base.css">
+  <script src="/nav.js"></script>
+  <link rel="stylesheet" href="/patterns/patterns.css">
+  <link rel="stylesheet" href="/patterns/page.css">
+  <script src="/errors.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <div class="wrap">
+    <header class="site-bar">
+      <a class="wordmark" href="/">Port Authority</a>
+      <nav aria-label="Primary"><a href="/">Experiments</a><a href="/guide/">The guide</a><a href="/patterns/" aria-current="page">Port patterns</a><a href="/comlink/">Comlink today</a><a href="/ai-router/">AI router</a><a href="/lab/">The lab</a><a href="/missing/">What is missing</a><a href="/reading/">Further reading</a><a href="/hub/">Your hub</a></nav>
+    </header>
+    <main id="main">
+      <div class="stack page-head">
+        <p class="crumb"><a href="/patterns/">Port patterns</a> / <span id="group"><a href="/patterns/#exchange">The six basic patterns</a></span></p>
+        <h1 id="title">Use a SharedWorker to connect tabs to each other</h1>
+      </div>
+      <section class="pattern" id="demo"><div class="demo"><noscript><p class="small muted">The demo that runs here needs JavaScript. Everything else on this page reads the same without it.</p></noscript></div></section>
+      <div class="deep" id="deep">
+      <section id="what">
+        <h2>What you are looking at</h2>
+        <p>Every tab on an origin can reach the same SharedWorker. Here it keeps a port to each tab and does one job: when a tab joins, it makes a channel between that tab and every other, then stays out of it. The tabs talk directly. Open a third in a new tab and it joins the same mesh.</p>
+      </section>
+      <section id="code">
+        <h2>The code</h2>
+        <pre><span class="c">// in the SharedWorker</span>
+const peers = new Set();
+onconnect = ({ ports: [port] }) => {
+  port.onmessage = ({ data: { name } }) => {     <span class="c">// each tab says its name once</span>
+    for (const other of peers) {
+      const { port1, port2 } = new MessageChannel();
+      port.postMessage({ meet: other.name }, [port1]);
+      other.port.postMessage({ meet: name }, [port2]);
+    }
+    peers.add({ name, port });
+  };
+};</pre>
+        <h3 id="using">Using it</h3>
+        <pre><span class="c">// in every tab of a notes app</span>
+const worker = new SharedWorker("/exchange.js");
+const others = new Map();
+worker.port.onmessage = ({ data, ports: [direct] }) =&gt; {
+  others.set(data.meet, direct);          <span class="c">// one port for each other tab</span>
+  direct.onmessage = (e) =&gt; showEdit(e.data);
+};
+
+<span class="c">// the person types in this tab. Each other tab gets the edit on its own port.</span>
+<span class="c">// The worker does not see it.</span>
+editor.oninput = () =&gt; {
+  for (const direct of others.values()) direct.postMessage({ note: noteId, text: editor.value });
+};
+
+<span class="c">// A tab that has closed stays in the map. Posting to it does nothing</span>
+<span class="c">// and raises no error.</span></pre>
+        <h3 id="case">Where you would use it</h3>
+        <p>A real case. A notes app is open in three tabs, and the person types in one of them. Each tab connects to the same SharedWorker when it loads, and the worker hands it a direct port to every tab that is already open. The typing tab posts each edit down those ports, so the other tabs show it without asking the server, and the worker carries none of it. A tab can also post to one other tab alone, for example to ask it for the newest draft, where a <code>BroadcastChannel</code> would send that to every tab. This needs a browser that has SharedWorker.</p>
+      </section>
+      <section id="how">
+        <h2>How it works</h2>
+        <div class="stack paras">
+          <p>A SharedWorker is one worker that every tab of an origin can connect to. Each tab gets a port to it. Here the worker never carries a chat message. When a new tab joins, the worker makes a channel for each tab already present and posts one end to each side.</p>
+          <p>Every tab ends up with a direct line to every other tab. It is the introduce pattern with a worker as the introducer.</p>
+          <p>The worker needs to know when a tab has gone, and a port doesn't tell it. Each tab holds a Web Lock named after itself for as long as it lives, and the worker queues for the same lock. When the worker gets it, the tab is gone.</p>
+        </div>
+      </section>
+      <section id="steps">
+        <h2>Step by step</h2>
+        <p>What each press of Next does in the demo at the top.</p>
+        <ol>
+          <li><strong>Left tab joins SharedWorker.</strong> Left tab connects to the SharedWorker. Nobody else is connected yet.</li>
+          <li><strong>Right tab joins SharedWorker.</strong> Right tab connects. The SharedWorker makes a new channel and hands one end to each tab, forming the teal direct line.</li>
+          <li><strong>Left tab says hi.</strong> Left tab sends a message directly to Right tab. Notice the SharedWorker saw 0 chat messages.</li>
+          <li><strong>Right tab says hi.</strong> Right tab sends a message directly back. The SharedWorker is completely out of the chat.</li>
+        </ol>
+      </section>
+      <section id="uses">
+        <h2>What you could build with it</h2>
+        <p>These are built and running below.</p>
+        <article class="built" id="built-leader">
+          <h3>One tab does the background job, and another takes over when it closes</h3>
+          <p class="small muted idea">The idea: One tab as the leader for a background job, chosen and replaced by the worker. A presence list of the site's open tabs.</p>
+          <div class="demo"></div>
+          <h4>What you are looking at</h4>
+          <p>Three tabs of this site are open in the boxes below. A shared worker holds a port to each, keeps the list of who is here, and names one the leader. Only the leader runs the sync job. Close it, and the worker notices through a lock the tab was holding, promotes the tab that has been here longest, and tells everyone. The link opens a fourth tab for real.</p>
+          <h4>The code</h4>
+          <pre><span class="c">// each tab</span>
+navigator.locks.request(myName, () => new Promise(() => {}));   <span class="c">// held until this tab dies</span>
+port.postMessage({ join: true, lock: myName });
+port.onmessage = ({ data }) => { iAmLeader = data.lead; };
+
+<span class="c">// the worker</span>
+navigator.locks.request(lock, () => leave(port));   <span class="c">// runs when the tab has gone</span></pre>
+          <h4>Step by step</h4>
+          <p>What each press of Next does in this demo.</p>
+          <ol>
+          <li><strong>Close the leader.</strong> The leading tab is destroyed. The worker gets its lock, and promotes the next tab.</li>
+          <li><strong>Close the leader.</strong> And again. The last tab left is the leader.</li>
+        </ol>
+        </article>
+        <article class="built" id="built-sync">
+          <h3>A list that stays the same in every tab, with no server</h3>
+          <p class="small muted idea">The idea: Tab-to-tab sync that does not go through a server.</p>
+          <div class="demo"></div>
+          <h4>What you are looking at</h4>
+          <p>The two boxes are two tabs of this site, each showing a shopping list. Add an item in one and it appears in the other. Tick it in the other and it is ticked in the first. The list lives in a shared worker that holds a port to every tab. Nothing is sent to a server, and nothing is written to storage. The checkboxes in the boxes work too, and the link opens a third tab for real.</p>
+          <h4>The code</h4>
+          <pre><span class="c">// every tab</span>
+const port = new SharedWorker("/sync-worker.js").port;
+port.onmessage = ({ data }) => render(data.list);
+addButton.onclick = () => port.postMessage({ add: true });
+
+<span class="c">// the worker</span>
+onconnect = ({ ports: [port] }) => {
+  ports.add(port);
+  port.onmessage = ({ data }) => { change(list, data); for (const p of ports) p.postMessage({ list }); };
+};</pre>
+          <h4>Step by step</h4>
+          <p>What each press of Next does in this demo.</p>
+          <ol>
+          <li><strong>Tab one: add an item.</strong> Tab one tells the worker. The worker tells every tab.</li>
+          <li><strong>Tab one: add an item.</strong> A second item, in both tabs.</li>
+          <li><strong>Tab two: tick the first item.</strong> Tab two ticks it, and it is ticked in tab one.</li>
+        </ol>
+        </article>
+      </section>
+      <section id="try">
+        <h2>Things to try</h2>
+        <ul>
+          <li>Open another peer in a new tab and watch the introduction count: one new line per peer already there.</li>
+          <li>Send from one peer and see that the worker carried none of it.</li>
+        </ul>
+      </section>
+      <section id="traps">
+        <h2>Common mistakes</h2>
+        <ul>
+          <li>Inside a cross-site iframe a SharedWorker is partitioned by the top-level site. A hidden hub iframe is a different hub on every site.</li>
+          <li>A SharedWorker dies with its last page unless created with <code>extendedLifetime</code>.</li>
+          <li>Safari on iOS only gained SharedWorker in 16, and Chrome on Android later still. Check before relying on it.</li>
+        </ul>
+      </section>
+      <section id="related">
+        <h2>Read next</h2>
+        <ul class="cards">
+          <li><a href="/patterns/introduce/"><strong>Connect two sites to each other, then remove yourself</strong><span>A port can be passed on by whoever holds it.</span></a></li>
+          <li><a href="/patterns/socket/"><strong>One connection to the server, shared by every tab</strong><span>Ten tabs of the same site usually means ten connections to the server.</span></a></li>
+          <li><a href="/patterns/reload/"><strong>Keep a port across a page reload</strong><span>A port cannot be saved.</span></a></li>
+        </ul>
+      </section>
+      </div>
+      <nav class="pager" id="pager" aria-label="More patterns"><a href="/patterns/attenuate/"><small>‹ Before this</small>Give a frame limited access, then revoke it</a><a class="pager-all" href="/patterns/">All patterns</a><a class="pager-next" href="/patterns/stream/"><small>After this ›</small>Send a stream to another frame</a></nav>
+    </main>
+    <footer class="small muted" style="padding-block:2rem 4rem">Port Authority, by <a href="https://paul.kinlan.me">Paul Kinlan</a>. <a href="/about/">About this site</a>.</footer>
+  </div>
+  <script type="module" src="/patterns/page.js"></script>
+  <script type="module" src="/refs.js"></script>
+</body>
+</html>

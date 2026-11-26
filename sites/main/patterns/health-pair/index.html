@@ -1,0 +1,141 @@
+<!doctype html>
+<!-- Written by scripts/patterns.mjs from the modules in /patterns/. Edit those, then run it. -->
+<html lang="en" data-pattern="health-pair">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Send a second port with the first, only for health checks | Port Authority</title>
+  <meta name="description" content="A port does not tell you when its other end has gone. Posting into it still works, and nothing comes back. So this page sends the far side two ports at once. The first carries the ">
+  <meta property="og:title" content="Send a second port with the first, only for health checks | Port Authority">
+  <meta property="og:description" content="A port does not tell you when its other end has gone. Posting into it still works, and nothing comes back. So this page sends the far side two ports at once. The first carries the ">
+  <meta property="og:type" content="article">
+  <meta name="twitter:card" content="summary">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/base.css">
+  <script src="/nav.js"></script>
+  <link rel="stylesheet" href="/patterns/patterns.css">
+  <link rel="stylesheet" href="/patterns/page.css">
+  <script src="/errors.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <div class="wrap">
+    <header class="site-bar">
+      <a class="wordmark" href="/">Port Authority</a>
+      <nav aria-label="Primary"><a href="/">Experiments</a><a href="/guide/">The guide</a><a href="/patterns/" aria-current="page">Port patterns</a><a href="/comlink/">Comlink today</a><a href="/ai-router/">AI router</a><a href="/lab/">The lab</a><a href="/missing/">What is missing</a><a href="/reading/">Further reading</a><a href="/hub/">Your hub</a></nav>
+    </header>
+    <main id="main">
+      <div class="stack page-head">
+        <p class="crumb"><a href="/patterns/">Port patterns</a> / <span id="group"><a href="/patterns/#health-pair">Knowing the other side is still there</a></span></p>
+        <h1 id="title">Send a second port with the first, only for health checks</h1>
+      </div>
+      <section class="pattern" id="demo"><div class="demo"><noscript><p class="small muted">The demo that runs here needs JavaScript. Everything else on this page reads the same without it.</p></noscript></div></section>
+      <div class="deep" id="deep">
+      <section id="what">
+        <h2>What you are looking at</h2>
+        <p>A port does not tell you when its other end has gone. Posting into it still works, and nothing comes back. So this page sends the far side two ports at once. The first carries the work: a flower name goes in, a price comes out, and that is the whole protocol. The second carries pings and their answers and nothing else. The page pings once a second. One missed answer is late. Three in a row and the page treats the far side as gone. A page that is closing says goodbye on the health port as it goes, so most endings are seen at once and the pings are there for the ones that are not.</p>
+      </section>
+      <section id="code">
+        <h2>The code</h2>
+        <pre>import { watch, answer } from "/alive.js";
+
+<span class="c">// this page</span>
+const data = new MessageChannel(), health = new MessageChannel();
+frame.postMessage("ports", origin, [data.port2, health.port2]);
+watch(health.port1, { every: 1000, misses: 3,
+  onState: (state) => state === "silent" || state === "closed" ? giveUp() : null });
+
+<span class="c">// the far side</span>
+onmessage = ({ ports: [data, health] }) => {
+  data.onmessage = (e) => data.postMessage(price(e.data)); <span class="c">// no health logic here</span>
+  answer(health);  <span class="c">// answers pings, and says goodbye on pagehide</span>
+};</pre>
+        <h3 id="using">Using it</h3>
+        <pre><span class="c">// a shop's basket page, and a delivery-price frame from a courier's site</span>
+<span class="c">// the same watch() call, with what it returns kept, so that giveUp() can stop the pings</span>
+const watcher = watch(health.port1, { every: 1000, misses: 3,
+  onState: (state) =&gt; state === "silent" || state === "closed" ? giveUp() : null });
+
+<span class="c">// work goes on the data port: a postcode in, a price out</span>
+data.port1.onmessage = (e) =&gt; { deliveryPrice.textContent = e.data; };
+postcode.onchange = () =&gt; data.port1.postMessage(postcode.value);
+
+<span class="c">// three pings went unanswered, or the frame said goodbye as it went</span>
+function giveUp() {
+  watcher.stop();
+  data.port1.close(); health.port1.close();
+  courierFrame.remove();
+  deliveryPrice.textContent = "No delivery price at the moment. You can still order.";
+  retryButton.hidden = false;   <span class="c">// a press loads the frame again and sends it two new ports</span>
+}</pre>
+        <h3 id="case">Where you would use it</h3>
+        <p>A real case. A shop's basket page embeds a delivery-price frame from a courier's site. The page sends the frame two ports when it loads, one for postcodes and prices and one for pings. If the frame's page crashes, hangs or is navigated away, a postcode posted into the data port gets no price and no error. After three missed pings, or a goodbye, the shop calls <code>giveUp()</code>: it stops the pings, closes its two ports, removes the frame and tells the person they can still order. Without the health port the price would stay at its last value and the person would wait.</p>
+      </section>
+      <section id="how">
+        <h2>How it works</h2>
+        <div class="stack paras">
+          <p>A port has no state you can read and no event for the other end going away. If the page at the other end is closed, navigated, crashed or stuck, <code>postMessage</code> still returns normally and the message is dropped or waits. The only way to know is to hear something from the other side, regularly, and to treat a long silence as the other side being gone.</p>
+          <p>Doing that on the data port means every message on it needs a type, so that a ping can be told from a price, and the far side's work code has to answer pings. Sending a second port keeps the two apart. The data port's protocol stays exactly what it was. The health port carries <code>{ ping: n }</code> one way and <code>{ pong: n }</code> back, and the code that handles it can be the same small file in every project: <a href="/alive.js">/alive.js</a>.</p>
+          <p>The far side also tells what it knows about itself. A page that is closing or navigating fires <code>pagehide</code>, and the far side posts a goodbye on the health port from that handler. That arrives in a few milliseconds, so the common endings are seen at once. The pings are for the endings that give no warning: a crash, a frozen thread, a page that called <code>close()</code> on its ports.</p>
+          <p>Silence doesn't prove it has gone. A far side in a long loop is alive and will answer later, which is why the demo's busy far side goes from silent back to alive. And if this page's own timer runs late, because this page was the busy one, the missed answers say nothing about the far side, so the count starts again.</p>
+          <p>There is no <code>close</code> event to wait for instead. One was added to the HTML standard in January 2024 and taken out again on 2 October 2026, with the note that no browser ships it. Chrome built it behind a flag and said it would not ship it as written, because it let a page observe garbage collection. <code>/alive.js</code> listens for it anyway where a browser has it, since nothing is quicker.</p>
+        </div>
+      </section>
+      <section id="steps">
+        <h2>Step by step</h2>
+        <p>What each press of Next does in the demo at the top.</p>
+        <ol>
+          <li><strong>Connect.</strong> This page makes two channels and sends one end of each to a page on the florist's site. Pings start on the second.</li>
+          <li><strong>Ask the price of tulips.</strong> The question and the answer go on the first port. The health port is not involved.</li>
+          <li><strong>Far side: busy for 5 seconds.</strong> The far side runs a long loop and answers nothing. One missed ping is late, three is silent. When the loop ends it answers again and is alive.</li>
+          <li><strong>Remove the far side.</strong> The frame is destroyed. Its page said goodbye on the health port as it went, so this page knew at once.</li>
+        </ol>
+      </section>
+      <section id="uses">
+        <h2>What you could build with it</h2>
+        <h3 class="todo">Already running</h3>
+        <ul>
+          <li>Tell the person that a tool they were using has gone, instead of leaving them waiting. <a href="#demo">See the demo at the top of this page.</a></li>
+          <li>Restart a worker that has stopped answering and send it the questions it had not answered. <a href="/patterns/alive-restart/">See a worker restarted when it stops answering.</a></li>
+        </ul>
+      </section>
+      <section id="try">
+        <h2>Things to try</h2>
+        <ul>
+          <li>Make the far side busy and watch the state go late, silent, then alive again when its loop finishes.</li>
+          <li>Ask the price of tulips while the far side is busy. The answer arrives after the loop, because the question waited in the port.</li>
+          <li>Close the far side's ports instead of removing it. No goodbye is sent, and only the missed pings show it.</li>
+        </ul>
+      </section>
+      <section id="traps">
+        <h2>Common mistakes</h2>
+        <ul>
+          <li>Do not treat one missed ping as death. A busy main thread, a slow device or a garbage collection pause all delay answers. Count misses.</li>
+          <li>A page that has been hidden for a minute or more can answer slowly. Each answer says whether its page is hidden, and <code>watch()</code> then allows a minute between answers instead of a second.</li>
+          <li>Pings that are answered prove the thread is running, not that the work is going well. Put a timeout on work too.</li>
+          <li>A goodbye is sent from <code>pagehide</code>. It is not sent when a process crashes or a worker is terminated: no code of the dying side runs.</li>
+          <li><code>pagehide</code> with <code>persisted: true</code> means the page is going into the back/forward cache and may come back. Treat it as paused, not gone. <code>/alive.js</code> does, and gives up after ten minutes if it does not return.</li>
+        </ul>
+      </section>
+      <section id="measured">
+        <h2>Measured</h2>
+        <p class="measured">Chromium 153: the goodbye from a removed frame on another site arrives in under 200 ms, usually under 10. A frame busy for 5 seconds is late after 1 second, silent after 3, and alive again as soon as its loop ends. Other browsers are being filled in from <a href="/lab/results/">the lab's results</a>.</p>
+      </section>
+      <section id="related">
+        <h2>Read next</h2>
+        <ul class="cards">
+          <li><a href="/patterns/health-back/"><strong>Let the far side make the health channel and send a port back</strong><span>Here the page sends only one port, the one for work, the same as it would with no health checks at all.</span></a></li>
+          <li><a href="/patterns/health-beats/"><strong>Send a beat each way on two one-way ports</strong><span>Each side makes a channel, keeps the end it posts into and gives the other side the end to listen on.</span></a></li>
+          <li><a href="/patterns/alive-signals/"><strong>Which signal notices which ending, and how quickly</strong><span>Every way of knowing the far side has gone, side by side, measured in your browser.</span></a></li>
+          <li><a href="/patterns/swpair/"><strong>Join the service workers of two sites with a port</strong><span>The florist's site and the library's site each have a service worker.</span></a></li>
+        </ul>
+      </section>
+      </div>
+      <nav class="pager" id="pager" aria-label="More patterns"><a href="/patterns/swpair/"><small>‹ Before this</small>Join the service workers of two sites with a port</a><a class="pager-all" href="/patterns/">All patterns</a><a class="pager-next" href="/patterns/health-back/"><small>After this ›</small>Let the far side make the health channel and send a port back</a></nav>
+    </main>
+    <footer class="small muted" style="padding-block:2rem 4rem">Port Authority, by <a href="https://paul.kinlan.me">Paul Kinlan</a>. <a href="/about/">About this site</a>.</footer>
+  </div>
+  <script type="module" src="/patterns/page.js"></script>
+  <script type="module" src="/refs.js"></script>
+</body>
+</html>

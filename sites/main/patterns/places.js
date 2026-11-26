@@ -90,15 +90,16 @@ export const places = [
     id: "far",
     title: "A port whose other end is on another device",
     blurb: "This page meets another device through a pairing code, the two connect directly with WebRTC, and each side wraps its end of that connection in a <code>MessagePort</code>. Then this page hands its port on. The counter at the end of the yellow cable is a sandboxed frame that was given a port and knows nothing more. Your phone is now pressing its buttons. The server carried a few messages so the two could find each other, and nothing since. The port carries more than text: bytes, other ports and streams can be posted into it, and each is rebuilt on the other device. See <a href=\"/patterns/far/#built-farfile\">sending a photo as a stream</a> and <a href=\"/patterns/far/#built-farports\">lending a port to another device</a>.",
-    code: `<span class="c">// both devices</span>
-const port = await far({ code });               <span class="c">// a real MessagePort</span>
+    code: `<span class="c">// this page shows a pairing code. onPort is given a real MessagePort</span>
+far({ code, host: true, onPort(port) {
+  counterFrame.postMessage({ cmd: "port" }, "*", [port]);   <span class="c">// give it away like any other port</span>
+} });
 
-<span class="c">// this page: give it away like any other port</span>
-counterFrame.postMessage({ cmd: "port" }, "*", [port]);
-
-<span class="c">// the other device: ordinary port code</span>
-port.postMessage({ do: "add" });
-port.onmessage = ({ data }) => show(data.count);`,
+<span class="c">// the other device, with the same code: ordinary port code</span>
+far({ code, onPort(port) {
+  port.postMessage({ do: "add" });
+  port.onmessage = ({ data }) => show(data.count);
+} });`,
     async setup(stage, ui) {
       const farBox = stage.box("far", { html: `<div class="here"><div class="box-title">Another device</div><p class="small muted">Nobody yet. Open the link on a phone, or let a stand-in play the part.</p></div>` });
       const me = logBox(stage, "page", "This page, in the middle", `<p class="small" data-code style="margin:0 0 .4rem" hidden></p>`);

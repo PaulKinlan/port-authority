@@ -1,0 +1,148 @@
+<!doctype html>
+<!-- Written by scripts/patterns.mjs from the modules in /patterns/. Edit those, then run it. -->
+<html lang="en" data-pattern="pipeline">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Back-pressure across three origins | Port Authority</title>
+  <meta name="description" content="This page hands its stream to a frame on another origin. That frame transforms it and hands the result to a frame on a third origin, down a port it holds to that frame. Nothing is ">
+  <meta property="og:title" content="Back-pressure across three origins | Port Authority">
+  <meta property="og:description" content="This page hands its stream to a frame on another origin. That frame transforms it and hands the result to a frame on a third origin, down a port it holds to that frame. Nothing is ">
+  <meta property="og:type" content="article">
+  <meta name="twitter:card" content="summary">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/base.css">
+  <script src="/nav.js"></script>
+  <link rel="stylesheet" href="/patterns/patterns.css">
+  <link rel="stylesheet" href="/patterns/page.css">
+  <script src="/errors.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <div class="wrap">
+    <header class="site-bar">
+      <a class="wordmark" href="/">Port Authority</a>
+      <nav aria-label="Primary"><a href="/">Experiments</a><a href="/guide/">The guide</a><a href="/patterns/" aria-current="page">Port patterns</a><a href="/comlink/">Comlink today</a><a href="/ai-router/">AI router</a><a href="/lab/">The lab</a><a href="/missing/">What is missing</a><a href="/reading/">Further reading</a><a href="/hub/">Your hub</a></nav>
+    </header>
+    <main id="main">
+      <div class="stack page-head">
+        <p class="crumb"><a href="/patterns/">Port patterns</a> / <span id="group"><a href="/patterns/#pipeline">More things a port can carry</a></span></p>
+        <h1 id="title">Back-pressure across three origins</h1>
+      </div>
+      <section class="pattern" id="demo"><div class="demo"><noscript><p class="small muted">The demo that runs here needs JavaScript. Everything else on this page reads the same without it.</p></noscript></div></section>
+      <div class="deep" id="deep">
+      <section id="what">
+        <h2>What you are looking at</h2>
+        <p>This page hands its stream to a frame on another origin. That frame transforms it and hands the result to a frame on a third origin, down a port it holds to that frame. Nothing is buffered without limit: pause the reader and, a few chunks later, the source stops being asked for more.</p>
+      </section>
+      <section id="code">
+        <h2>The code</h2>
+        <pre><span class="c">// the transformer, on its own origin</span>
+port.onmessage = ({ data }) => {
+  const out = data.readable.pipeThrough(new TransformStream({ transform: shout }));
+  toReader.postMessage({ readable: out }, [out]);   <span class="c">// a port to the third origin</span>
+};</pre>
+        <h3 id="using">Using it</h3>
+        <pre><span class="c">// a recorded meeting page, a caption styler from a second company, a player from a third</span>
+const toStyler = new MessageChannel(), between = new MessageChannel();
+styler.contentWindow.postMessage({}, stylerOrigin, [toStyler.port2, between.port1]);   <span class="c">// port and toReader</span>
+player.contentWindow.postMessage({}, playerOrigin, [between.port2]);
+<span class="c">// the page: a stream that makes a line only when it is asked for one</span>
+const readable = new ReadableStream({ pull(c) { c.enqueue(nextLine()); } }, { highWaterMark: 0 });
+toStyler.port1.postMessage({ readable }, [readable]);
+
+<span class="c">// the styler: shout is its transform</span>
+const shout = (line, controller) =&gt; controller.enqueue(line.toUpperCase());
+
+<span class="c">// the player: show one caption for two seconds, then read the next</span>
+port.onmessage = async ({ data }) =&gt; {
+  const reader = data.readable.getReader();
+  for (;;) {
+    if (paused) await resumed();                <span class="c">// the person pressed pause</span>
+    const { value, done } = await reader.read();
+    if (done) return;
+    await showFor(value, 2000);
+  }
+};
+<span class="c">// While it is paused nothing is read. A few lines later pull() stops being called in the page.</span></pre>
+        <h3 id="case">Where you would use it</h3>
+        <p>A real case. A page plays a recorded meeting and holds the transcript. A frame from a second company styles each line as a caption, and a player frame from a third company shows one caption at a time. The page gives the styler a port to the player, so styled lines go to the player and do not come back through the page. When the person pauses the player it stops reading, and a few lines later the page stops being asked for more. No stage sends a pause message to another, and only a few lines are in flight at any time.</p>
+      </section>
+      <section id="how">
+        <h2>How it works</h2>
+        <div class="stack paras">
+          <p>Three origins in a row: a source, a transformer and a reader. The source's stream is transferred to the transformer, which pipes it through a <code>TransformStream</code> and transfers the result to the reader.</p>
+          <p>Each stream has a small queue. When the reader stops reading, its queue fills, the transformer's writes stop being accepted, its queue fills, and the source stops being asked for more. Pausing the last stage stops the first, across two origin boundaries, with no message from you.</p>
+          <p>Start reading again and demand flows back the other way. The source resumes a few chunks later.</p>
+        </div>
+      </section>
+      <section id="steps">
+        <h2>Step by step</h2>
+        <p>What each press of Next does in the demo at the top.</p>
+        <ol>
+          <li><strong>Connect the three origins.</strong> Channels are opened from this page to the transformer, and from the transformer to the reader.</li>
+          <li><strong>Start the pipe.</strong> A ReadableStream leaves this page, passes through the transformer, and reaches the reader.</li>
+          <li><strong>Pause the reader.</strong> The reader stops pulling. Back-pressure travels upstream and stops the source a few chunks later.</li>
+          <li><strong>Let the reader continue.</strong> The reader resumes pulling, and the source starts producing again.</li>
+        </ol>
+      </section>
+      <section id="uses">
+        <h2>What you could build with it</h2>
+        <p>This one is built and running below.</p>
+        <article class="built" id="built-stages">
+          <h3>Three parties each supply one stage, and none of them sees the others</h3>
+          <p class="small muted idea">The idea: Processing chains where each stage is supplied by a different party: decrypt, then decode, then display.</p>
+          <div class="demo"></div>
+          <h4>What you are looking at</h4>
+          <p>A zipped order needs unzipping, turning from bytes into text, and its card number hiding before it is shown. Each of those is a stream stage supplied by a different origin. This page asks each for a stage, joins the three end to end and sends the file through. This page holds both ends of every stage, so the data comes back here between one stage and the next. Each party sees only what flows through its own stage, and none of them needs to know the others exist.</p>
+          <h4>The code</h4>
+          <pre><span class="c">// each party</span>
+const stage = new TransformStream({ transform(chunk, out) { out.enqueue(work(chunk)); } });
+parent.postMessage({ readable: stage.readable, writable: stage.writable }, "*", [stage.readable, stage.writable]);
+
+<span class="c">// this page</span>
+zippedFile.pipeThrough(unzip).pipeThrough(decode).pipeThrough(redact).pipeTo(screen);</pre>
+          <h4>Step by step</h4>
+          <p>What each press of Next does in this demo.</p>
+          <ol>
+          <li><strong>Ask each party for a stage.</strong> Three origins each hand over both ends of one transform.</li>
+          <li><strong>Pour a zipped order through all three.</strong> Bytes go in at one end. Readable text with the card number hidden comes out of the other.</li>
+        </ol>
+        </article>
+        <h3 class="todo">Already running</h3>
+        <ul>
+          <li>Protecting a slow consumer from a fast producer without buffering everything. <a href="#demo">See the demo at the top of this page.</a></li>
+        </ul>
+      </section>
+      <section id="try">
+        <h2>Things to try</h2>
+        <ul>
+          <li>Start the pipe, pause the reader and watch the source's counter stop a few chunks later.</li>
+          <li>Resume and watch it pick up.</li>
+        </ul>
+      </section>
+      <section id="traps">
+        <h2>Common mistakes</h2>
+        <ul>
+          <li>The queues mean a few chunks are always in flight. Do not assume pause is instant.</li>
+          <li>Every stage must stay alive. See <a href="/patterns/stream-intro/">why a stream does not survive its introducer</a>.</li>
+        </ul>
+      </section>
+      <section id="related">
+        <h2>Read next</h2>
+        <ul class="cards">
+          <li><a href="/patterns/stream/"><strong>Send a stream to another frame</strong><span>A ReadableStream is transferable too, so you can hand another origin a live stream and it reads with back-pressure, as if the source were local.</span></a></li>
+          <li><a href="/patterns/roundtrip/"><strong>Pipe your data through another site, and get it back</strong><span>A transform has two ends, and both can be given away.</span></a></li>
+          <li><a href="/patterns/stream-intro/"><strong>A forwarded stream stops when the page that passed it on closes. A port keeps working.</strong><span>You can pass a stream on, the same as a port.</span></a></li>
+          <li><a href="/patterns/filter/"><strong>Run live video through a filter on another origin</strong><span>Video can leave your page one frame at a time and come back changed.</span></a></li>
+        </ul>
+      </section>
+      </div>
+      <nav class="pager" id="pager" aria-label="More patterns"><a href="/patterns/stream-intro/"><small>‹ Before this</small>A forwarded stream stops when the page that passed it on closes. A port keeps working.</a><a class="pager-all" href="/patterns/">All patterns</a><a class="pager-next" href="/patterns/reload/"><small>After this ›</small>Keep a port across a page reload</a></nav>
+    </main>
+    <footer class="small muted" style="padding-block:2rem 4rem">Port Authority, by <a href="https://paul.kinlan.me">Paul Kinlan</a>. <a href="/about/">About this site</a>.</footer>
+  </div>
+  <script type="module" src="/patterns/page.js"></script>
+  <script type="module" src="/refs.js"></script>
+</body>
+</html>

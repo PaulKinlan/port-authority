@@ -1,0 +1,178 @@
+<!doctype html>
+<!-- Written by scripts/patterns.mjs from the modules in /patterns/. Edit those, then run it. -->
+<html lang="en" data-pattern="signer">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Let another origin sign with your key without giving it the key | Port Authority</title>
+  <meta name="description" content="The vault makes a signing key the browser will not let anyone read, itself included. It gives this page a port that signs. This page lends the shop a weaker port: orders only, thre">
+  <meta property="og:title" content="Let another origin sign with your key without giving it the key | Port Authority">
+  <meta property="og:description" content="The vault makes a signing key the browser will not let anyone read, itself included. It gives this page a port that signs. This page lends the shop a weaker port: orders only, thre">
+  <meta property="og:type" content="article">
+  <meta name="twitter:card" content="summary">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/base.css">
+  <script src="/nav.js"></script>
+  <link rel="stylesheet" href="/patterns/patterns.css">
+  <link rel="stylesheet" href="/patterns/page.css">
+  <script src="/errors.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <div class="wrap">
+    <header class="site-bar">
+      <a class="wordmark" href="/">Port Authority</a>
+      <nav aria-label="Primary"><a href="/">Experiments</a><a href="/guide/">The guide</a><a href="/patterns/" aria-current="page">Port patterns</a><a href="/comlink/">Comlink today</a><a href="/ai-router/">AI router</a><a href="/lab/">The lab</a><a href="/missing/">What is missing</a><a href="/reading/">Further reading</a><a href="/hub/">Your hub</a></nav>
+    </header>
+    <main id="main">
+      <div class="stack page-head">
+        <p class="crumb"><a href="/patterns/">Port patterns</a> / <span id="group"><a href="/patterns/#signer">Across threads</a></span></p>
+        <h1 id="title">Let another origin sign with your key without giving it the key</h1>
+      </div>
+      <section class="pattern" id="demo"><div class="demo"><noscript><p class="small muted">The demo that runs here needs JavaScript. Everything else on this page reads the same without it.</p></noscript></div></section>
+      <div class="deep" id="deep">
+      <section id="what">
+        <h2>What you are looking at</h2>
+        <p>The vault makes a signing key the browser will not let anyone read, itself included. It gives this page a port that signs. This page lends the shop a weaker port: orders only, three uses. The shop gets real signatures that anyone can check against the public key, and at no point does the key, or the full port, move.</p>
+      </section>
+      <section id="code">
+        <h2>The code</h2>
+        <pre><span class="c">// the vault</span>
+const { privateKey, publicKey } = await crypto.subtle.generateKey(ECDSA, false, ["sign", "verify"]);
+port.onmessage = async ({ data }) => port.postMessage({ id: data.id, signature: await sign(privateKey, data.text) });
+
+<span class="c">// this page, lending less than it has</span>
+lent.onmessage = ({ data }) => {
+  if (uses-- > 0 && data.text.startsWith("order:")) vault.postMessage(data); else refuse(data);
+};</pre>
+        <h3 id="using">Using it</h3>
+        <pre><span class="c">// a company's purchasing page, its key vault in one frame, a florist's ordering widget in another</span>
+<span class="c">// the vault: how it signs, and how it gives out the public half of the key</span>
+const ECDSA = { name: "ECDSA", namedCurve: "P-256" }, SHA = { name: "ECDSA", hash: "SHA-256" };
+const sign = (key, text) =&gt; crypto.subtle.sign(SHA, key, new TextEncoder().encode(text));
+port.postMessage({ publicKey: await crypto.subtle.exportKey("jwk", publicKey) });
+
+<span class="c">// the page: pass answers down to the widget, and say why when it refuses</span>
+vault.onmessage = ({ data }) =&gt; data.publicKey ? publish(data.publicKey) : lent.postMessage(data);
+const refuse = (data) =&gt; lent.postMessage({ id: data.id, refused: "this port signs orders only, three times" });
+
+<span class="c">// the florist's widget: ask, then get a signature or a refusal</span>
+port.postMessage({ id: 1, text: "order: 2 dozen tulips" });
+port.postMessage({ id: 2, text: "pay: 5000 to the florist" });
+port.onmessage = ({ data }) =&gt; data.refused ? showError(data.refused) : sendOrder(data.id, data.signature);
+
+<span class="c">// anyone with the public key can check an order. The florist has it as jwk</span>
+const key = await crypto.subtle.importKey("jwk", jwk, ECDSA, false, ["verify"]);
+const ok = await crypto.subtle.verify(SHA, key, signature, new TextEncoder().encode(text));
+
+<span class="c">// the buyer signs out</span>
+lent.close();
+<span class="c">// The widget still holds its port. Nothing answers it now, and it is told nothing.</span></pre>
+        <h3 id="case">Where you would use it</h3>
+        <p>A real case. A company buys flowers through a florist's ordering widget, which sits in a frame on the company's purchasing page. The florist only accepts orders signed with the company's key, and that key lives in a vault frame from the company's identity provider. The page holds the vault's signing port and lends the widget a weaker one: orders only, three uses. The widget gets signed orders it can send to the florist, and its attempt to sign a payment is refused by the page. When the buyer signs out the page closes the lent port, and the widget can sign nothing more.</p>
+      </section>
+      <section id="how">
+        <h2>How it works</h2>
+        <div class="stack paras">
+          <p>WebCrypto can make a key that cannot be exported. Code can use it and no code can read it. The vault frame makes one and never sends it anywhere.</p>
+          <p>What the vault gives out is a port. Post bytes in, get a signature back. Whoever holds that port can sign, for as long as the vault keeps listening.</p>
+          <p>The page then lends the shop a weaker port of its own: orders only, three uses. The shop's requests pass through the page, which checks them and forwards the allowed ones. So there are three layers. Each hands on less than it holds and can cut off the one below.</p>
+        </div>
+      </section>
+      <section id="steps">
+        <h2>Step by step</h2>
+        <p>What each press of Next does in the demo at the top.</p>
+        <ol>
+          <li><strong>Ask the vault.</strong> The vault makes a key nobody can read, and gives this page a port that signs.</li>
+          <li><strong>Lend the shop.</strong> This page lends the shop a weaker port: orders only, three uses.</li>
+          <li><strong>Shop: sign an order.</strong> The shop asks for a signature. The request passes through this page to the vault, and the result is checked here.</li>
+          <li><strong>Shop: try to sign a payment.</strong> The shop asks to sign a payment. This page refuses, because that port only does orders.</li>
+          <li><strong>Take the port back.</strong> The shop's port is closed.</li>
+        </ol>
+      </section>
+      <section id="uses">
+        <h2>What you could build with it</h2>
+        <p>These are built and running below.</p>
+        <article class="built" id="built-cap">
+          <h3>A wallet the shop can charge, up to a limit you set</h3>
+          <p class="small muted idea">The idea: Spending rules: amount caps, allow-lists and expiry enforced in the forwarding handler.</p>
+          <div class="demo"></div>
+          <h4>What you are looking at</h4>
+          <p>The wallet is a frame on its own origin that pays whoever asks down its port. This page holds that port and does not pass it on. It gives the shop a port of its own, and forwards a charge to the wallet only if the running total stays under fifty. The shop cannot go around it, because the only port the shop has ends in this page.</p>
+          <h4>The code</h4>
+          <pre>let spent = 0;
+shopPort.onmessage = ({ data }) => {
+  if (spent + data.amount > 50) return shopPort.postMessage({ refused: "over the limit" });
+  spent += data.amount;
+  walletPort.postMessage(data);             <span class="c">// only now does the wallet hear of it</span>
+};</pre>
+          <h4>Step by step</h4>
+          <p>What each press of Next does in this demo.</p>
+          <ol>
+          <li><strong>Let the shop charge up to 50.</strong> The shop gets a port that ends here, not at the wallet.</li>
+          <li><strong>Shop: charge 20.</strong> 20 is under the limit. This page passes it on and the wallet pays.</li>
+          <li><strong>Shop: charge 20.</strong> 40 so far. Still allowed.</li>
+          <li><strong>Shop: charge 20.</strong> This would make 60. This page refuses, and the wallet never hears of it.</li>
+        </ol>
+        </article>
+        <article class="built" id="built-quota">
+          <h3>One API key, used by two apps, each under its own limit</h3>
+          <p class="small muted idea">The idea: API credentials held by one origin and used by many under limits.</p>
+          <div class="demo"></div>
+          <h4>What you are looking at</h4>
+          <p>The key holder has a key that cannot be read, and signs requests with it. Two apps from other origins need signed requests. Neither is given the key. Each is given its own port to the key holder, and each port has its own allowance: three requests for the weather app, one for the garden app. The key holder counts per port, so it knows who is asking without anyone having to say.</p>
+          <h4>The code</h4>
+          <pre><span class="c">// the key holder, once per app</span>
+const { port1, port2 } = new MessageChannel();
+let left = allowance;
+port1.onmessage = async ({ data }) => {
+  if (left-- <= 0) return port1.postMessage({ refused: "allowance used" });
+  port1.postMessage({ signed: await crypto.subtle.sign("HMAC", key, encode(data.request)) });
+};
+give(app, port2);</pre>
+          <h4>Step by step</h4>
+          <p>What each press of Next does in this demo.</p>
+          <ol>
+          <li><strong>Give each app a line to the key holder.</strong> Two ports, two allowances. The key stays where it is.</li>
+          <li><strong>Weather app: sign a request.</strong> The key holder signs it. One of three used.</li>
+          <li><strong>Garden app: sign a request.</strong> The garden app's one request.</li>
+          <li><strong>Garden app: sign a request.</strong> Its allowance is used. The weather app's is untouched.</li>
+        </ol>
+        </article>
+        <h3 class="todo">Already running</h3>
+        <ul>
+          <li>A wallet or identity frame that signs for sites without ever exposing the key. <a href="#demo">See the demo at the top of this page.</a></li>
+        </ul>
+      </section>
+      <section id="try">
+        <h2>Things to try</h2>
+        <ul>
+          <li>Have the shop sign an order, then try a payment. The second is refused by the page, not the vault.</li>
+          <li>Use the port three times and try a fourth.</li>
+          <li>Take the port back and try again.</li>
+        </ul>
+      </section>
+      <section id="traps">
+        <h2>Common mistakes</h2>
+        <ul>
+          <li>The vault signs whatever it is sent. The rules live in the layer that forwards, so that layer must be one you trust.</li>
+          <li>Compare with <a href="/patterns/keycopy/">sending the key itself</a>, which cannot be undone.</li>
+        </ul>
+      </section>
+      <section id="related">
+        <h2>Read next</h2>
+        <ul class="cards">
+          <li><a href="/patterns/keycopy/"><strong>Send a key to another site: it gets a copy you cannot take back</strong><span>A CryptoKey can be posted to another origin.</span></a></li>
+          <li><a href="/patterns/attenuate/"><strong>Give a frame limited access, then revoke it</strong><span>Holding a port is the permission to use it.</span></a></li>
+          <li><a href="/patterns/functions/"><strong>Pass a function to another origin</strong><span>A function cannot be cloned, but a port can stand in for one.</span></a></li>
+        </ul>
+      </section>
+      </div>
+      <nav class="pager" id="pager" aria-label="More patterns"><a href="/patterns/filter/"><small>‹ Before this</small>Run live video through a filter on another origin</a><a class="pager-all" href="/patterns/">All patterns</a><a class="pager-next" href="/patterns/keycopy/"><small>After this ›</small>Send a key to another site: it gets a copy you cannot take back</a></nav>
+    </main>
+    <footer class="small muted" style="padding-block:2rem 4rem">Port Authority, by <a href="https://paul.kinlan.me">Paul Kinlan</a>. <a href="/about/">About this site</a>.</footer>
+  </div>
+  <script type="module" src="/patterns/page.js"></script>
+  <script type="module" src="/refs.js"></script>
+</body>
+</html>

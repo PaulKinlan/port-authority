@@ -1,0 +1,149 @@
+<!doctype html>
+<!-- Written by scripts/patterns.mjs from the modules in /patterns/. Edit those, then run it. -->
+<html lang="en" data-pattern="keycopy">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Send a key to another site: it gets a copy you cannot take back | Port Authority</title>
+  <meta name="description" content="A CryptoKey can be posted to another origin. This page makes a signing key that cannot be read, and sends the key itself to the florist's site. The florist can now sign as you. It ">
+  <meta property="og:title" content="Send a key to another site: it gets a copy you cannot take back | Port Authority">
+  <meta property="og:description" content="A CryptoKey can be posted to another origin. This page makes a signing key that cannot be read, and sends the key itself to the florist's site. The florist can now sign as you. It ">
+  <meta property="og:type" content="article">
+  <meta name="twitter:card" content="summary">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/base.css">
+  <script src="/nav.js"></script>
+  <link rel="stylesheet" href="/patterns/patterns.css">
+  <link rel="stylesheet" href="/patterns/page.css">
+  <script src="/errors.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <div class="wrap">
+    <header class="site-bar">
+      <a class="wordmark" href="/">Port Authority</a>
+      <nav aria-label="Primary"><a href="/">Experiments</a><a href="/guide/">The guide</a><a href="/patterns/" aria-current="page">Port patterns</a><a href="/comlink/">Comlink today</a><a href="/ai-router/">AI router</a><a href="/lab/">The lab</a><a href="/missing/">What is missing</a><a href="/reading/">Further reading</a><a href="/hub/">Your hub</a></nav>
+    </header>
+    <main id="main">
+      <div class="stack page-head">
+        <p class="crumb"><a href="/patterns/">Port patterns</a> / <span id="group"><a href="/patterns/#keycopy">Between real sites</a></span></p>
+        <h1 id="title">Send a key to another site: it gets a copy you cannot take back</h1>
+      </div>
+      <section class="pattern" id="demo"><div class="demo"><noscript><p class="small muted">The demo that runs here needs JavaScript. Everything else on this page reads the same without it.</p></noscript></div></section>
+      <div class="deep" id="deep">
+      <section id="what">
+        <h2>What you are looking at</h2>
+        <p>A <code>CryptoKey</code> can be posted to another origin. This page makes a signing key that cannot be read, and sends the key itself to the florist's site. The florist can now sign as you. It cannot read the key either, but it can keep it: it saves the key in its own IndexedDB, and after a reload it still has it. Nothing this page does can undo that. Compare <a href="/patterns/signer/">the signer pattern</a>, where the key stays put and only a port travels.</p>
+      </section>
+      <section id="code">
+        <h2>The code</h2>
+        <pre>const { privateKey } = await crypto.subtle.generateKey(ECDSA, false, ["sign"]);
+floristWindow.postMessage({ key: privateKey }, floristOrigin);   <span class="c">// a copy, not a move</span>
+
+<span class="c">// the florist, on its own origin</span>
+await db.put(key, "theirs");                 <span class="c">// kept, for as long as it likes</span>
+await crypto.subtle.sign(ECDSA, key, bytes); <span class="c">// signs as you</span></pre>
+        <h3 id="using">Using it</h3>
+        <pre><span class="c">// a flower company: sign-in pages on one origin, the shop (the florist) on another</span>
+<span class="c">// the sign-in page: give the server the public half of the pair, so it can check signatures</span>
+const spki = await crypto.subtle.exportKey("spki", publicKey);
+await fetch("/devices", { method: "POST", body: spki });
+
+<span class="c">// the florist: take a key from the sign-in origin and from nowhere else</span>
+addEventListener("message", async (e) =&gt; {
+  if (e.origin !== signInOrigin || !e.data?.key) return;
+  await db.put(e.data.key, "theirs");
+});
+
+<span class="c">// the florist, a week later. The sign-in page is not open.</span>
+const key = await db.get("theirs");
+const signature = await crypto.subtle.sign(ECDSA, key, bytes);   <span class="c">// sent to the server with the order</span>
+
+<span class="c">// the person signs out. The key cannot be taken back from the florist,</span>
+<span class="c">// so the sign-in page asks the server to stop accepting its signatures.</span>
+await fetch("/devices/this-one", { method: "DELETE" });</pre>
+        <h3 id="case">Where you would use it</h3>
+        <p>A real case. A flower company runs its sign-in pages on one origin and its shop on another. When a person signs in, the sign-in page makes a signing key, gives the public half to the company's server, and posts the private key to the shop. The shop keeps the key in its own IndexedDB and signs each order with it, so the sign-in page does not have to stay open. This is right only because one company owns both origins and the shop is meant to keep the key. The moment to plan for is sign-out: the sign-in page cannot remove the key from the shop's storage, so it asks the server to stop accepting that key's signatures.</p>
+      </section>
+      <section id="how">
+        <h2>How it works</h2>
+        <div class="stack paras">
+          <p>A <code>CryptoKey</code> can be cloned by <code>postMessage</code>, including to another origin, and including when it is marked non-extractable. The receiver gets a working key.</p>
+          <p>Non-extractable means nobody can read the bytes. It does not mean nobody else can have the key. The florist cannot export it, and it does not need to: it stores the key object in its own IndexedDB and still has it after a reload.</p>
+          <p>So you can't take a posted key back. This page can destroy its own copy and the florist keeps signing as this page for ever. In the signer pattern only a port was sent, and closing it ended the access.</p>
+        </div>
+      </section>
+      <section id="steps">
+        <h2>Step by step</h2>
+        <p>What each press of Next does in the demo at the top.</p>
+        <ol>
+          <li><strong>Send the key itself.</strong> A copy of the key goes to the florist's real site. This page still has its own.</li>
+          <li><strong>Florist: sign an order.</strong> The florist signs with the key, and this page checks the signature. It is valid: the florist can sign as this page.</li>
+          <li><strong>Reload the florist.</strong> The florist's page is thrown away and loaded again. It saved the key in its own storage first.</li>
+          <li><strong>Florist: sign an order.</strong> It still has the key, and still signs. There is no way to take a copied key back.</li>
+        </ol>
+      </section>
+      <section id="uses">
+        <h2>What you could build with it</h2>
+        <p>This one is built and running below.</p>
+        <article class="built" id="built-keyworker">
+          <h3>Make a key on the page, then keep it only in a worker</h3>
+          <p class="small muted idea">The idea: Moving a key from a setup page to a worker on the same origin.</p>
+          <div class="demo"></div>
+          <h4>What you are looking at</h4>
+          <p>Giving a key away is permanent, which is sometimes what you want. This page makes a signing key and posts it to its own worker, then drops its copy. From here on the page cannot sign anything by itself. A script injected into the page finds no key to use. It can only ask the worker, which can say no.</p>
+          <h4>The code</h4>
+          <pre>const { privateKey, publicKey } = await crypto.subtle.generateKey(ECDSA, false, ["sign", "verify"]);
+worker.postMessage({ key: privateKey });     <span class="c">// a copy goes to the worker</span>
+<span class="c">// let the page's copy go out of scope: the worker now holds the only one</span>
+
+worker.postMessage({ sign: "order 1" });     <span class="c">// the page can ask</span></pre>
+          <h4>Step by step</h4>
+          <p>What each press of Next does in this demo.</p>
+          <ol>
+          <li><strong>Make a key and give it to the worker.</strong> The page makes a key nobody can read, posts it to its worker and forgets it.</li>
+          <li><strong>Ask the worker to sign.</strong> The worker signs. This page checks the signature with the public half.</li>
+          <li><strong>Page: try to sign by itself.</strong> The page has no key any more.</li>
+        </ol>
+        </article>
+        <h3 class="todo">Already running</h3>
+        <ul>
+          <li>Provisioning: an origin you trust completely is given a key to keep. <a href="#demo">See the demo at the top of this page.</a></li>
+          <li>If you want to be able to change your mind, send a port and not the key. <a href="/patterns/signer/">See the signer, which sends a port instead.</a></li>
+        </ul>
+      </section>
+      <section id="try">
+        <h2>Things to try</h2>
+        <ul>
+          <li>Send the key, have the florist sign, and see the signature verify here.</li>
+          <li>Destroy this page's copy and reload the florist. It still signs.</li>
+        </ul>
+      </section>
+      <section id="traps">
+        <h2>Common mistakes</h2>
+        <ul>
+          <li>There is no revocation. The only fix is a new key pair.</li>
+          <li>The receiver's storage is its own. Clearing your site data does not clear theirs.</li>
+        </ul>
+      </section>
+      <section id="measured">
+        <h2>Measured</h2>
+        <p class="measured">Chromium 157: a non-extractable ECDSA key posted to a frame on a real second origin signs there, is stored in that origin's IndexedDB, and survives a reload of that frame. Other browsers are being filled in from <a href="/lab/results/">the lab's results</a>.</p>
+      </section>
+      <section id="related">
+        <h2>Read next</h2>
+        <ul class="cards">
+          <li><a href="/patterns/signer/"><strong>Let another origin sign with your key without giving it the key</strong><span>The vault makes a signing key the browser will not let anyone read, itself included.</span></a></li>
+          <li><a href="/patterns/attenuate/"><strong>Give a frame limited access, then revoke it</strong><span>Holding a port is the permission to use it.</span></a></li>
+          <li><a href="/patterns/halves/"><strong>Send only the readable side of a stream</strong><span>A stream has a direction, and you can hand over one direction without the other.</span></a></li>
+        </ul>
+      </section>
+      </div>
+      <nav class="pager" id="pager" aria-label="More patterns"><a href="/patterns/signer/"><small>‹ Before this</small>Let another origin sign with your key without giving it the key</a><a class="pager-all" href="/patterns/">All patterns</a><a class="pager-next" href="/patterns/halves/"><small>After this ›</small>Send only the readable side of a stream</a></nav>
+    </main>
+    <footer class="small muted" style="padding-block:2rem 4rem">Port Authority, by <a href="https://paul.kinlan.me">Paul Kinlan</a>. <a href="/about/">About this site</a>.</footer>
+  </div>
+  <script type="module" src="/patterns/page.js"></script>
+  <script type="module" src="/refs.js"></script>
+</body>
+</html>

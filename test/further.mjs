@@ -4,7 +4,7 @@ import { createRequire } from "node:module";
 import { Buffer } from "node:buffer";
 const { chromium } = createRequire(import.meta.url)("playwright");
 const LIVE = process.env.LIVE;
-const root = LIVE ? process.env.LIVE_MAIN || `https://portauthority.${LIVE}` : "http://hub.localhost:8787";
+const root = LIVE ? process.env.LIVE_MAIN || `https://portauthority.${LIVE}` : `http://hub.localhost:${process.env.PORT || 8787}`;
 const shots = process.argv[2];
 // ISOLATE=1 puts sandboxed and cross-site frames in processes of their own, as desktop Chrome does.
 const args = process.env.ISOLATE ? ["--enable-features=IsolateSandboxedIframes", "--site-per-process"] : [];

@@ -1,0 +1,138 @@
+<!doctype html>
+<!-- Written by scripts/patterns.mjs from the modules in /patterns/. Edit those, then run it. -->
+<html lang="en" data-pattern="health-back">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Let the far side make the health channel and send a port back | Port Authority</title>
+  <meta name="description" content="Here the page sends only one port, the one for work, the same as it would with no health checks at all. When the far side receives it, it makes a channel of its own for health chec">
+  <meta property="og:title" content="Let the far side make the health channel and send a port back | Port Authority">
+  <meta property="og:description" content="Here the page sends only one port, the one for work, the same as it would with no health checks at all. When the far side receives it, it makes a channel of its own for health chec">
+  <meta property="og:type" content="article">
+  <meta name="twitter:card" content="summary">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/base.css">
+  <script src="/nav.js"></script>
+  <link rel="stylesheet" href="/patterns/patterns.css">
+  <link rel="stylesheet" href="/patterns/page.css">
+  <script src="/errors.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <div class="wrap">
+    <header class="site-bar">
+      <a class="wordmark" href="/">Port Authority</a>
+      <nav aria-label="Primary"><a href="/">Experiments</a><a href="/guide/">The guide</a><a href="/patterns/" aria-current="page">Port patterns</a><a href="/comlink/">Comlink today</a><a href="/ai-router/">AI router</a><a href="/lab/">The lab</a><a href="/missing/">What is missing</a><a href="/reading/">Further reading</a><a href="/hub/">Your hub</a></nav>
+    </header>
+    <main id="main">
+      <div class="stack page-head">
+        <p class="crumb"><a href="/patterns/">Port patterns</a> / <span id="group"><a href="/patterns/#health-back">Knowing the other side is still there</a></span></p>
+        <h1 id="title">Let the far side make the health channel and send a port back</h1>
+      </div>
+      <section class="pattern" id="demo"><div class="demo"><noscript><p class="small muted">The demo that runs here needs JavaScript. Everything else on this page reads the same without it.</p></noscript></div></section>
+      <div class="deep" id="deep">
+      <section id="what">
+        <h2>What you are looking at</h2>
+        <p>Here the page sends only one port, the one for work, the same as it would with no health checks at all. When the far side receives it, it makes a channel of its own for health checks and sends one end back. Each side set up exactly one channel. The page does not have to know in advance that the far side does health checks: if a port comes back, it watches it. If none comes, it carries on without. The far side decides how it is watched.</p>
+      </section>
+      <section id="code">
+        <h2>The code</h2>
+        <pre><span class="c">// this page: one port, as usual</span>
+const data = new MessageChannel();
+frame.postMessage("port", origin, [data.port2]);
+addEventListener("message", (e) => {
+  if (e.source === frame && e.data === "health") watch(e.ports[0], { onState });
+});
+
+<span class="c">// the far side: make the health channel, keep one end, send the other back</span>
+onmessage = ({ source, ports: [data] }) => {
+  serve(data);
+  const health = new MessageChannel();
+  answer(health.port1);
+  source.postMessage("health", "*", [health.port2]);
+};</pre>
+        <h3 id="using">Using it</h3>
+        <pre><span class="c">// an address-lookup frame from a postal service, embedded by many shops</span>
+<span class="c">// a shop that knows about health checks. This is its onState.</span>
+function onState(state) {
+  if (state === "alive") lookupNote.textContent = "";
+  if (state === "late") lookupNote.textContent = "Address lookup is slow.";
+  if (state === "silent" || state === "closed") {
+    lookupNote.textContent = "Address lookup has stopped. Type your address below.";
+    addressFields.hidden = false;
+  }
+}
+
+<span class="c">// work is the same whether a health port came back or not</span>
+data.port1.onmessage = (e) =&gt; showAddresses(e.data);
+postcode.onchange = () =&gt; data.port1.postMessage(postcode.value);
+
+<span class="c">// an older shop has no listener for "health". The port that comes back is never read.</span>
+<span class="c">// Its lookups work as before, and it cannot tell when the frame stops.</span>
+
+<span class="c">// the far side's serve(): a postcode in, addresses out, and nothing about health</span>
+function serve(data) {
+  data.onmessage = (e) =&gt; data.postMessage(addressesFor(e.data));
+}</pre>
+        <h3 id="case">Where you would use it</h3>
+        <p>A real case. A postal service offers an address-lookup frame that many shops embed, and each shop sends it one port for postcodes and addresses. The postal service adds health checks to the frame and leaves the lookup messages as they were: the frame now makes a second channel and posts one end back. A shop whose page was written before that has no listener for it, and its lookups work as before. A shop that listens for the health message watches the port, and when the frame goes silent it shows plain address fields for the person to fill in. No shop had to change its code on the day the frame changed.</p>
+      </section>
+      <section id="how">
+        <h2>How it works</h2>
+        <div class="stack paras">
+          <p>The previous pattern needs the caller to know, before it sends anything, that the far side does health checks. Here the far side decides. The caller sends one port, the same as it would with no health checks at all. The far side makes a second channel, keeps one end, and posts the other end back to whoever sent the first.</p>
+          <p>So each side makes exactly one channel and handles one kind of message on each port. A caller that has never heard of health checks still works: a port arrives back and is never read, which costs nothing. A caller that knows about them watches it.</p>
+          <p>The port comes back the way the first came in. From a frame that is <code>parent.postMessage</code>. From a worker it is <code>postMessage</code> on the worker's global. Over a port it can be sent back on the data port itself, as the only message that carries a port, so the data protocol still needs no types.</p>
+        </div>
+      </section>
+      <section id="steps">
+        <h2>Step by step</h2>
+        <p>What each press of Next does in the demo at the top.</p>
+        <ol>
+          <li><strong>Connect.</strong> This page sends one port. The far side makes a second channel and sends an end back. That end is drawn as it arrives.</li>
+          <li><strong>Ask the price of tulips.</strong> Work goes on the port this page made.</li>
+          <li><strong>Far side: close its ports.</strong> The far side calls close() on both of its ports. Nothing is said: close() is silent. The pings stop being answered, and after three this page gives up.</li>
+        </ol>
+      </section>
+      <section id="uses">
+        <h2>What you could build with it</h2>
+        <h3 class="todo">Already running</h3>
+        <ul>
+          <li>A service that callers can watch if they know about health checks, and use as normal if they do not. <a href="#demo">See the demo at the top of this page.</a></li>
+        </ul>
+      </section>
+      <section id="try">
+        <h2>Things to try</h2>
+        <ul>
+          <li>Connect and watch the black cable appear from the far side, a moment after the teal one.</li>
+          <li>Close the far side's ports. <code>close()</code> sends nothing to the other end, so it takes three missed pings to notice.</li>
+        </ul>
+      </section>
+      <section id="traps">
+        <h2>Common mistakes</h2>
+        <ul>
+          <li>If the health port can arrive on the data port, check <code>event.ports</code> before treating a message as data.</li>
+          <li>The far side chooses how often it is pinged only if you let it. Here the caller still sets the interval.</li>
+        </ul>
+      </section>
+      <section id="measured">
+        <h2>Measured</h2>
+        <p class="measured">Chromium 153: after the far side calls <code>close()</code> on both its ports, nothing arrives at this page. Three missed pings at one a second mark it silent after about 3 seconds. Other browsers are being filled in from <a href="/lab/results/">the lab's results</a>.</p>
+      </section>
+      <section id="related">
+        <h2>Read next</h2>
+        <ul class="cards">
+          <li><a href="/patterns/health-pair/"><strong>Send a second port with the first, only for health checks</strong><span>A port does not tell you when its other end has gone.</span></a></li>
+          <li><a href="/patterns/health-beats/"><strong>Send a beat each way on two one-way ports</strong><span>Each side makes a channel, keeps the end it posts into and gives the other side the end to listen on.</span></a></li>
+          <li><a href="/patterns/reply/"><strong>Send a reply port with each request</strong><span>Instead of matching replies to requests with ids, make a new channel for each request and send one end along with it.</span></a></li>
+        </ul>
+      </section>
+      </div>
+      <nav class="pager" id="pager" aria-label="More patterns"><a href="/patterns/health-pair/"><small>‹ Before this</small>Send a second port with the first, only for health checks</a><a class="pager-all" href="/patterns/">All patterns</a><a class="pager-next" href="/patterns/health-beats/"><small>After this ›</small>Send a beat each way on two one-way ports</a></nav>
+    </main>
+    <footer class="small muted" style="padding-block:2rem 4rem">Port Authority, by <a href="https://paul.kinlan.me">Paul Kinlan</a>. <a href="/about/">About this site</a>.</footer>
+  </div>
+  <script type="module" src="/patterns/page.js"></script>
+  <script type="module" src="/refs.js"></script>
+</body>
+</html>

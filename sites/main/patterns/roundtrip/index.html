@@ -1,0 +1,163 @@
+<!doctype html>
+<!-- Written by scripts/patterns.mjs from the modules in /patterns/. Edit those, then run it. -->
+<html lang="en" data-pattern="roundtrip">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pipe your data through another site, and get it back | Port Authority</title>
+  <meta name="description" content="A transform has two ends, and both can be given away. The library's site makes one that blacks out email addresses and long numbers, and hands this page the end to write into and t">
+  <meta property="og:title" content="Pipe your data through another site, and get it back | Port Authority">
+  <meta property="og:description" content="A transform has two ends, and both can be given away. The library's site makes one that blacks out email addresses and long numbers, and hands this page the end to write into and t">
+  <meta property="og:type" content="article">
+  <meta name="twitter:card" content="summary">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/base.css">
+  <script src="/nav.js"></script>
+  <link rel="stylesheet" href="/patterns/patterns.css">
+  <link rel="stylesheet" href="/patterns/page.css">
+  <script src="/errors.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <div class="wrap">
+    <header class="site-bar">
+      <a class="wordmark" href="/">Port Authority</a>
+      <nav aria-label="Primary"><a href="/">Experiments</a><a href="/guide/">The guide</a><a href="/patterns/" aria-current="page">Port patterns</a><a href="/comlink/">Comlink today</a><a href="/ai-router/">AI router</a><a href="/lab/">The lab</a><a href="/missing/">What is missing</a><a href="/reading/">Further reading</a><a href="/hub/">Your hub</a></nav>
+    </header>
+    <main id="main">
+      <div class="stack page-head">
+        <p class="crumb"><a href="/patterns/">Port patterns</a> / <span id="group"><a href="/patterns/#roundtrip">Between real sites</a></span></p>
+        <h1 id="title">Pipe your data through another site, and get it back</h1>
+      </div>
+      <section class="pattern" id="demo"><div class="demo"><noscript><p class="small muted">The demo that runs here needs JavaScript. Everything else on this page reads the same without it.</p></noscript></div></section>
+      <div class="deep" id="deep">
+      <section id="what">
+        <h2>What you are looking at</h2>
+        <p>A transform has two ends, and both can be given away. The library's site makes one that blacks out email addresses and long numbers, and hands this page the end to write into and the end to read from. From here it is an ordinary <code>pipeThrough</code>: your lines go in, cross to the library's origin, are changed by code this page never loads or sees, and come back. Back-pressure crosses with them.</p>
+      </section>
+      <section id="code">
+        <h2>The code</h2>
+        <pre><span class="c">// the library, on its own origin</span>
+const { readable, writable } = new TransformStream({ transform: redact });
+parent.postMessage({ readable, writable }, "*", [readable, writable]);
+
+<span class="c">// this page</span>
+myLines.pipeThrough({ readable, writable }).pipeTo(screen);</pre>
+        <h3 id="using">Using it</h3>
+        <pre><span class="c">// a support desk app, and a redaction service from another company in a frame</span>
+<span class="c">// the service: redact is an ordinary transform function</span>
+const redact = (line, controller) =&gt;
+  controller.enqueue(line.replace(/[0-9][0-9 -]{6,}[0-9]/g, "[number]"));
+
+<span class="c">// the support desk: take the two ends from the service's origin and from nowhere else</span>
+addEventListener("message", (e) =&gt; {
+  if (e.origin !== serviceOrigin || !e.data?.readable) return;
+  const { readable, writable } = e.data;
+  <span class="c">// chat is the WebSocket that carries what the customer types</span>
+  const myLines = new ReadableStream({ start(c) { chat.onmessage = (m) =&gt; c.enqueue(m.data); } });
+  const screen = new WritableStream({ write(line) { agentView.append(line); } });
+  myLines.pipeThrough({ readable, writable }).pipeTo(screen);
+});
+
+<span class="c">// If the service's frame is removed, lines stop coming back and no error is raised.</span>
+<span class="c">// The support desk times each line, and shows a fault when one is late.</span></pre>
+        <h3 id="case">Where you would use it</h3>
+        <p>A real case. A support desk app shows agents what customers type in a chat, and customers sometimes type card numbers. The app pipes every line through a redaction service from another company, which runs in a frame on its own origin and hands over both ends of its transform. The service's code is never loaded into the app's page, and the service sees only the lines that are piped to it. The app does trust the service with those lines. If the service's frame is removed the pipe stops with no error, so the app keeps a timer and reports a fault when a line is late.</p>
+      </section>
+      <section id="how">
+        <h2>How it works</h2>
+        <div class="stack paras">
+          <p>A <code>TransformStream</code> has a writable end and a readable end, and both are transferable. The library makes one that redacts text and gives this page both ends.</p>
+          <p>From here it is an ordinary <code>pipeThrough</code>. Lines written here cross to the library's origin, are changed by code this page never loads, and come back through the readable end.</p>
+          <p>The transform runs with the library's origin, storage and code. This page sees only what goes in and what comes out. Back-pressure crosses both ways, so the library cannot be flooded.</p>
+        </div>
+      </section>
+      <section id="steps">
+        <h2>Step by step</h2>
+        <p>What each press of Next does in the demo at the top.</p>
+        <ol>
+          <li><strong>Ask the library for its transform.</strong> The library's site makes a transform and gives this page both of its ends.</li>
+          <li><strong>Send a line through it.</strong> A line with an email address goes to the library's origin and comes back blacked out.</li>
+          <li><strong>Send a line through it.</strong> A card number goes through the same pipe.</li>
+        </ol>
+      </section>
+      <section id="uses">
+        <h2>What you could build with it</h2>
+        <p>These are built and running below.</p>
+        <article class="built" id="built-cipher">
+          <h3>An encryption service you pipe through, whose key you never hold</h3>
+          <p class="small muted idea">The idea: Translation, redaction, compression or encryption offered by another origin as a pipe. A paid service whose code and keys stay on its own origin.</p>
+          <div class="demo"></div>
+          <h4>What you are looking at</h4>
+          <p>The cipher service makes a key that cannot be read, even by itself, and offers two pipes: one that seals and one that opens. This page writes a line into the first and gets back bytes it cannot read. It writes those bytes into the second and gets its line back. The key, and the code that uses it, stay on the service's origin. It could meter each line and charge for it, and this page would have no way around that.</p>
+          <h4>The code</h4>
+          <pre><span class="c">// the service</span>
+const seal = new TransformStream({ async transform(text, out) {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  out.enqueue({ iv, data: await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, encode(text)) });
+} });
+parent.postMessage({ seal: { readable: seal.readable, writable: seal.writable } }, "*", [seal.readable, seal.writable]);
+
+<span class="c">// this page</span>
+lines.pipeThrough(seal).pipeTo(storage);</pre>
+          <h4>Step by step</h4>
+          <p>What each press of Next does in this demo.</p>
+          <ol>
+          <li><strong>Ask the cipher service for its pipes.</strong> The service makes a key and hands over both ends of two transforms.</li>
+          <li><strong>Seal a line, then open it.</strong> A line goes into the sealing pipe and comes back as bytes. Those bytes go into the opening pipe and come back as the line.</li>
+          <li><strong>Seal a line, then open it.</strong> A second line. The key never left the service.</li>
+        </ol>
+        </article>
+        <article class="built" id="built-stages">
+          <h3>Three parties each supply one stage, and none of them sees the others</h3>
+          <p class="small muted idea">The idea: Chaining several origins' transforms with repeated <code>pipeThrough</code>.</p>
+          <div class="demo"></div>
+          <h4>What you are looking at</h4>
+          <p>A zipped order needs unzipping, turning from bytes into text, and its card number hiding before it is shown. Each of those is a stream stage supplied by a different origin. This page asks each for a stage, joins the three end to end and sends the file through. This page holds both ends of every stage, so the data comes back here between one stage and the next. Each party sees only what flows through its own stage, and none of them needs to know the others exist.</p>
+          <h4>The code</h4>
+          <pre><span class="c">// each party</span>
+const stage = new TransformStream({ transform(chunk, out) { out.enqueue(work(chunk)); } });
+parent.postMessage({ readable: stage.readable, writable: stage.writable }, "*", [stage.readable, stage.writable]);
+
+<span class="c">// this page</span>
+zippedFile.pipeThrough(unzip).pipeThrough(decode).pipeThrough(redact).pipeTo(screen);</pre>
+          <h4>Step by step</h4>
+          <p>What each press of Next does in this demo.</p>
+          <ol>
+          <li><strong>Ask each party for a stage.</strong> Three origins each hand over both ends of one transform.</li>
+          <li><strong>Pour a zipped order through all three.</strong> Bytes go in at one end. Readable text with the card number hidden comes out of the other.</li>
+        </ol>
+        </article>
+      </section>
+      <section id="try">
+        <h2>Things to try</h2>
+        <ul>
+          <li>Ask for the transform and send lines through it. Compare what went in with what came back.</li>
+          <li>Send the line with nothing secret in it. It returns unchanged.</li>
+        </ul>
+      </section>
+      <section id="traps">
+        <h2>Common mistakes</h2>
+        <ul>
+          <li>You are trusting the other origin with the data that goes in. The pattern hides their code from you, not your data from them.</li>
+          <li>If their frame goes away the pipe stalls with no error.</li>
+        </ul>
+      </section>
+      <section id="related">
+        <h2>Read next</h2>
+        <ul class="cards">
+          <li><a href="/patterns/pipeline/"><strong>Back-pressure across three origins</strong><span>This page hands its stream to a frame on another origin.</span></a></li>
+          <li><a href="/patterns/filter/"><strong>Run live video through a filter on another origin</strong><span>Video can leave your page one frame at a time and come back changed.</span></a></li>
+          <li><a href="/patterns/halves/"><strong>Send only the readable side of a stream</strong><span>A stream has a direction, and you can hand over one direction without the other.</span></a></li>
+          <li><a href="/patterns/lend/"><strong>Lend someone a network connection you opened</strong><span>The widget on the right is locked down so that it cannot reach the network at all.</span></a></li>
+        </ul>
+      </section>
+      </div>
+      <nav class="pager" id="pager" aria-label="More patterns"><a href="/patterns/halves/"><small>‹ Before this</small>Send only the readable side of a stream</a><a class="pager-all" href="/patterns/">All patterns</a><a class="pager-next" href="/patterns/lend/"><small>After this ›</small>Lend someone a network connection you opened</a></nav>
+    </main>
+    <footer class="small muted" style="padding-block:2rem 4rem">Port Authority, by <a href="https://paul.kinlan.me">Paul Kinlan</a>. <a href="/about/">About this site</a>.</footer>
+  </div>
+  <script type="module" src="/patterns/page.js"></script>
+  <script type="module" src="/refs.js"></script>
+</body>
+</html>

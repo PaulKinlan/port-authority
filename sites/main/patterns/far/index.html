@@ -1,0 +1,255 @@
+<!doctype html>
+<!-- Written by scripts/patterns.mjs from the modules in /patterns/. Edit those, then run it. -->
+<html lang="en" data-pattern="far">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>A port whose other end is on another device | Port Authority</title>
+  <meta name="description" content="This page meets another device through a pairing code, the two connect directly with WebRTC, and each side wraps its end of that connection in a MessagePort. Then this page hands i">
+  <meta property="og:title" content="A port whose other end is on another device | Port Authority">
+  <meta property="og:description" content="This page meets another device through a pairing code, the two connect directly with WebRTC, and each side wraps its end of that connection in a MessagePort. Then this page hands i">
+  <meta property="og:type" content="article">
+  <meta name="twitter:card" content="summary">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/base.css">
+  <script src="/nav.js"></script>
+  <link rel="stylesheet" href="/patterns/patterns.css">
+  <link rel="stylesheet" href="/patterns/page.css">
+  <script src="/errors.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <div class="wrap">
+    <header class="site-bar">
+      <a class="wordmark" href="/">Port Authority</a>
+      <nav aria-label="Primary"><a href="/">Experiments</a><a href="/guide/">The guide</a><a href="/patterns/" aria-current="page">Port patterns</a><a href="/comlink/">Comlink today</a><a href="/ai-router/">AI router</a><a href="/lab/">The lab</a><a href="/missing/">What is missing</a><a href="/reading/">Further reading</a><a href="/hub/">Your hub</a></nav>
+    </header>
+    <main id="main">
+      <div class="stack page-head">
+        <p class="crumb"><a href="/patterns/">Port patterns</a> / <span id="group"><a href="/patterns/#far">Other devices, Service Workers, sockets and audio</a></span></p>
+        <h1 id="title">A port whose other end is on another device</h1>
+      </div>
+      <section class="pattern" id="demo"><div class="demo"><noscript><p class="small muted">The demo that runs here needs JavaScript. Everything else on this page reads the same without it.</p></noscript></div></section>
+      <div class="deep" id="deep">
+      <section id="what">
+        <h2>What you are looking at</h2>
+        <p>This page meets another device through a pairing code, the two connect directly with WebRTC, and each side wraps its end of that connection in a <code>MessagePort</code>. Then this page hands its port on. The counter at the end of the yellow cable is a sandboxed frame that was given a port and knows nothing more. Your phone is now pressing its buttons. The server carried a few messages so the two could find each other, and nothing since. The port carries more than text: bytes, other ports and streams can be posted into it, and each is rebuilt on the other device. See <a href="/patterns/far/#built-farfile">sending a photo as a stream</a> and <a href="/patterns/far/#built-farports">lending a port to another device</a>.</p>
+      </section>
+      <section id="code">
+        <h2>The code</h2>
+        <pre><span class="c">// this page shows a pairing code. onPort is given a real MessagePort</span>
+far({ code, host: true, onPort(port) {
+  counterFrame.postMessage({ cmd: "port" }, "*", [port]);   <span class="c">// give it away like any other port</span>
+} });
+
+<span class="c">// the other device, with the same code: ordinary port code</span>
+far({ code, onPort(port) {
+  port.postMessage({ do: "add" });
+  port.onmessage = ({ data }) => show(data.count);
+} });</pre>
+        <h3 id="using">Using it</h3>
+        <pre><span class="c">// a venue's front desk laptop, and a steward's phone at the door</span>
+<span class="c">// the laptop: code is six random characters, shown on screen as a QR code</span>
+const line = far({ code, host: true, onPort(port) {
+  counterFrame.postMessage({ cmd: "port" }, "*", [port]);   <span class="c">// the counter gets the port that stands for the phone</span>
+} });
+
+<span class="c">// the counter frame: it was given a port, and does not know a phone holds the other end</span>
+addEventListener("message", (e) =&gt; {
+  if (e.source !== parent || e.data?.cmd !== "port") return;
+  const port = e.ports[0];
+  port.onmessage = ({ data }) =&gt; { if (data.do === "add") count++; port.postMessage({ count }); };
+});
+
+<span class="c">// the phone, with the code from the QR link: one press for each person who comes in</span>
+far({ code, onPort(port) {
+  addButton.onclick = () =&gt; port.postMessage({ do: "add" });
+  port.onmessage = ({ data }) =&gt; show(data.count);
+}, onState(state) { if (state === "gone") show("The front desk hung up"); } });
+
+<span class="c">// the laptop: the doors close</span>
+line.close();</pre>
+        <h3 id="case">Where you would use it</h3>
+        <p>A real case. At a venue's door a steward counts people in on a phone, and the total shows on the front desk laptop. The laptop shows a pairing code as a QR code, the steward scans it, and the two devices connect directly. The laptop hands its port to the counter, which is a sandboxed frame that knows only that it was given a port. When the doors close the laptop calls <code>close()</code>, and the phone's <code>onState</code> reports <code>gone</code>. There is no relay, so this works only where the two devices can reach each other directly.</p>
+      </section>
+      <section id="how">
+        <h2>How it works</h2>
+        <div class="stack paras">
+          <p>Two devices cannot pass a port, because neither has a reference to the other. A server can introduce them. Each opens a WebSocket to a meeting place named by a short code, and the server relays the few messages WebRTC needs to set up a direct data channel.</p>
+          <p>Each side then makes a local <code>MessageChannel</code>, joins one end to the data channel, and hands out the other. Code that holds that port cannot tell it from any other port.</p>
+          <p>This page gives its port to a sandboxed counter. The phone ends up talking to a frame that was given a port and nothing else, through a page that keeps no reference to either.</p>
+          <p>The browser will not move a port or a stream to another machine, so the code that joins the port to the data channel rebuilds them. When a message contains a <code>MessagePort</code>, the far side makes a new channel, hands out one end, and the two sides pass that port's messages along the same data channel under a number. A <code>ReadableStream</code> becomes a new stream on the far side that asks for one chunk at a time, so the source is read only as fast as the far side reads. A <code>WritableStream</code> works the same way in the other direction. Bytes travel as bytes, cut into frames of 15 kB.</p>
+          <p>All of it shares the one data channel. The file that does this is <a href="/portwire.js"><code>portwire.js</code></a>. It needs only something that carries bytes in order, so the same code would put a port on a WebSocket.</p>
+        </div>
+      </section>
+      <section id="steps">
+        <h2>Step by step</h2>
+        <p>What each press of Next does in the demo at the top.</p>
+        <ol>
+          <li><strong>Open a line for another device.</strong> This page asks the server for a meeting place and shows its code. Open the link on a phone to be the other device.</li>
+          <li><strong>Use a stand-in.</strong> No phone to hand, so a second page plays the other device. The two connect directly and this page gives its end to the counter.</li>
+          <li><strong>Other device: add one.</strong> The other device posts into its port. The message arrives in the counter frame, which was only ever given a port.</li>
+          <li><strong>Other device: change the colour.</strong> Another message, the same way. The answer goes back and the far side shows it.</li>
+          <li><strong>Hang up.</strong> This page closes the connection, and the far port goes quiet.</li>
+        </ol>
+      </section>
+      <section id="uses">
+        <h2>What you could build with it</h2>
+        <p>These are built and running below.</p>
+        <article class="built" id="built-approve">
+          <h3>Approve on your phone what you started on your laptop</h3>
+          <p class="small muted idea">The idea: Approving an action on one device that was started on another.</p>
+          <div class="demo"></div>
+          <h4>What you are looking at</h4>
+          <p>This page is a checkout. Before it pays, it asks another device. The two are joined by a pairing code and a direct connection, and each holds a port. The question goes down the port, the other device shows Approve and Deny, and the answer comes back up it. Open the link on your phone to do it for real, or let a second page stand in for the phone.</p>
+          <h4>The code</h4>
+          <pre><span class="c">// laptop</span>
+const port = await far({ code, host: true });
+port.postMessage({ ask: "Pay 20 to the florist?" });
+port.onmessage = ({ data }) => data.answer === "approve" ? pay() : stop();
+
+<span class="c">// phone</span>
+port.onmessage = ({ data }) => show(data.ask);
+approveButton.onclick = () => port.postMessage({ answer: "approve" });</pre>
+          <h4>Step by step</h4>
+          <p>What each press of Next does in this demo.</p>
+          <ol>
+          <li><strong>Open a line to your phone.</strong> This page opens a meeting place and shows its code. The link is for your phone.</li>
+          <li><strong>Use a stand-in for the phone.</strong> A second page plays the phone, and the two connect directly.</li>
+          <li><strong>Pay 20 to the florist.</strong> The checkout stops and asks the other device.</li>
+          <li><strong>Other device: approve.</strong> The other device says yes, down its port. The checkout goes ahead.</li>
+          <li><strong>Pay 20 to the florist.</strong> A second payment asks again.</li>
+          <li><strong>Other device: deny.</strong> This time the answer is no, and nothing is paid.</li>
+        </ol>
+        </article>
+        <article class="built" id="built-agent">
+          <h3>An agent on one machine, using tools that live in a browser on another</h3>
+          <p class="small muted idea">The idea: Pairing an agent on one machine with tools in a browser on another.</p>
+          <div class="demo"></div>
+          <h4>What you are looking at</h4>
+          <p>This page is a shop with a basket, and it offers three tools: read the basket, add tulips, and empty it. The agent runs somewhere else. The two are paired with a code and connect directly, and the agent's side holds a port. It is sent the list of tools and calls them by name. This page decides what each name does, and refuses any name it never offered. Here a second page stands in for the agent's machine, and its buttons stand in for the agent's choices.</p>
+          <h4>The code</h4>
+          <pre><span class="c">// this browser owns the tools</span>
+const tools = { readBasket: () => basket.join(", "), addTulips: () => { basket.push("tulips"); return "added"; } };
+const port = await far({ code, host: true });
+port.postMessage({ tools: Object.keys(tools) });
+port.onmessage = ({ data }) =>
+  port.postMessage(data.call in tools ? { result: tools[data.call]() } : { error: "no such tool" });</pre>
+          <h4>Step by step</h4>
+          <p>What each press of Next does in this demo.</p>
+          <ol>
+          <li><strong>Open a line for the agent.</strong> This page opens a meeting place and shows its code.</li>
+          <li><strong>Use a stand-in for the agent's machine.</strong> A second page plays the other machine. The two connect directly, and the tool list is sent.</li>
+          <li><strong>Agent: call addTulips.</strong> The call crosses to this browser, which runs its own tool.</li>
+          <li><strong>Agent: call readBasket.</strong> The agent reads what is in the basket.</li>
+          <li><strong>Agent: call deleteAccount.</strong> A name this page never offered. It is refused here.</li>
+        </ol>
+        </article>
+        <article class="built" id="built-farfile">
+          <h3>Send a photo from your phone to this page as a stream</h3>
+          <p class="small muted idea">The idea: Sending a file from a phone to a laptop as a stream, with no upload to a server.</p>
+          <div class="demo"></div>
+          <h4>What you are looking at</h4>
+          <p>The phone picks a picture and posts <code>file.stream()</code> into its port. A stream cannot be moved to another machine, so the port on this side hands over a new <code>ReadableStream</code> and feeds it with the bytes as they arrive over the direct connection. This page does not read it. It transfers the stream to a sandboxed viewer, which reads it chunk by chunk and draws the picture at the end. The phone's file is read only as fast as the viewer reads. No server sees any of it.</p>
+          <h4>The code</h4>
+          <pre><span class="c">// phone</span>
+const body = file.stream();
+port.postMessage({ file: { name: file.name, size: file.size }, body }, [body]);
+
+<span class="c">// this page: a stream arrived from another device. Pass it on unread.</span>
+port.onmessage = ({ data }) =>
+  viewer.postMessage({ file: data.file, body: data.body }, "*", [data.body]);
+
+<span class="c">// the viewer, a sandboxed frame</span>
+for await (const chunk of body) show(chunk);</pre>
+          <h4>Step by step</h4>
+          <p>What each press of Next does in this demo.</p>
+          <ol>
+          <li><strong>Open a line to your phone.</strong> This page opens a meeting place and shows a QR code. Scan it with a phone to be the other device.</li>
+          <li><strong>Use a stand-in for the phone.</strong> A second page plays the phone, and the two connect directly.</li>
+          <li><strong>Other device: send a sample picture.</strong> The other device posts a stream into its port. This page receives a stream and passes it to the viewer without reading it. The viewer draws the picture when the last byte arrives.</li>
+          <li><strong>Hang up.</strong> This page closes the connection.</li>
+        </ol>
+        </article>
+        <article class="built" id="built-farports">
+          <h3>Lend the other device a port to one thing, then take it back</h3>
+          <p class="small muted idea">The idea: Lending another device a port to one thing on this one, and taking it back without ending the connection.</p>
+          <div class="demo"></div>
+          <h4>What you are looking at</h4>
+          <p>The connection between the two devices is one port. This page posts more ports into it. Each is a line to one sandboxed frame here: a lamp, and a counter. The phone receives each as a <code>MessagePort</code> of its own and uses it like any other. The lines pass through this page, so this page can close one. Take the lamp back and the phone's lamp button does nothing, while its counter port and the connection carry on. The phone was never given the page, only two ports.</p>
+          <h4>The code</h4>
+          <pre><span class="c">// this page: a line to the lamp that it can close</span>
+const toLamp = new MessageChannel(), toPhone = new MessageChannel();
+lampFrame.postMessage({ cmd: "port" }, "*", [toLamp.port1]);
+toPhone.port1.onmessage = (e) => toLamp.port2.postMessage(e.data);
+toLamp.port2.onmessage = (e) => toPhone.port1.postMessage(e.data);
+
+<span class="c">// a port, posted into the port that crosses devices</span>
+far.postMessage({ lent: "lamp", port: toPhone.port2 }, [toPhone.port2]);
+
+<span class="c">// the phone</span>
+far.onmessage = ({ data }) => { data.port.postMessage({ do: "switch" }); };
+
+<span class="c">// later, this page</span>
+toPhone.port1.close();</pre>
+          <h4>Step by step</h4>
+          <p>What each press of Next does in this demo.</p>
+          <ol>
+          <li><strong>Open a line to your phone.</strong> This page opens a meeting place and shows a QR code.</li>
+          <li><strong>Use a stand-in for the phone.</strong> A second page plays the phone, and the two connect directly.</li>
+          <li><strong>Lend the lamp.</strong> This page posts a port into the connection. The other device receives a port of its own that leads to the lamp.</li>
+          <li><strong>Lend the counter.</strong> A second port, to the counter. Both ride on the one connection.</li>
+          <li><strong>Other device: switch the lamp.</strong> The other device posts into its lamp port. The lamp frame here hears it and answers.</li>
+          <li><strong>Other device: add one.</strong> The same, on the counter's port.</li>
+          <li><strong>Take the lamp back.</strong> This page closes its end of the lamp's line.</li>
+          <li><strong>Other device: switch the lamp.</strong> The other device posts into its lamp port again. Nothing is on the other end.</li>
+          <li><strong>Other device: add one.</strong> The counter's port still works. Only one port was closed.</li>
+        </ol>
+        </article>
+        <h3 class="todo">Already running</h3>
+        <ul>
+          <li>A phone as a remote control or second screen for a page on a laptop. <a href="#demo">See the demo at the top of this page.</a></li>
+        </ul>
+      </section>
+      <section id="try">
+        <h2>Things to try</h2>
+        <ul>
+          <li>Open a line, then scan the QR code with a phone and press its buttons.</li>
+          <li>No phone to hand: use the stand-in, which is a second page playing the part.</li>
+          <li>Hang up and press the far side's button again.</li>
+          <li>Further down, send a photo from the phone and watch the viewer's byte count.</li>
+        </ul>
+      </section>
+      <section id="traps">
+        <h2>Common mistakes</h2>
+        <ul>
+          <li>A port or stream that crosses is a stand-in joined to the original. Its traffic passes through the page that opened the connection on each device. Close either page and everything riding on the connection ends.</li>
+          <li>A buffer is copied to the other device. Transferring it empties it on this side and saves nothing.</li>
+          <li>Blob, File, OffscreenCanvas, VideoFrame and shared memory do not cross. Send <code>file.stream()</code> for a file.</li>
+          <li>No browser tells a page when a port's other end has closed — the port <code>close</code> event was removed from the HTML standard in October 2026 — so a lent port that is closed on one device is not closed on the other. Posting into it does nothing. Send a message saying so.</li>
+          <li>There is no relay. Two networks that cannot reach each other directly will not connect.</li>
+          <li>The pairing code is the only secret. Anyone who has it while the line is open can join.</li>
+        </ul>
+      </section>
+      <section id="measured">
+        <h2>Measured</h2>
+        <p class="measured">Chromium 157, between two pages on one computer: a 600 kB picture crosses as a stream and arrives whole, a port sent through the connection works on the far side, and closing one lent port leaves the others working. Not yet tested between two networks. Other browsers are being filled in from <a href="/lab/results/">the lab's results</a>.</p>
+      </section>
+      <section id="related">
+        <h2>Read next</h2>
+        <ul class="cards">
+          <li><a href="/patterns/introduce/"><strong>Connect two sites to each other, then remove yourself</strong><span>A port can be passed on by whoever holds it.</span></a></li>
+          <li><a href="/patterns/socket/"><strong>One connection to the server, shared by every tab</strong><span>Ten tabs of the same site usually means ten connections to the server.</span></a></li>
+          <li><a href="/patterns/lend/"><strong>Lend someone a network connection you opened</strong><span>The widget on the right is locked down so that it cannot reach the network at all.</span></a></li>
+          <li><a href="/patterns/stream/"><strong>Send a stream to another frame</strong><span>A ReadableStream is transferable too, so you can hand another origin a live stream and it reads with back-pressure, as if the source were local.</span></a></li>
+        </ul>
+      </section>
+      </div>
+      <nav class="pager" id="pager" aria-label="More patterns"><a href="/patterns/oneway/"><small>‹ Before this</small>Join two sites with a port that carries messages one way only</a><a class="pager-all" href="/patterns/">All patterns</a><a class="pager-next" href="/patterns/mounted/"><small>After this ›</small>Mount another site at a path on yours</a></nav>
+    </main>
+    <footer class="small muted" style="padding-block:2rem 4rem">Port Authority, by <a href="https://paul.kinlan.me">Paul Kinlan</a>. <a href="/about/">About this site</a>.</footer>
+  </div>
+  <script type="module" src="/patterns/page.js"></script>
+  <script type="module" src="/refs.js"></script>
+</body>
+</html>

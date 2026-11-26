@@ -1,0 +1,172 @@
+<!doctype html>
+<!-- Written by scripts/patterns.mjs from the modules in /patterns/. Edit those, then run it. -->
+<html lang="en" data-pattern="socket">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>One connection to the server, shared by every tab | Port Authority</title>
+  <meta name="description" content="Ten tabs of the same site usually means ten connections to the server. Here no tab has one. A SharedWorker holds the only WebSocket, and each tab holds a port to the worker. A tab ">
+  <meta property="og:title" content="One connection to the server, shared by every tab | Port Authority">
+  <meta property="og:description" content="Ten tabs of the same site usually means ten connections to the server. Here no tab has one. A SharedWorker holds the only WebSocket, and each tab holds a port to the worker. A tab ">
+  <meta property="og:type" content="article">
+  <meta name="twitter:card" content="summary">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/base.css">
+  <script src="/nav.js"></script>
+  <link rel="stylesheet" href="/patterns/patterns.css">
+  <link rel="stylesheet" href="/patterns/page.css">
+  <script src="/errors.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <div class="wrap">
+    <header class="site-bar">
+      <a class="wordmark" href="/">Port Authority</a>
+      <nav aria-label="Primary"><a href="/">Experiments</a><a href="/guide/">The guide</a><a href="/patterns/" aria-current="page">Port patterns</a><a href="/comlink/">Comlink today</a><a href="/ai-router/">AI router</a><a href="/lab/">The lab</a><a href="/missing/">What is missing</a><a href="/reading/">Further reading</a><a href="/hub/">Your hub</a></nav>
+    </header>
+    <main id="main">
+      <div class="stack page-head">
+        <p class="crumb"><a href="/patterns/">Port patterns</a> / <span id="group"><a href="/patterns/#socket">Other devices, Service Workers, sockets and audio</a></span></p>
+        <h1 id="title">One connection to the server, shared by every tab</h1>
+      </div>
+      <section class="pattern" id="demo"><div class="demo"><noscript><p class="small muted">The demo that runs here needs JavaScript. Everything else on this page reads the same without it.</p></noscript></div></section>
+      <div class="deep" id="deep">
+      <section id="what">
+        <h2>What you are looking at</h2>
+        <p>Ten tabs of the same site usually means ten connections to the server. Here no tab has one. A SharedWorker holds the only WebSocket, and each tab holds a port to the worker. A tab speaks by posting to its port. The worker numbers each question, and the answer with that number goes back down the port of the tab that asked, so replies are never mixed up. Close a tab and the worker notices and carries on. Drop the connection and the worker opens another and asks again anything that was not answered. The tabs have no code for any of that. The two boxes on the outside are real pages of this site, and the link opens a third in a real tab that joins the same socket.</p>
+      </section>
+      <section id="code">
+        <h2>The code</h2>
+        <pre><span class="c">// every tab</span>
+const { port } = new SharedWorker("/socket-worker.js");
+port.postMessage({ say: "hello" });
+port.onmessage = ({ data }) => show(data.answer);
+
+<span class="c">// the worker: one socket, and a note of who asked what</span>
+port.onmessage = ({ data }) => {
+  const id = ++ids;
+  pending.set(id, { port, text: data.say });
+  socket.send(JSON.stringify({ id, text: data.say }));
+};
+socket.onmessage = ({ data }) => {
+  const { id, text } = JSON.parse(data);
+  pending.get(id).port.postMessage({ answer: text });
+  pending.delete(id);
+};
+<span class="c">// a dropped connection: open another and ask again what is still waiting</span>
+socket.onclose = () => setTimeout(connect, 300);</pre>
+        <h3 id="using">Using it</h3>
+        <pre><span class="c">// an issue tracker. A person has ten issues open in ten tabs.</span>
+<span class="c">// each tab: ask about its own issue, and hold a lock under a name of its own while the tab lives</span>
+port.postMessage({ say: "status of issue 4127" });
+navigator.locks.request(lock, () =&gt; { port.postMessage({ lock }); return new Promise(() =&gt; {}); });
+
+<span class="c">// the worker: every tab arrives here with a port of its own</span>
+onconnect = (e) =&gt; {
+  const port = e.ports[0];
+  port.onmessage = ({ data }) =&gt; {
+    <span class="c">// when the worker gets the tab's lock, the tab has gone. leave() drops its questions.</span>
+    if (data.lock) return navigator.locks.request(data.lock, () =&gt; leave(port));
+    <span class="c">// otherwise it is data.say, and the handler above</span>
+  };
+};
+
+<span class="c">// the worker: the laptop changes network and the socket closes. connect() runs again.</span>
+function connect() {
+  socket = new WebSocket("wss://tracker.example/live");
+  <span class="c">// ask again for every tab that is still waiting. No tab did anything.</span>
+  socket.onopen = () =&gt; { for (const [id, { text }] of pending) socket.send(JSON.stringify({ id, text })); };
+  <span class="c">// socket.onmessage and socket.onclose are set here, as above</span>
+}</pre>
+        <h3 id="case">Where you would use it</h3>
+        <p>A real case. An issue tracker's server allows each person a small number of connections, and people open ten issues in ten tabs. Every tab asks the worker about its own issue, and the worker sends all the questions over one WebSocket. When the laptop changes network the socket closes, and the worker opens another and asks again what was not answered. The tabs run no code for this and their ports are unchanged. A status question is safe to send twice, which matters because a repeated question may reach the server twice.</p>
+      </section>
+      <section id="how">
+        <h2>How it works</h2>
+        <div class="stack paras">
+          <p>Each tab connects to one SharedWorker and gets a port. The worker opens a single WebSocket and keeps it. Tabs post to their port, and the worker sends on the socket.</p>
+          <p>The worker gives each question a number and remembers which port asked it. The server's answer carries the number, and the worker sends it down that port and no other. It is the reply pattern with a socket in the middle.</p>
+          <p>If the socket closes while tabs are still open, the worker opens another and sends again every question that has no answer yet. A tab's port is unaffected by any of this, because the port goes to the worker and not to the server.</p>
+          <p>Tabs hold a Web Lock for as long as they live. The worker waits on each lock, so it knows when a tab has gone, and it hangs up when the last one leaves.</p>
+        </div>
+      </section>
+      <section id="steps">
+        <h2>Step by step</h2>
+        <p>What each press of Next does in the demo at the top.</p>
+        <ol>
+          <li><strong>Connect both tabs to the SharedWorker.</strong> Each tab opens a port to the SharedWorker. Neither tab opens a WebSocket; the worker holds the only one.</li>
+          <li><strong>Tab one: say hello.</strong> Tab one posts to its port. The worker sends it on the only socket, and the server's answer comes back to tab one alone.</li>
+          <li><strong>Tab two: say hello.</strong> Tab two does the same, on the same socket.</li>
+          <li><strong>Close tab one.</strong> Tab one is destroyed. The worker notices, and the socket stays open for the other.</li>
+          <li><strong>Drop the connection.</strong> The worker's socket is closed, as a failed network would close it. The worker opens another. Tab two did nothing and was told nothing.</li>
+          <li><strong>Tab two: say hello.</strong> Tab two posts to the same port as before, and the answer arrives over the new socket.</li>
+        </ol>
+      </section>
+      <section id="uses">
+        <h2>What you could build with it</h2>
+        <p>This one is built and running below.</p>
+        <article class="built" id="built-feed">
+          <h3>One subscription feeds every tab, and one place handles reconnecting</h3>
+          <p class="small muted idea">The idea: One subscription feeding every open tab. A single place to handle reconnection and backoff.</p>
+          <div class="demo"></div>
+          <h4>What you are looking at</h4>
+          <p>Both tabs show a live price, and neither has a connection to the server. A shared worker holds the one subscription and passes each price down a port to every tab. When the connection drops, the worker is the only thing that notices. It waits, tries again, waits longer if that fails, and carries on. The tabs contain no reconnection code at all. Drop the connection and watch them wait.</p>
+          <h4>The code</h4>
+          <pre><span class="c">// the worker: the only code that knows about the connection</span>
+socket.onmessage = ({ data }) => { for (const port of tabs) port.postMessage({ price: data }); };
+socket.onclose = () => setTimeout(connect, Math.min(8000, 500 * 2 ** attempt++));
+
+<span class="c">// every tab, in full</span>
+port.onmessage = ({ data }) => show(data.price);</pre>
+          <h4>Step by step</h4>
+          <p>What each press of Next does in this demo.</p>
+          <ol>
+          <li><strong>Drop the connection.</strong> The server hangs up on the worker. The worker waits half a second and connects again. The tabs did nothing.</li>
+          <li><strong>Close tab one.</strong> One tab goes. The subscription stays up for the other.</li>
+        </ol>
+        </article>
+        <h3 class="todo">Already running</h3>
+        <ul>
+          <li>Staying under a server's per-user connection limit. <a href="#demo">See the demo at the top of this page.</a></li>
+        </ul>
+      </section>
+      <section id="try">
+        <h2>Things to try</h2>
+        <ul>
+          <li>Have both tabs say hello and check the worker's socket count.</li>
+          <li>Open a third tab for real from the link.</li>
+          <li>Close tab one and carry on from tab two.</li>
+          <li>Drop the connection, then have a tab say hello. The count of sockets opened goes up by one.</li>
+        </ul>
+      </section>
+      <section id="traps">
+        <h2>Common mistakes</h2>
+        <ul>
+          <li>Without SharedWorker, fall back to a socket per tab.</li>
+          <li>The worker is partitioned inside cross-site iframes.</li>
+          <li>Do not match answers to askers by the order they arrive in. One lost or reordered answer gives every later tab the wrong one. Number the questions.</li>
+          <li>A question that is sent again after a reconnect may reach the server twice. Make the server ignore a number it has already answered, or only repeat requests that are safe to repeat.</li>
+        </ul>
+      </section>
+      <section id="measured">
+        <h2>Measured</h2>
+        <p class="measured">Chromium 157: three tabs, one socket opened, each answer delivered only to the tab that asked. After the socket is closed the worker opens a second, and a tab's next question is answered with no change in the tab. Other browsers are being filled in from <a href="/lab/results/">the lab's results</a>.</p>
+      </section>
+      <section id="related">
+        <h2>Read next</h2>
+        <ul class="cards">
+          <li><a href="/patterns/exchange/"><strong>Use a SharedWorker to connect tabs to each other</strong><span>Every tab on an origin can reach the same SharedWorker.</span></a></li>
+          <li><a href="/patterns/reply/"><strong>Send a reply port with each request</strong><span>Instead of matching replies to requests with ids, make a new channel for each request and send one end along with it.</span></a></li>
+          <li><a href="/patterns/lend/"><strong>Lend someone a network connection you opened</strong><span>The widget on the right is locked down so that it cannot reach the network at all.</span></a></li>
+          <li><a href="/patterns/reload/"><strong>Keep a port across a page reload</strong><span>A port cannot be saved.</span></a></li>
+        </ul>
+      </section>
+      </div>
+      <nav class="pager" id="pager" aria-label="More patterns"><a href="/patterns/mounted/"><small>‹ Before this</small>Mount another site at a path on yours</a><a class="pager-all" href="/patterns/">All patterns</a><a class="pager-next" href="/patterns/audio/"><small>After this ›</small>A worker that plays music while this page is frozen</a></nav>
+    </main>
+    <footer class="small muted" style="padding-block:2rem 4rem">Port Authority, by <a href="https://paul.kinlan.me">Paul Kinlan</a>. <a href="/about/">About this site</a>.</footer>
+  </div>
+  <script type="module" src="/patterns/page.js"></script>
+  <script type="module" src="/refs.js"></script>
+</body>
+</html>

@@ -675,7 +675,7 @@ navigator.locks.request(lock, () => leave(port));   <span class="c">// runs when
   {
     pattern: "filter", use: [0], id: "built-watermark",
     title: "A captions and watermark plug-in that only ever sees pixels",
-    blurb: "The plug-in is a frame on another origin. Each frame of this page's video is handed to it, it draws a caption and a watermark on top, and hands the frame back. It has no access to the camera, the page or the network path the video came from.",
+    blurb: "The plug-in is a frame on another origin. Each frame of this page's video is handed to it, it draws a caption and a watermark on top, and hands the frame back. It has no access to the camera, the page or the network path the video came from. A frame goes as a <code>VideoFrame</code> where the browser will hand one to the plug-in, and as an <code>ImageBitmap</code> where it will not. Chrome will not hand a <code>VideoFrame</code> to another process, which is where a frame like this one runs.",
     code: `<span class="c">// the plug-in</span>
 port.onmessage = ({ data }) => {
   ctx.drawImage(data.frame, 0, 0); data.frame.close();
@@ -691,10 +691,13 @@ port.onmessage = ({ data }) => {
         script: () => on("port", (_, [port]) => {
           let canvas = null, ctx = null, caption = "Tulips are in season", done = 0;
           log("waiting for frames");
+          // The browser could not rebuild what was sent. It says so with this event, and gives no reason. Tell the page.
+          port.onmessageerror = () => { log("a frame arrived that could not be rebuilt here"); send(port, "there", { unreadable: true }); };
           port.onmessage = ({ data }) => {
             if (data.caption) { caption = data.caption; return log("caption: " + caption); }
-            const frame = data.frame;
-            if (!canvas) { canvas = new OffscreenCanvas(frame.displayWidth, frame.displayHeight); ctx = canvas.getContext("2d"); }
+            // The picture comes as a VideoFrame, or as an ImageBitmap where a VideoFrame cannot cross.
+            const frame = data.frame || data.bitmap;
+            if (!canvas) { canvas = new OffscreenCanvas(frame.displayWidth || frame.width, frame.displayHeight || frame.height); ctx = canvas.getContext("2d"); }
             const { width: w, height: h } = canvas;
             ctx.drawImage(frame, 0, 0);
             const timestamp = frame.timestamp;
@@ -702,8 +705,9 @@ port.onmessage = ({ data }) => {
             ctx.fillStyle = "rgba(0,0,0,.65)"; ctx.fillRect(0, h - 38, w, 38);
             ctx.fillStyle = "#fff"; ctx.font = "600 17px system-ui"; ctx.textAlign = "center"; ctx.fillText(caption, w / 2, h - 13);
             ctx.textAlign = "right"; ctx.font = "700 12px system-ui"; ctx.fillStyle = "rgba(255,255,255,.8)"; ctx.fillText("PORT AUTHORITY", w - 10, 18);
-            const out = new VideoFrame(canvas, { timestamp });
-            send(port, "there", { frame: out }, [out]);
+            // It goes back as what it came as.
+            if (data.frame) { const out = new VideoFrame(canvas, { timestamp }); send(port, "there", { frame: out }, [out]); }
+            else { const out = canvas.transferToImageBitmap(); send(port, "there", { bitmap: out }, [out]); }
             if (++done % 30 === 0) log(`captioned ${done} frames, kept none`);
           };
         }),
@@ -717,6 +721,7 @@ port.onmessage = ({ data }) => {
         return;
       }
       let running = false, waiting = false, n = 0;
+      let carry = "VideoFrame";      // what each picture is sent as: an ImageBitmap once the plug-in says a VideoFrame did not arrive
       const paint = (t) => {
         const { width: w, height: h } = source;
         sctx.fillStyle = "#0e9f8e"; sctx.fillRect(0, 0, w, h);
@@ -727,15 +732,24 @@ port.onmessage = ({ data }) => {
         if (!source.isConnected) return;
         paint(t);
         if (running && !waiting) {
-          const frame = new VideoFrame(source, { timestamp: Math.round(t * 1000) });
-          channel.port1.postMessage({ frame }, [frame]); frame.close();
           waiting = true;
+          if (carry === "VideoFrame") {
+            const frame = new VideoFrame(source, { timestamp: Math.round(t * 1000) });
+            channel.port1.postMessage({ frame }, [frame]); frame.close();
+          } else {
+            createImageBitmap(source).then((bitmap) => { if (!source.isConnected) return bitmap.close(); channel.port1.postMessage({ bitmap }, [bitmap]); }, () => { waiting = false; });
+          }
           if (n++ % 8 === 0) stage.pulse("there", "page");
         }
         requestAnimationFrame(loop);
       };
       requestAnimationFrame(loop);
-      channel.port1.onmessage = ({ data }) => { octx.drawImage(data.frame, 0, 0); data.frame.close(); waiting = false; };
+      channel.port1.onmessage = ({ data }) => {
+        // The plug-in is in another process, and this browser will not hand a VideoFrame to one. An ImageBitmap does cross.
+        if (data.unreadable) { carry = "ImageBitmap"; waiting = false; return; }
+        const picture = data.frame || data.bitmap;
+        octx.drawImage(picture, 0, 0); picture.close(); waiting = false;
+      };
       stage.post("plugin", { cmd: "port" }, [channel.port2]);
       stage.cable("there", "page", "plugin", "yellow");
       const captions = ["Roses arrive on Thursday", "Peonies: three left", "Tulips are in season"];

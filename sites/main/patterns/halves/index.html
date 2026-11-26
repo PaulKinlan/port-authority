@@ -1,0 +1,176 @@
+<!doctype html>
+<!-- Written by scripts/patterns.mjs from the modules in /patterns/. Edit those, then run it. -->
+<html lang="en" data-pattern="halves">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Send only the readable side of a stream | Port Authority</title>
+  <meta name="description" content="A stream has a direction, and you can hand over one direction without the other. The library's site gets only something to read from: it can listen and has nothing to speak into. T">
+  <meta property="og:title" content="Send only the readable side of a stream | Port Authority">
+  <meta property="og:description" content="A stream has a direction, and you can hand over one direction without the other. The library's site gets only something to read from: it can listen and has nothing to speak into. T">
+  <meta property="og:type" content="article">
+  <meta name="twitter:card" content="summary">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/base.css">
+  <script src="/nav.js"></script>
+  <link rel="stylesheet" href="/patterns/patterns.css">
+  <link rel="stylesheet" href="/patterns/page.css">
+  <script src="/errors.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <div class="wrap">
+    <header class="site-bar">
+      <a class="wordmark" href="/">Port Authority</a>
+      <nav aria-label="Primary"><a href="/">Experiments</a><a href="/guide/">The guide</a><a href="/patterns/" aria-current="page">Port patterns</a><a href="/comlink/">Comlink today</a><a href="/ai-router/">AI router</a><a href="/lab/">The lab</a><a href="/missing/">What is missing</a><a href="/reading/">Further reading</a><a href="/hub/">Your hub</a></nav>
+    </header>
+    <main id="main">
+      <div class="stack page-head">
+        <p class="crumb"><a href="/patterns/">Port patterns</a> / <span id="group"><a href="/patterns/#halves">Between real sites</a></span></p>
+        <h1 id="title">Send only the readable side of a stream</h1>
+      </div>
+      <section class="pattern" id="demo"><div class="demo"><noscript><p class="small muted">The demo that runs here needs JavaScript. Everything else on this page reads the same without it.</p></noscript></div></section>
+      <div class="deep" id="deep">
+      <section id="what">
+        <h2>What you are looking at</h2>
+        <p>A stream has a direction, and you can hand over one direction without the other. The library's site gets only something to read from: it can listen and has nothing to speak into. The florist's site gets only something to write into: it can post notes through the slot and cannot see what else is inside. The owner can cut either one off. Close the feed and the listener is told it has ended. Shut the box and the next write fails.</p>
+      </section>
+      <section id="code">
+        <h2>The code</h2>
+        <pre><span class="c">// listen only</span>
+library.postMessage({ readable }, origin, [readable]);
+
+<span class="c">// write only</span>
+const writable = new WritableStream({ start(c) { box = c; }, write: keep });
+florist.postMessage({ writable }, origin, [writable]);
+box.error(new Error("shut"));               <span class="c">// later: their next write fails</span></pre>
+        <h3 id="using">Using it</h3>
+        <pre><span class="c">// a town noticeboard page, with the library's frame and the florist's frame in it</span>
+const readable = new ReadableStream({ start(c) { feed = c; } });
+const keep = (notice) =&gt; feed.enqueue(notice);   <span class="c">// what a shop writes goes on the board</span>
+
+<span class="c">// the library: show each notice. Its stream has no method that writes.</span>
+const reader = readable.getReader();
+for (;;) {
+  const { value, done } = await reader.read();
+  if (done) break;                               <span class="c">// the noticeboard closed the feed</span>
+  show(value);
+}
+
+<span class="c">// the florist: send a notice in. It has nothing to read with.</span>
+const writer = writable.getWriter();
+try { await writer.write("Tulips, half price on Friday"); }
+catch { show("The noticeboard has shut our box"); }
+
+<span class="c">// the noticeboard: the florist sends too many adverts</span>
+box.error(new Error("shut"));                    <span class="c">// the florist's next write fails</span>
+<span class="c">// the noticeboard: the board is taken down</span>
+feed.close();                                    <span class="c">// the library's next read says done</span></pre>
+        <h3 id="case">Where you would use it</h3>
+        <p>A real case. A town noticeboard site embeds two other sites in frames. The library's frame shows the notices on a screen in its hall, so it is given the readable stream, which has no method that writes. The florist's frame sends notices in, so it is given a writable stream of its own and cannot read what other shops have sent. When the florist sends too many adverts, the noticeboard calls <code>box.error()</code> and the florist's next write fails, while the other shops' streams still work. When the board is taken down, the noticeboard closes the feed and the library's reader is told the stream has ended.</p>
+      </section>
+      <section id="how">
+        <h2>How it works</h2>
+        <div class="stack paras">
+          <p>A readable stream can only be read and a writable stream can only be written. Each is transferable by itself. So if you hand someone one of them, they get one direction of the conversation.</p>
+          <p>The library gets a readable. It has no method that writes. The florist gets a writable. It has no method that reads, so it can drop notes into a box whose other contents it cannot see.</p>
+          <p>The owner made both streams and kept their controllers. Closing the feed ends the listener's stream cleanly. Erroring the box makes the writer's next write fail.</p>
+        </div>
+      </section>
+      <section id="steps">
+        <h2>Step by step</h2>
+        <p>What each press of Next does in the demo at the top.</p>
+        <ol>
+          <li><strong>Give the library the listening half.</strong> The library's site gets a stream it can only read. This page keeps the controller.</li>
+          <li><strong>Give the florist the writing half.</strong> The florist's site gets a stream it can only write into.</li>
+          <li><strong>Florist: drop a note.</strong> The florist writes a note. It lands here, and the florist cannot see what else is in the box.</li>
+          <li><strong>Close the feed.</strong> This page ends the feed. The library is told it is over.</li>
+          <li><strong>Shut the drop box.</strong> This page shuts the box.</li>
+          <li><strong>Florist: drop a note.</strong> The florist's next note is refused.</li>
+        </ol>
+      </section>
+      <section id="uses">
+        <h2>What you could build with it</h2>
+        <p>These are built and running below.</p>
+        <article class="built" id="built-sealed">
+          <h3>A sealed bid box that two rivals write into</h3>
+          <p class="small muted idea">The idea: A submission box that accepts input from many parties who cannot see each other's.</p>
+          <div class="demo"></div>
+          <h4>What you are looking at</h4>
+          <p>Two bidders on two origins each get something to write into, and nothing to read from. Their bids land in this page. Neither can see the other's bid, or even whether the other has bid. When the owner closes the box, both writers are refused from then on. It is a sealed auction with no server.</p>
+          <h4>The code</h4>
+          <pre>const makeSlot = (who) => new WritableStream({
+  start(controller) { slots.push(controller); },
+  write(bid) { bids.push({ who, bid }); },
+});
+const slot = makeSlot("one");
+bidderOne.postMessage({ slot }, "*", [slot]);   <span class="c">// write only</span>
+<span class="c">// closing time</span>
+slots.forEach((s) => s.error(new Error("bidding has closed")));</pre>
+          <h4>Step by step</h4>
+          <p>What each press of Next does in this demo.</p>
+          <ol>
+          <li><strong>Give each bidder a slot.</strong> Each bidder gets a stream it can write to and cannot read.</li>
+          <li><strong>Bidder one: bid.</strong> Bidder one's bid arrives here. Bidder two is told nothing.</li>
+          <li><strong>Bidder two: bid.</strong> Bidder two bids without knowing what it is up against.</li>
+          <li><strong>Close the box.</strong> The owner shuts both slots and names the winner.</li>
+          <li><strong>Bidder one: bid.</strong> A late bid is refused.</li>
+        </ol>
+        </article>
+        <article class="built" id="built-roles">
+          <h3>One feed, with a writing role and a reading role</h3>
+          <p class="small muted idea">The idea: Read-only and write-only views of the same resource for different roles.</p>
+          <div class="demo"></div>
+          <h4>What you are looking at</h4>
+          <p>A greenhouse sensor should be able to report and never read. A dashboard should be able to read and never report. This page makes one stream and gives the writing end to the sensor and the reading end to the dashboard. Nobody has to check the roles. The sensor holds an object with no way to read, and the dashboard holds one with no way to write. The stream was made in this page and still runs through it, so readings stop if this page closes.</p>
+          <h4>The code</h4>
+          <pre>const { readable, writable } = new TransformStream();
+sensor.postMessage({ feed: writable }, "*", [writable]);       <span class="c">// can write, cannot read</span>
+dashboard.postMessage({ feed: readable }, "*", [readable]);    <span class="c">// can read, cannot write</span></pre>
+          <h4>Step by step</h4>
+          <p>What each press of Next does in this demo.</p>
+          <ol>
+          <li><strong>Give out the two ends.</strong> The sensor gets the writing end and the dashboard the reading end. This page keeps neither end, but the stream still runs through it.</li>
+          <li><strong>Sensor: report a reading.</strong> A reading goes from the sensor, through the stream in this page, to the dashboard.</li>
+          <li><strong>Sensor: try to read the feed.</strong> The sensor's end has nothing to read with.</li>
+          <li><strong>Dashboard: try to write a reading.</strong> The dashboard's end has nothing to write with.</li>
+        </ol>
+        </article>
+        <h3 class="todo">Already running</h3>
+        <ul>
+          <li>A log or metrics feed that a third party may watch and not influence. <a href="#demo">See the demo at the top of this page.</a></li>
+        </ul>
+      </section>
+      <section id="try">
+        <h2>Things to try</h2>
+        <ul>
+          <li>Give out both halves, drop a note, then close the feed and shut the box.</li>
+          <li>After shutting the box, drop another note and read the florist's log.</li>
+        </ul>
+      </section>
+      <section id="traps">
+        <h2>Common mistakes</h2>
+        <ul>
+          <li>A write can resolve before the far side refuses it. Do not treat a resolved write as delivered.</li>
+          <li>Erroring a stream is final. Make a new one to reopen.</li>
+          <li>The listening half is not fully one-way. The listener chooses when to read and the owner can see that. <a href="/patterns/oneway/#built-covert">A frame sends a word back this way.</a></li>
+        </ul>
+      </section>
+      <section id="related">
+        <h2>Read next</h2>
+        <ul class="cards">
+          <li><a href="/patterns/oneway/"><strong>Join two sites with a port that carries messages one way only</strong><span>A MessagePort always works in both directions.</span></a></li>
+          <li><a href="/patterns/attenuate/"><strong>Give a frame limited access, then revoke it</strong><span>Holding a port is the permission to use it.</span></a></li>
+          <li><a href="/patterns/stream/"><strong>Send a stream to another frame</strong><span>A ReadableStream is transferable too, so you can hand another origin a live stream and it reads with back-pressure, as if the source were local.</span></a></li>
+          <li><a href="/patterns/lend/"><strong>Lend someone a network connection you opened</strong><span>The widget on the right is locked down so that it cannot reach the network at all.</span></a></li>
+        </ul>
+      </section>
+      </div>
+      <nav class="pager" id="pager" aria-label="More patterns"><a href="/patterns/keycopy/"><small>‹ Before this</small>Send a key to another site: it gets a copy you cannot take back</a><a class="pager-all" href="/patterns/">All patterns</a><a class="pager-next" href="/patterns/roundtrip/"><small>After this ›</small>Pipe your data through another site, and get it back</a></nav>
+    </main>
+    <footer class="small muted" style="padding-block:2rem 4rem">Port Authority, by <a href="https://paul.kinlan.me">Paul Kinlan</a>. <a href="/about/">About this site</a>.</footer>
+  </div>
+  <script type="module" src="/patterns/page.js"></script>
+  <script type="module" src="/refs.js"></script>
+</body>
+</html>

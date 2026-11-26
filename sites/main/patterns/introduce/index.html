@@ -1,0 +1,177 @@
+<!doctype html>
+<!-- Written by scripts/patterns.mjs from the modules in /patterns/. Edit those, then run it. -->
+<html lang="en" data-pattern="introduce">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Connect two sites to each other, then remove yourself | Port Authority</title>
+  <meta name="description" content="A port can be passed on by whoever holds it. So a third party that knows two sites can make a channel, give each of them an end, and step away. The three windows are three differen">
+  <meta property="og:title" content="Connect two sites to each other, then remove yourself | Port Authority">
+  <meta property="og:description" content="A port can be passed on by whoever holds it. So a third party that knows two sites can make a channel, give each of them an end, and step away. The three windows are three differen">
+  <meta property="og:type" content="article">
+  <meta name="twitter:card" content="summary">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/base.css">
+  <script src="/nav.js"></script>
+  <link rel="stylesheet" href="/patterns/patterns.css">
+  <link rel="stylesheet" href="/patterns/page.css">
+  <script src="/errors.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <div class="wrap">
+    <header class="site-bar">
+      <a class="wordmark" href="/">Port Authority</a>
+      <nav aria-label="Primary"><a href="/">Experiments</a><a href="/guide/">The guide</a><a href="/patterns/" aria-current="page">Port patterns</a><a href="/comlink/">Comlink today</a><a href="/ai-router/">AI router</a><a href="/lab/">The lab</a><a href="/missing/">What is missing</a><a href="/reading/">Further reading</a><a href="/hub/">Your hub</a></nav>
+    </header>
+    <main id="main">
+      <div class="stack page-head">
+        <p class="crumb"><a href="/patterns/">Port patterns</a> / <span id="group"><a href="/patterns/#introduce">The six basic patterns</a></span></p>
+        <h1 id="title">Connect two sites to each other, then remove yourself</h1>
+      </div>
+      <section class="pattern" id="demo"><div class="demo"><noscript><p class="small muted">The demo that runs here needs JavaScript. Everything else on this page reads the same without it.</p></noscript></div></section>
+      <div class="deep" id="deep">
+      <section id="what">
+        <h2>What you are looking at</h2>
+        <p>A port can be passed on by whoever holds it. So a third party that knows two sites can make a channel, give each of them an end, and step away. The three windows are three different sites, and each address is in its bar. So that you can see all three at once, each is shown as a frame inside this page. A site cannot go and find the introducer. Two windows that have nothing to do with each other cannot reach each other in a browser at all. A first line exists only because one window opened the other, or one is a frame inside the other. So an introducer is a window a site opens, or a window that opens the sites, or a page that holds them as frames. This page stands in for that: it holds all three, and hands Site A and Site B their first lines. Close the introducer and the other two do not notice. This is how <a href="/hub/">the hub</a> works.</p>
+      </section>
+      <section id="code">
+        <h2>The code</h2>
+        <pre><span class="c">// in the introducer, which holds a port to each side</span>
+const { port1, port2 } = new MessageChannel();
+toLeft.postMessage({ meet: "right" }, [port1]);
+toRight.postMessage({ meet: "left" }, [port2]);
+<span class="c">// nothing else to do. It can close.</span></pre>
+        <h3 id="using">Using it</h3>
+        <pre><span class="c">// a print shop wants the person's photos. When the person presses Choose photos</span>
+<span class="c">// it opens a picker window, and that is what lets the shop post to the picker.</span>
+const picker = window.open(pickerUrl, "", "popup");
+const line = new MessageChannel();
+<span class="c">// once the picker says it is ready</span>
+picker.postMessage("line", pickerOrigin, [line.port2]);  <span class="c">// the picker keeps this as toLeft</span>
+
+<span class="c">// In the picker, the person chooses a photo store. The picker opens it in a</span>
+<span class="c">// window, posts it a port in the same way, and keeps the other end as toRight.</span>
+<span class="c">// Then the picker runs the code above and closes.</span>
+
+<span class="c">// the print shop hears on its line to the picker</span>
+line.port1.onmessage = (e) =&gt; {
+  const store = e.ports[0];             <span class="c">// port1 of the new channel</span>
+  line.port1.close();                   <span class="c">// the picker is not needed again</span>
+  show("Connected to " + e.data.meet);
+  store.onmessage = (m) =&gt; addToOrder(m.data.photo);
+  store.postMessage({ want: "photos" });
+};</pre>
+        <h3 id="case">Where you would use it</h3>
+        <p>A real case. A print shop needs photos that the person keeps with a photo storage site. The shop does not know every storage site, so it opens a picker window, and the picker opens the storage site that the person chooses. The picker was opened by the shop and it opened the storage site, so it can hold a port to each. It makes a new channel, sends one end to the shop and one to the storage site, and closes. The shop then asks the storage site for photos directly, and the picker sees none of it.</p>
+      </section>
+      <section id="how">
+        <h2>How it works</h2>
+        <div class="stack paras">
+          <p>The introducer knows two parties who do not know each other. It makes a channel and posts one end to each. The two can now talk directly. The introducer kept neither end, so it can't read the messages and it can go away.</p>
+          <p>A broker normally stays in the path of every message. Here it is only needed for the introduction.</p>
+          <p>Think of two sites in two tabs. Neither has a reference to the other's window, so neither could have reached the other alone. The introducer has a line to both and chooses to connect them. In the demo the three sites are frames in this page, so this page hands out the first two lines, one from each site to the introducer.</p>
+          <p>How does a site come to have a line to the introducer in the first place? Not by looking for it. A browser gives a page a handle to another window in three ways only: the page opened that window, the page was opened by it, or one is a frame inside the other. A page can post a port to a window it has a handle to, and that is the first line. Two tabs that a person opened by hand, on two different sites, have none of these. Nothing in a browser will connect them, and no introducer can reach them.</p>
+          <p>So in practice an introducer is one of three things. It is a window that a site opens, as this site's hub is, and as the router's window is. Or it is a window that opens the sites. Or it is a page that holds the sites as frames. Pages from one site can also find each other with a <code>BroadcastChannel</code> or a <code>SharedWorker</code>, but only pages from that same site. A server that both sites talk to can pass messages between them, but that is a connection through the server, and not a port.</p>
+        </div>
+      </section>
+      <section id="steps">
+        <h2>Step by step</h2>
+        <p>What each press of Next does in the demo at the top.</p>
+        <ol>
+          <li><strong>Connect Site A to the introducer.</strong> Site A gets a private line to the introducer. Between real windows that takes one of them having opened the other. Here this page hands the line over. Site B is still separate.</li>
+          <li><strong>Connect Site B to the introducer.</strong> Site B gets its own line to the introducer. A and B still cannot reach each other.</li>
+          <li><strong>Introduce them.</strong> The introducer makes a new channel and sends one end to Site A and one end to Site B. The yellow direct line appears underneath.</li>
+          <li><strong>Site A says hello.</strong> Site A talks directly to Site B on the yellow cable. Nothing passes through the introducer.</li>
+          <li><strong>Site B says hello.</strong> Site B answers directly on the same yellow cable.</li>
+          <li><strong>Close the introducer.</strong> The introducer's window is closed and its dark cables vanish. The yellow direct line stays.</li>
+          <li><strong>Site A says hello.</strong> Site A still reaches Site B. The line never belonged to the introducer.</li>
+        </ol>
+      </section>
+      <section id="uses">
+        <h2>What you could build with it</h2>
+        <p>These are built and running below.</p>
+        <article class="built" id="built-wire">
+          <h3>Two vendors' widgets, wired together by the page that embeds them</h3>
+          <p class="small muted idea">The idea: Connecting two widgets from different vendors on one page without either loading the other's code. A parent page that wires its iframes together and then stays out of their conversation.</p>
+          <div class="demo"></div>
+          <h4>What you are looking at</h4>
+          <p>A list of places from one vendor and a map from another, each in its own frame on its own origin. Neither has heard of the other and neither loads the other's code. The page that embeds them makes a channel, and gives each widget an end. Pick a place in the list and the map moves, with nothing passing through the page.</p>
+          <h4>The code</h4>
+          <pre>const { port1, port2 } = new MessageChannel();
+listFrame.postMessage({ cmd: "port" }, "*", [port1]);
+mapFrame.postMessage({ cmd: "port" }, "*", [port2]);
+<span class="c">// that is all the integration code there is</span></pre>
+          <h4>Step by step</h4>
+          <p>What each press of Next does in this demo.</p>
+          <ol>
+          <li><strong>Wire the two widgets together.</strong> Each widget gets one end of a channel. This page keeps neither.</li>
+          <li><strong>List: pick the next place.</strong> The list tells the map directly. The map answers the list.</li>
+          <li><strong>List: pick the next place.</strong> Again. Nothing passes through the page in the middle.</li>
+        </ol>
+        </article>
+        <article class="built" id="built-picker">
+          <h3>A picker that connects a shop to the florist the person chose, then closes</h3>
+          <p class="small muted idea">The idea: A picker or hub that connects a site to a tool the person chose, then closes. This site's hub does that.</p>
+          <div class="demo"></div>
+          <h4>What you are looking at</h4>
+          <p>Two florists have each registered with the picker. The shop holds a port to the picker and knows neither florist. The shop asks for someone who can send flowers. The picker waits for the person to choose. Then it makes a channel, sends one end to the chosen florist and the other to the shop, and keeps neither. After that the picker can be closed. The order goes from the shop to the florist on the new channel, and the florist that was not picked hears nothing. <a href="/hub/">The hub on this site</a> is this, with the list of tools kept on a server.</p>
+          <h4>The code</h4>
+          <pre><span class="c">// the shop</span>
+picker.postMessage({ want: "send flowers" });
+picker.onmessage = ({ data, ports: [florist] }) => {
+  florist.postMessage({ order: "twelve tulips" });      <span class="c">// straight to the florist</span>
+};
+
+<span class="c">// the picker, when the person has chosen</span>
+const { port1, port2 } = new MessageChannel();
+tools.get(choice).postMessage({ introduced: "the shop" }, [port1]);
+shop.postMessage({ tool: choice }, [port2]);
+<span class="c">// it kept neither end, so it can close</span></pre>
+          <h4>Step by step</h4>
+          <p>What each press of Next does in this demo.</p>
+          <ol>
+          <li><strong>Shop: ask for someone to send flowers.</strong> The shop asks the picker. The picker knows two florists that can, and waits for the person.</li>
+          <li><strong>Person: pick Petal Post.</strong> The picker makes a channel and gives one end to Petal Post and the other to the shop.</li>
+          <li><strong>Close the picker.</strong> The picker's frame is destroyed. The line between the shop and the florist is still there.</li>
+          <li><strong>Shop: order twelve tulips.</strong> The order goes straight to Petal Post, and the answer comes straight back. Rose and Thorn hears nothing.</li>
+        </ol>
+        </article>
+      </section>
+      <section id="try">
+        <h2>Things to try</h2>
+        <ul>
+          <li>Introduce them, close the introducer, then make both sites talk. Count the dots that pass through the middle box: none.</li>
+          <li>Press Start again and close the introducer first. The sites can never meet.</li>
+        </ul>
+      </section>
+      <section id="traps">
+        <h2>Common mistakes</h2>
+        <ul>
+          <li>Each side needs a line to the introducer before it can be introduced, and that line comes from opening a window or holding a frame. An introducer cannot reach a tab it has no handle to.</li>
+          <li>The introducer cannot take the introduction back. If it needs to, it should keep a link in the chain and forward, as in <a href="/patterns/attenuate/">the attenuate pattern</a>.</li>
+          <li>Nothing tells either side that the other has gone. Send a ping and treat silence as the answer.</li>
+        </ul>
+      </section>
+      <section id="measured">
+        <h2>Measured</h2>
+        <p class="measured">Chromium 157: messages keep flowing between two frames on different sites after the introducing frame, on a third site, is removed from the document. Other browsers are being filled in from <a href="/lab/results/">the lab's results</a>.</p>
+      </section>
+      <section id="related">
+        <h2>Read next</h2>
+        <ul class="cards">
+          <li><a href="/patterns/hello/"><strong>Open a channel and send a message through it</strong><span>new MessageChannel() gives you two entangled ports.</span></a></li>
+          <li><a href="/patterns/attenuate/"><strong>Give a frame limited access, then revoke it</strong><span>Holding a port is the permission to use it.</span></a></li>
+          <li><a href="/patterns/stream-intro/"><strong>A forwarded stream stops when the page that passed it on closes. A port keeps working.</strong><span>You can pass a stream on, the same as a port.</span></a></li>
+          <li><a href="/patterns/exchange/"><strong>Use a SharedWorker to connect tabs to each other</strong><span>Every tab on an origin can reach the same SharedWorker.</span></a></li>
+        </ul>
+      </section>
+      </div>
+      <nav class="pager" id="pager" aria-label="More patterns"><a href="/patterns/hello/"><small>‹ Before this</small>Open a channel and send a message through it</a><a class="pager-all" href="/patterns/">All patterns</a><a class="pager-next" href="/patterns/reply/"><small>After this ›</small>Send a reply port with each request</a></nav>
+    </main>
+    <footer class="small muted" style="padding-block:2rem 4rem">Port Authority, by <a href="https://paul.kinlan.me">Paul Kinlan</a>. <a href="/about/">About this site</a>.</footer>
+  </div>
+  <script type="module" src="/patterns/page.js"></script>
+  <script type="module" src="/refs.js"></script>
+</body>
+</html>

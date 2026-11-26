@@ -1,0 +1,215 @@
+<!doctype html>
+<!-- Written by scripts/patterns.mjs from the modules in /patterns/. Edit those, then run it. -->
+<html lang="en" data-pattern="functions">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pass a function to another origin | Port Authority</title>
+  <meta name="description" content="A function cannot be cloned, but a port can stand in for one. Wrap the function in a channel, send the other end, and the receiver gets something it can call. Arguments can be func">
+  <meta property="og:title" content="Pass a function to another origin | Port Authority">
+  <meta property="og:description" content="A function cannot be cloned, but a port can stand in for one. Wrap the function in a channel, send the other end, and the receiver gets something it can call. Arguments can be func">
+  <meta property="og:type" content="article">
+  <meta name="twitter:card" content="summary">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/base.css">
+  <script src="/nav.js"></script>
+  <link rel="stylesheet" href="/patterns/patterns.css">
+  <link rel="stylesheet" href="/patterns/page.css">
+  <script src="/errors.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <div class="wrap">
+    <header class="site-bar">
+      <a class="wordmark" href="/">Port Authority</a>
+      <nav aria-label="Primary"><a href="/">Experiments</a><a href="/guide/">The guide</a><a href="/patterns/" aria-current="page">Port patterns</a><a href="/comlink/">Comlink today</a><a href="/ai-router/">AI router</a><a href="/lab/">The lab</a><a href="/missing/">What is missing</a><a href="/reading/">Further reading</a><a href="/hub/">Your hub</a></nav>
+    </header>
+    <main id="main">
+      <div class="stack page-head">
+        <p class="crumb"><a href="/patterns/">Port patterns</a> / <span id="group"><a href="/patterns/#functions">More things a port can carry</a></span></p>
+        <h1 id="title">Pass a function to another origin</h1>
+      </div>
+      <section class="pattern" id="demo"><div class="demo"><noscript><p class="small muted">The demo that runs here needs JavaScript. Everything else on this page reads the same without it.</p></noscript></div></section>
+      <div class="deep" id="deep">
+      <section id="what">
+        <h2>What you are looking at</h2>
+        <p>A function cannot be cloned, but a port can stand in for one. Wrap the function in a channel, send the other end, and the receiver gets something it can call. Arguments can be functions too, the same way. Close the port and the function stops existing for them. This is how Comlink works underneath.</p>
+      </section>
+      <section id="code">
+        <h2>The code</h2>
+        <pre>const lend = (fn) => {
+  const { port1, port2 } = new MessageChannel();
+  port1.onmessage = (e) => fn(...e.data);
+  return { port: port2, revoke: () => port1.close() };   <span class="c">// send port, keep revoke</span>
+};
+const borrow = (port) => (...args) => port.postMessage(args);</pre>
+        <h3 id="using">Using it</h3>
+        <pre><span class="c">// a photo site. A resizing tool from another company runs in a frame.</span>
+<span class="c">// The site lends it a function that moves the site's own progress bar.</span>
+const onProgress = (done, total) =&gt; { bar.max = total; bar.value = done; };
+const grant = lend(onProgress);
+tool.contentWindow.postMessage({ resize: photos }, toolOrigin, [grant.port]);
+
+<span class="c">// in the tool's frame</span>
+addEventListener("message", async (event) =&gt; {
+  if (event.origin !== photoSiteOrigin) return;
+  const onProgress = borrow(event.ports[0]);   <span class="c">// a function again</span>
+  let done = 0;
+  for (const photo of event.data.resize) {
+    await shrink(photo);
+    onProgress(++done, event.data.resize.length);  <span class="c">// runs in the photo site's page</span>
+  }
+});
+
+<span class="c">// the person cancels: the tool's later calls do nothing, and it is told nothing</span>
+cancelButton.onclick = () =&gt; grant.revoke();</pre>
+        <h3 id="case">Where you would use it</h3>
+        <p>A real case. A photo site uses a resizing tool from another company, which runs in a frame on its own origin. The site wants its own progress bar to move while the tool works, so it lends the tool an <code>onProgress</code> function. The tool calls it after each photo, and the call runs in the site's page, where the bar is. The tool cannot read the function or reach the bar. When the person cancels, the site calls <code>revoke()</code>, which closes its end of the channel, and the tool's later calls do nothing.</p>
+      </section>
+      <section id="how">
+        <h2>How it works</h2>
+        <div class="stack paras">
+          <p>A function cannot be cloned or transferred. A port can. So a function is passed by keeping it at home and sending a port that calls it: the receiver posts arguments, your side runs the function and posts back the result.</p>
+          <p>The function never leaves. It still sees your variables and runs with your origin's authority. The other side can call it and can't read it.</p>
+          <p>Close the port and the function is taken back. The other side's next call goes nowhere. JavaScript has no other way to revoke a callback.</p>
+        </div>
+      </section>
+      <section id="steps">
+        <h2>Step by step</h2>
+        <p>What each press of Next does in the demo at the top.</p>
+        <ol>
+          <li><strong>Lend onTick().</strong> A channel is created wrapping onTick(), and one end is sent to the other origin as a callable handle.</li>
+          <li><strong>Start the countdown.</strong> The other origin starts ticking and calls onTick() on each tick; every call runs back here.</li>
+          <li><strong>Take the function back.</strong> This page closes its end of the port. The countdown carries on over there, but its calls no longer arrive.</li>
+        </ol>
+      </section>
+      <section id="uses">
+        <h2>What you could build with it</h2>
+        <p>These are built and running below.</p>
+        <article class="built" id="built-listener">
+          <h3>An event listener that lives on another origin</h3>
+          <p class="small muted idea">The idea: Callbacks and event listeners across origins.</p>
+          <div class="demo"></div>
+          <h4>What you are looking at</h4>
+          <p><code>addEventListener</code> takes a function, and a function cannot cross origins. A port can. This page listens to its own button and posts each press down a port. The analytics frame on another origin counts presses of a button it cannot see, in a page it cannot read. Close the port and it is unsubscribed.</p>
+          <h4>The code</h4>
+          <pre><span class="c">// the other origin wants: button.addEventListener("click", theirFunction)</span>
+const { port1, port2 } = new MessageChannel();
+button.addEventListener("click", () => port1.postMessage({ type: "click", at: Date.now() }));
+analytics.postMessage({ cmd: "listen" }, "*", [port2]);
+<span class="c">// unsubscribe them</span>
+port1.close();</pre>
+          <h4>Step by step</h4>
+          <p>What each press of Next does in this demo.</p>
+          <ol>
+          <li><strong>Let analytics listen.</strong> A port goes to the analytics frame. Presses of this page's button will be posted down it.</li>
+          <li><strong>Press the page's button.</strong> The press is heard on the other origin.</li>
+          <li><strong>Press the page's button.</strong> And again.</li>
+          <li><strong>Unsubscribe analytics.</strong> This page closes the port.</li>
+          <li><strong>Press the page's button.</strong> The button still works here. The other origin hears nothing.</li>
+        </ol>
+        </article>
+        <article class="built" id="built-method">
+          <h3>Lend one method of an object, and not the object</h3>
+          <p class="small muted idea">The idea: Exposing one method of an object rather than the object.</p>
+          <div class="demo"></div>
+          <h4>What you are looking at</h4>
+          <p>This page has a cart with three methods: add, clear and total. A badge from another origin needs the total. It is given a port that calls <code>cart.total()</code> and nothing else. The badge can ask for the total as often as it likes. It cannot add, and it cannot clear, because the port it holds doesn't offer those methods.</p>
+          <h4>The code</h4>
+          <pre>const cart = { items: [], add(item) {…}, clear() {…}, total() {…} };
+const { port1, port2 } = new MessageChannel();
+port1.onmessage = ({ data }) =>
+  port1.postMessage(data.call === "total" ? { result: cart.total() } : { error: "not on this port" });
+badge.postMessage({ cmd: "port" }, "*", [port2]);</pre>
+          <h4>Step by step</h4>
+          <p>What each press of Next does in this demo.</p>
+          <ol>
+          <li><strong>Lend the badge cart.total.</strong> The badge gets a port that reaches one method.</li>
+          <li><strong>Add tulips to the cart.</strong> This page uses its own cart, with all its methods.</li>
+          <li><strong>Badge: ask for the total.</strong> The badge calls total through its port.</li>
+          <li><strong>Badge: try to clear the cart.</strong> The badge asks for a method it was not lent.</li>
+        </ol>
+        </article>
+        <article class="built" id="built-proxy">
+          <h3>Call another origin's object as if it were local, in about twenty lines</h3>
+          <p class="small muted idea">The idea: Libraries in the Comlink family, which wrap exactly this.</p>
+          <div class="demo"></div>
+          <h4>What you are looking at</h4>
+          <p>Libraries such as Comlink turn a port into something you call like an ordinary object. This is that idea at its smallest. On this page, <code>wrap(port)</code> returns a <code>Proxy</code>. Reading a property extends a path, and calling it posts the path and the arguments down the port and returns a promise. In the frame, <code>expose(api, port)</code> walks the path, calls the function, and posts back the result or the error. The walk only follows properties the object itself has. Without that check, a caller could ask for <code>constructor</code> and reach <code>Function</code>, which <a href="/comlink/">the Comlink page</a> shows happening in Comlink 4.4.2.</p>
+          <h4>The code</h4>
+          <pre><span class="c">// this page</span>
+function wrap(port) {
+  let last = 0; const waiting = new Map();
+  port.onmessage = ({ data }) => {
+    const { resolve, reject } = waiting.get(data.id); waiting.delete(data.id);
+    "error" in data ? reject(new Error(data.error)) : resolve(data.result);
+  };
+  const at = (path) => new Proxy(() => {}, {
+    get: (_, key) => key === "then" ? undefined : at([...path, key]),
+    apply: (_, __, args) => new Promise((resolve, reject) => {
+      waiting.set(++last, { resolve, reject });
+      port.postMessage({ id: last, path, args });
+    }),
+  });
+  return at([]);
+}
+const shop = wrap(port);
+await shop.basket.total();
+
+<span class="c">// the frame on another origin</span>
+function expose(api, port) {
+  port.onmessage = async ({ data: { id, path, args } }) => {
+    try {
+      let owner = null, target = api;
+      for (const key of path) {
+        if (!Object.hasOwn(target, key)) throw new Error("nothing called " + path.join("."));
+        owner = target; target = target[key];
+      }
+      port.postMessage({ id, result: await target.apply(owner, args) });
+    } catch (err) { port.postMessage({ id, error: err.message }); }
+  };
+}</pre>
+          <h4>Step by step</h4>
+          <p>What each press of Next does in this demo.</p>
+          <ol>
+          <li><strong>Wrap the port.</strong> The frame exposes an object on its end. This page wraps the other end in a Proxy.</li>
+          <li><strong>shop.add(2, 3).</strong> A call that looks local. The path and the arguments went down the port, and 5 came back.</li>
+          <li><strong>shop.basket.add("lilies").</strong> A method two levels down. It changes the basket that lives in the frame.</li>
+          <li><strong>shop.basket.total().</strong> The total is worked out in the frame, from the basket as it is now.</li>
+          <li><strong>shop.reserve().</strong> This method throws in the frame. The promise on this page rejects with the same message.</li>
+          <li><strong>shop.constructor("return 1").</strong> The object has no property of its own called constructor, so the frame refuses.</li>
+        </ol>
+        </article>
+      </section>
+      <section id="try">
+        <h2>Things to try</h2>
+        <ul>
+          <li>Lend the function and watch each call from the other origin run here.</li>
+          <li>Take it back while the countdown is still running over there. Their calls stop arriving.</li>
+        </ul>
+      </section>
+      <section id="traps">
+        <h2>Common mistakes</h2>
+        <ul>
+          <li>Every call is asynchronous, even if the function is not.</li>
+          <li>Arguments and results are copied. An object passed through is a snapshot, not a reference.</li>
+          <li>Nothing collects a port when the far side forgets it. Close proxies you are done with.</li>
+        </ul>
+      </section>
+      <section id="related">
+        <h2>Read next</h2>
+        <ul class="cards">
+          <li><a href="/patterns/reply/"><strong>Send a reply port with each request</strong><span>Instead of matching replies to requests with ids, make a new channel for each request and send one end along with it.</span></a></li>
+          <li><a href="/patterns/attenuate/"><strong>Give a frame limited access, then revoke it</strong><span>Holding a port is the permission to use it.</span></a></li>
+          <li><a href="/patterns/signer/"><strong>Let another origin sign with your key without giving it the key</strong><span>The vault makes a signing key the browser will not let anyone read, itself included.</span></a></li>
+        </ul>
+      </section>
+      </div>
+      <nav class="pager" id="pager" aria-label="More patterns"><a href="/patterns/canvas/"><small>‹ Before this</small>Let another origin paint on your page</a><a class="pager-all" href="/patterns/">All patterns</a><a class="pager-next" href="/patterns/zerocopy/"><small>After this ›</small>Move 64 MB between origins without copying it</a></nav>
+    </main>
+    <footer class="small muted" style="padding-block:2rem 4rem">Port Authority, by <a href="https://paul.kinlan.me">Paul Kinlan</a>. <a href="/about/">About this site</a>.</footer>
+  </div>
+  <script type="module" src="/patterns/page.js"></script>
+  <script type="module" src="/refs.js"></script>
+</body>
+</html>

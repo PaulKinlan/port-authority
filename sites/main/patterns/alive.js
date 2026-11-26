@@ -315,6 +315,7 @@ farSideIsGone();`,
   const worker = new Worker("/patterns/alive-worker.js", { type: "module" });
   const work = new MessageChannel(), health = new MessageChannel();
   worker.postMessage({ ports: true }, [work.port2, health.port2]);
+  current = work.port1;                            <span class="c">// questions go to the newest worker</span>
   work.port1.onmessage = ({ data }) => { pending.get(data.id).resolve(data.count); pending.delete(data.id); };
   watch(health.port1, { every: 500, misses: 3, onState(state) {
     if (state !== "silent") return;

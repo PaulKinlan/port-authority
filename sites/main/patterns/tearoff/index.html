@@ -1,0 +1,152 @@
+<!doctype html>
+<!-- Written by scripts/patterns.mjs from the modules in /patterns/. Edit those, then run it. -->
+<html lang="en" data-pattern="tearoff">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tear a live widget off into its own window | Port Authority</title>
+  <meta name="description" content="A port works the same in whichever window holds it. The meter here is fed by a service on another origin. Tear it off and the port is posted to a new window, which carries on from ">
+  <meta property="og:title" content="Tear a live widget off into its own window | Port Authority">
+  <meta property="og:description" content="A port works the same in whichever window holds it. The meter here is fed by a service on another origin. Tear it off and the port is posted to a new window, which carries on from ">
+  <meta property="og:type" content="article">
+  <meta name="twitter:card" content="summary">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/base.css">
+  <script src="/nav.js"></script>
+  <link rel="stylesheet" href="/patterns/patterns.css">
+  <link rel="stylesheet" href="/patterns/page.css">
+  <script src="/errors.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <div class="wrap">
+    <header class="site-bar">
+      <a class="wordmark" href="/">Port Authority</a>
+      <nav aria-label="Primary"><a href="/">Experiments</a><a href="/guide/">The guide</a><a href="/patterns/" aria-current="page">Port patterns</a><a href="/comlink/">Comlink today</a><a href="/ai-router/">AI router</a><a href="/lab/">The lab</a><a href="/missing/">What is missing</a><a href="/reading/">Further reading</a><a href="/hub/">Your hub</a></nav>
+    </header>
+    <main id="main">
+      <div class="stack page-head">
+        <p class="crumb"><a href="/patterns/">Port patterns</a> / <span id="group"><a href="/patterns/#tearoff">More things a port can carry</a></span></p>
+        <h1 id="title">Tear a live widget off into its own window</h1>
+      </div>
+      <section class="pattern" id="demo"><div class="demo"><noscript><p class="small muted">The demo that runs here needs JavaScript. Everything else on this page reads the same without it.</p></noscript></div></section>
+      <div class="deep" id="deep">
+      <section id="what">
+        <h2>What you are looking at</h2>
+        <p>A port works the same in whichever window holds it. The meter here is fed by a service on another origin. Tear it off and the port is posted to a new window, which carries on from the next tick with no reconnect. Put it back and it returns the port.</p>
+      </section>
+      <section id="code">
+        <h2>The code</h2>
+        <pre>const win = window.open("/meter.html", "", "popup");
+<span class="c">// once it says it is ready</span>
+win.postMessage({ feed: port }, location.origin, [port]);</pre>
+        <h3 id="using">Using it</h3>
+        <pre><span class="c">// a share dealing page, with a live price meter the person moves to a second screen</span>
+<span class="c">// /meter.html, in the new window: say it is ready, then take the port</span>
+let port = null;
+opener.postMessage("ready", location.origin);
+addEventListener("message", (event) =&gt; {
+  if (event.origin !== location.origin || !event.data.feed) return;
+  port = event.data.feed;
+  port.onmessage = (e) =&gt; showPrice(e.data);        <span class="c">// the next price arrives here</span>
+});
+<span class="c">// the person closes the new window: post the port back first</span>
+addEventListener("pagehide", () =&gt; { if (port) opener.postMessage({ back: true }, location.origin, [port]); });
+
+<span class="c">// the dealing page: send the port on "ready", and take it back later</span>
+addEventListener("message", (event) =&gt; {
+  if (event.source !== win || event.origin !== location.origin) return;
+  if (event.data === "ready") win.postMessage({ feed: port }, location.origin, [port]);
+  if (event.data.back) { port = event.ports[0]; port.onmessage = (e) =&gt; showPrice(e.data); }
+});
+<span class="c">// If the new window is killed, pagehide does not run and the port is lost.</span>
+<span class="c">// The page can watch win.closed, and ask the feed for a new port.</span></pre>
+        <h3 id="case">Where you would use it</h3>
+        <p>A real case. A share dealing page shows a live price meter. The prices arrive on a port from a frame run by the market data company, which the person signed in to once. The person wants the meter on a second screen while they fill in an order. The page opens a small window and posts the port to it, so the meter carries on from the next price with no new sign-in and no reconnect. When the person closes the small window it posts the port back, and the meter in the page starts again.</p>
+      </section>
+      <section id="how">
+        <h2>How it works</h2>
+        <div class="stack paras">
+          <p>A widget in a frame holds a port to the page. The page opens a new window, and the widget's port is posted on to that window. A port works the same in whichever window holds it, so the conversation carries on.</p>
+          <p>No state is serialised and nothing reconnects. The same wire that fed the embedded widget now feeds the window. Queued messages are not lost in the move.</p>
+          <p>This works because a port isn't tied to the context that made it.</p>
+        </div>
+      </section>
+      <section id="steps">
+        <h2>Step by step</h2>
+        <p>What each press of Next does in the demo at the top.</p>
+        <ol>
+          <li><strong>Connect to the feed.</strong> This page opens a channel to the feed frame on another origin, and live ticks start arriving.</li>
+        </ol>
+      </section>
+      <section id="uses">
+        <h2>What you could build with it</h2>
+        <p>These are built and running below.</p>
+        <article class="built" id="built-pip">
+          <h3>Float a tool above every other window, without moving its port</h3>
+          <p class="small muted idea">The idea: Moving a tool from a sidebar into Document Picture-in-Picture.</p>
+          <div class="demo"></div>
+          <h4>What you are looking at</h4>
+          <p>Document Picture-in-Picture gives a page a small window that stays on top of everything. It differs from tearing off into a popup in one useful way: the new window has no script of its own. This page's script keeps running it. So the meter's element moves into the floating window and the port stays exactly where it was. Close the floating window and the element comes home. This needs Chrome or Edge on a desktop, and a real press of the button.</p>
+          <h4>The code</h4>
+          <pre>const pip = await documentPictureInPicture.requestWindow({ width: 260, height: 150 });
+pip.document.body.append(meter);          <span class="c">// the element moves</span>
+port.onmessage = ({ data }) => { meter.textContent = data; };   <span class="c">// the port and its listener do not</span>
+pip.addEventListener("pagehide", () => sidebar.append(meter));</pre>
+        </article>
+        <article class="built" id="built-upgrade">
+          <h3>Replace a running widget with its next version, and keep its connection</h3>
+          <p class="small muted idea">The idea: Handing a live session from one frame to its replacement during an upgrade.</p>
+          <div class="demo"></div>
+          <h4>What you are looking at</h4>
+          <p>Version 1 of a chat widget is holding a port to a service that sends it numbered messages. Version 2 is ready. Loading it the usual way would mean dropping the connection and making another, and losing whatever arrived in between. Here version 1 stops listening, hands its port to version 2, and is removed. Messages that arrive during the swap wait in the port. The service is never told that anything changed.</p>
+          <h4>The code</h4>
+          <pre><span class="c">// version 1, when asked to step aside</span>
+port.onmessage = null;                                       <span class="c">// stop reading: what arrives now will wait</span>
+parent.postMessage({ handover: true, last }, "*", [port]);
+
+<span class="c">// version 2</span>
+port.onmessage = ({ data }) => { /* carries on from last + 1 */ };</pre>
+          <h4>Step by step</h4>
+          <p>What each press of Next does in this demo.</p>
+          <ol>
+          <li><strong>Connect version 1 to the service.</strong> The service starts sending numbered messages down a port.</li>
+          <li><strong>Load version 2 and hand over.</strong> Version 1 gives up its port and is removed. Version 2 picks up at the next message.</li>
+        </ol>
+        </article>
+        <h3 class="todo">Already running</h3>
+        <ul>
+          <li>Pop-out video, chat or inspector panels. <a href="#demo">See the demo at the top of this page.</a></li>
+        </ul>
+      </section>
+      <section id="try">
+        <h2>Things to try</h2>
+        <ul>
+          <li>Tear the widget off. The count in the new window carries on from where the embedded one stopped.</li>
+          <li>Close the new window and start again.</li>
+        </ul>
+      </section>
+      <section id="traps">
+        <h2>Common mistakes</h2>
+        <ul>
+          <li>Browsers only open a window in answer to a real press.</li>
+          <li>If the page that opened the window reloads, the window's port to it is dead unless it was banked first. See <a href="/patterns/reload/">keeping a port across a reload</a>.</li>
+        </ul>
+      </section>
+      <section id="related">
+        <h2>Read next</h2>
+        <ul class="cards">
+          <li><a href="/patterns/reload/"><strong>Keep a port across a page reload</strong><span>A port cannot be saved.</span></a></li>
+          <li><a href="/patterns/introduce/"><strong>Connect two sites to each other, then remove yourself</strong><span>A port can be passed on by whoever holds it.</span></a></li>
+          <li><a href="/patterns/tabserver/"><strong>Serve pages to other tabs from this tab</strong><span>A Service Worker can answer a fetch any way it likes, including by asking someone else.</span></a></li>
+        </ul>
+      </section>
+      </div>
+      <nav class="pager" id="pager" aria-label="More patterns"><a href="/patterns/zerocopy/"><small>‹ Before this</small>Move 64 MB between origins without copying it</a><a class="pager-all" href="/patterns/">All patterns</a><a class="pager-next" href="/patterns/tabserver/"><small>After this ›</small>Serve pages to other tabs from this tab</a></nav>
+    </main>
+    <footer class="small muted" style="padding-block:2rem 4rem">Port Authority, by <a href="https://paul.kinlan.me">Paul Kinlan</a>. <a href="/about/">About this site</a>.</footer>
+  </div>
+  <script type="module" src="/patterns/page.js"></script>
+  <script type="module" src="/refs.js"></script>
+</body>
+</html>

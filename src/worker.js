@@ -134,8 +134,10 @@ async function serve(env, site, pathname) {
   // It is at an address of its own so that it can be put under a service worker of its own (quiet.js).
   if (site === "router" && /^\/call-worker\/[^/]+\.js$/.test(path)) candidates = ["router/call-worker.js"];
   if (!/\.[a-z0-9]+$/i.test(path)) candidates.push(site + path + "/index.html");
-  // Each pattern has a page of its own, all drawn by one file.
-  if (site === "main" && /^\/patterns\/[a-z0-9-]+\/index\.html$/.test(path) && !path.startsWith("/patterns/served/")) candidates.push("main/patterns/_page.html");
+  // Each pattern has a page of its own, written out by scripts/patterns.mjs.
+  // An address under /patterns/ with no page gets one that says so, as a 404.
+  const NO_PATTERN = "main/patterns/_page.html";
+  if (site === "main" && /^\/patterns\/[a-z0-9-]+\/index\.html$/.test(path) && !path.startsWith("/patterns/served/")) candidates.push(NO_PATTERN);
   // The lab also runs inside the isolated room, from the same files.
   if (path.startsWith("/isolated/lab/")) candidates.push(site + path.slice(9), "shared" + path.slice(9));
   for (const key of candidates) {
@@ -174,7 +176,7 @@ async function serve(env, site, pathname) {
         // is that after a change, a site runs the old script one more time.
         if (SITE_LOADED.includes(path)) headers["cache-control"] = "max-age=60, stale-while-revalidate=604800";
       }
-      return new Response(body, { headers });
+      return new Response(body, { status: key === NO_PATTERN ? 404 : 200, headers });
     }
   }
   return null;

@@ -1,0 +1,344 @@
+<!doctype html>
+<!-- Written by scripts/patterns.mjs from the modules in /patterns/. Edit those, then run it. -->
+<html lang="en" data-pattern="swpair">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Join the service workers of two sites with a port | Port Authority</title>
+  <meta name="description" content="The florist's site and the library's site each have a service worker. A service worker can post to pages of its own site and to nothing else, so the two cannot reach each other. A ">
+  <meta property="og:title" content="Join the service workers of two sites with a port | Port Authority">
+  <meta property="og:description" content="The florist's site and the library's site each have a service worker. A service worker can post to pages of its own site and to nothing else, so the two cannot reach each other. A ">
+  <meta property="og:type" content="article">
+  <meta name="twitter:card" content="summary">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/base.css">
+  <script src="/nav.js"></script>
+  <link rel="stylesheet" href="/patterns/patterns.css">
+  <link rel="stylesheet" href="/patterns/page.css">
+  <script src="/errors.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <div class="wrap">
+    <header class="site-bar">
+      <a class="wordmark" href="/">Port Authority</a>
+      <nav aria-label="Primary"><a href="/">Experiments</a><a href="/guide/">The guide</a><a href="/patterns/" aria-current="page">Port patterns</a><a href="/comlink/">Comlink today</a><a href="/ai-router/">AI router</a><a href="/lab/">The lab</a><a href="/missing/">What is missing</a><a href="/reading/">Further reading</a><a href="/hub/">Your hub</a></nav>
+    </header>
+    <main id="main">
+      <div class="stack page-head">
+        <p class="crumb"><a href="/patterns/">Port patterns</a> / <span id="group"><a href="/patterns/#swpair">Other devices, Service Workers, sockets and audio</a></span></p>
+        <h1 id="title">Join the service workers of two sites with a port</h1>
+      </div>
+      <section class="pattern" id="demo"><div class="demo"><noscript><p class="small muted">The demo that runs here needs JavaScript. Everything else on this page reads the same without it.</p></noscript></div></section>
+      <div class="deep" id="deep">
+      <section id="what">
+        <h2>What you are looking at</h2>
+        <p>The florist's site and the library's site each have a service worker. A service worker can post to pages of its own site and to nothing else, so the two cannot reach each other. A port can be carried between them. The florist's worker makes a channel, keeps one port and gives the other to its page. The page sends that port over a line it holds to the library's page, and the library's page gives it to the library's worker. Now each worker holds one end of the same channel, and they ask each other questions with no page taking part. The answers are read from each site's own Cache Storage. A browser stops a service worker that has been idle for about thirty seconds, and the port is lost with it. Nothing tells the other worker. So each question has a time limit of 1.5 seconds. When it passes, the asking worker closes its port, makes a new channel, and has the pages carry one end across again. In the diagram this page gave the two pages their line. On the real web the florist's page opens the library's window and gives it one, which the link under the demo does.</p>
+      </section>
+      <section id="code">
+        <h2>The code</h2>
+        <pre><span class="c">// florist's service worker: make a channel, keep one port, give the other to my page</span>
+const { port1, port2 } = new MessageChannel();
+peer = port1;
+client.postMessage({ pair: "carry" }, [port2]);
+
+<span class="c">// florist's page: it opened the library's window earlier and gave it one end of a channel.</span>
+<span class="c">// The port from the worker goes over that port.</span>
+navigator.serviceWorker.onmessage = (event) =>
+  lineToLibraryPage.postMessage({ carry: true }, [event.ports[0]]);
+
+<span class="c">// library's page: give the port to its own worker. This starts the worker if it was stopped.</span>
+lineToFloristPage.onmessage = (event) =>
+  registration.active.postMessage({ pair: "peer", from: "florist" }, [event.ports[0]]);
+
+<span class="c">// library's service worker: this port now reaches the florist's worker directly</span>
+onmessage = (event) => { peer = event.ports[0]; peer.onmessage = answer; peer.postMessage({ hello: "library" }); };
+
+<span class="c">// either worker, later: a question, with a time limit, because a stopped worker says nothing</span>
+const reply = new MessageChannel();
+peer.postMessage({ ask: "Dune" }, [reply.port2]);
+const answer = await firstMessageOrTimeout(reply.port1, 1500);
+if (!answer) { peer.close(); peer = null; await join(); <span class="c">/* a new channel, carried across again */</span> }</pre>
+        <h3 id="using">Using it</h3>
+        <pre><span class="c">// one company's mail app and calendar app, on two origins. Mail is the florist, the calendar is the library.</span>
+<span class="c">// the calendar's worker: answer() reads its own cache and replies on the port that came with the question</span>
+async function answer(event) {
+  const busy = await (await caches.match("/busy.json")).json();
+  event.ports[0].postMessage({ free: !busy.includes(event.data.ask) });
+}
+
+<span class="c">// the mail's worker: a mail tab asks if a time is free, and the worker asks the calendar's worker</span>
+addEventListener("message", (event) =&gt; {
+  if (event.data.time) event.waitUntil(isFree(event.data.time).then((free) =&gt; event.source.postMessage({ free })));
+});
+
+async function isFree(time, tries = 2) {
+  if (!peer &amp;&amp; !(await join())) return null;          <span class="c">// no page of each app is open to carry a new port</span>
+  const reply = new MessageChannel();
+  peer.postMessage({ ask: time }, [reply.port2]);
+  const answer = await firstMessageOrTimeout(reply.port1, 1500);
+  if (answer) return answer.free;
+  peer.close(); peer = null;                       <span class="c">// no answer in time. Treat the port as lost.</span>
+  return tries &gt; 1 ? isFree(time, tries - 1) : null;  <span class="c">// once more, on a new port</span>
+}</pre>
+        <h3 id="case">Where you would use it</h3>
+        <p>A real case. One company runs a mail app and a calendar app on two origins, and each has a service worker with its own Cache Storage. The mail app shows, beside an invitation, whether that time is free. The person opens the calendar from the mail page, the two pages carry one port across, and after that the mail's worker asks the calendar's worker directly, for every mail tab. The interesting moment comes when the browser stops the calendar's worker for being idle: the next question gets no answer in 1.5 seconds, so the mail's worker closes its port, calls <code>join()</code>, and the pages carry a new port across. That repair needs both pages to be open still.</p>
+      </section>
+      <section id="how">
+        <h2>How it works</h2>
+        <div class="stack paras">
+          <p>A service worker can post to the pages of its own site, through <code>clients</code>, and to nothing else. It cannot open a window, it has no <code>window.postMessage</code> to another origin, and it cannot be embedded. So two service workers on two sites have no way to find each other. What they can do is hold a <code>MessagePort</code>, and a port can be carried by anyone who holds it. The join is one port making four hops: from the florist's worker to the florist's page, over a line the two pages share, to the library's page, and into the library's worker. After that the port joins the two workers and nothing else.</p>
+          <p>The pages need a line between them first. On the real web the florist's page opens a window on the library's site and posts it one end of a new channel, checking the origin of the window it is talking to. That window is the only time the two sites are on screen together. Both pages can close afterwards, and the workers keep talking as long as both are running.</p>
+          <p>They don't run for long. A browser stops a Service Worker that has been idle for about thirty seconds, and starts it again for the next fetch or message. Everything in its variables is lost, the port included, and the worker at the other end is not told. A <code>close</code> event for ports was added to the HTML standard in 2024, never shipped on by default in any browser, and was removed again in October 2026. So the only signal is silence, and every question here carries a reply port of its own and has a time limit of 1.5 seconds. When the time passes, the asking worker closes its end, makes a new channel, and asks its pages for one that holds a line to the other site. That page carries the new port across, the other page hands it to its worker, and the question is asked again. The demo's forget button stands in for a stop, because a page cannot ask the browser to stop a worker. The test for this page also stops both workers for real, through the browser's debugging protocol, and the next question is answered over a new port.</p>
+          <p>The rejoin needs a page of each site that still holds a line to the other. Without that, a worker that loses its port has lost the other site until a person opens the two pages together again. Shared workers have this problem less. A shared worker is not stopped while one of its tabs is open, so a link between two of them lasts as long as each site has a tab, with no time limits at all.</p>
+          <p>Once two workers are joined, the port between them can carry more ports. A tab can be given a port whose other end is the other site's worker, made by its own worker and sent over the join. A fetch on one site can be answered by the other site's worker, with the body as a <code>ReadableStream</code> that is transferred and still being written. And none of what arrives says where it came from: a message on a port has an empty <code>origin</code> and no <code>source</code>. What a worker knows about the other end is what the page that handed it the port said, so each page checks the origin of the window it got the port from, and a receiver that needs more can ask the other end to sign something.</p>
+        </div>
+      </section>
+      <section id="steps">
+        <h2>Step by step</h2>
+        <p>What each press of Next does in the demo at the top.</p>
+        <ol>
+          <li><strong>Give the two pages a line to each other.</strong> This page makes a channel and gives one port to the florist's page and one to the library's page. It stands in for the florist's page opening the library's window.</li>
+          <li><strong>Join the two workers.</strong> The florist's worker makes a channel and gives one port to its page. The port goes over the pages' line, and the library's page gives it to the library's worker.</li>
+          <li><strong>Florist's worker: ask about Dune.</strong> The florist's worker posts the question into its port. The library's worker reads its own cache and answers. Neither page took part.</li>
+          <li><strong>Library's worker: ask about tulips.</strong> The same port carries a question the other way.</li>
+          <li><strong>Make the library's worker forget.</strong> The library's worker closes its port and forgets it. This is what happens when the browser stops it. The florist's worker is told nothing.</li>
+          <li><strong>Florist's worker: ask about Dune.</strong> No answer comes in 1.5 seconds. The florist's worker closes its port, makes a new channel, and the pages carry one end across. Then it asks again and is answered.</li>
+          <li><strong>Close the library's page.</strong> The library's page is destroyed. The two workers still hold their ports.</li>
+          <li><strong>Florist's worker: ask about Dune.</strong> It is answered. The port between the workers does not pass through any page.</li>
+          <li><strong>Make the florist's worker forget.</strong> The florist's worker closes its port. There is no page on the library's side to receive a new one.</li>
+          <li><strong>Florist's worker: ask about Dune.</strong> The florist's worker sends a new port out and nothing answers on it. Without a page on each side, the workers cannot be joined again.</li>
+        </ol>
+      </section>
+      <section id="uses">
+        <h2>What you could build with it</h2>
+        <p>These are built and running below.</p>
+        <article class="built" id="built-lines">
+          <h3>Each tab gets its own port to the other site's service worker</h3>
+          <p class="small muted idea">The idea: A tab that needs the other site often gets a port of its own to that site's worker, so its questions do not queue through its own worker.</p>
+          <div class="demo"></div>
+          <h4>What you are looking at</h4>
+          <p>The two workers are joined by one port. A florist tab that wants to ask the library something could ask the florist's worker to pass the question on, and then every question from every tab would queue through that worker. Instead the tab asks its worker for a line. The florist's worker makes a new channel, gives the tab one port, and posts the other port to the library's worker over the port that joins them. From then on the tab asks the library's worker directly. The florist's worker can forget its own port, or be stopped, and the tab's line still works, because the line never passed through it. The line ends when the library's worker is stopped. The tab finds out the same way a worker does, by getting no answer, and asks for another line.</p>
+          <h4>The code</h4>
+          <pre><span class="c">// florist's service worker: a tab asked for a line</span>
+const line = new MessageChannel();
+tab.postMessage({ pair: "line" }, [line.port1]);
+peer.postMessage({ line: true, from: "florist" }, [replyPort, line.port2]);   <span class="c">// a port, sent over a port</span>
+
+<span class="c">// library's service worker: answer on whatever port arrives over the port</span>
+peer.onmessage = (event) => {
+  if (event.data.line) event.ports[1].onmessage = answer;
+};
+
+<span class="c">// florist's tab: ask the library's worker directly</span>
+line.postMessage({ ask: "Dune" }, [reply.port2]);</pre>
+          <h4>How it works</h4>
+          <div class="stack paras">
+          <p>There are three kinds of port in this demo. The teal one joins the two pages, and is only ever used to carry other ports. The yellow one joins the two workers. Each red one joins a single florist tab to the library's worker.</p>
+          <p>A tab cannot make its own line, because it has no way to reach the library's worker. Its own worker can. When a tab asks, the florist's worker calls <code>new MessageChannel()</code>. It posts one port to the tab with <code>client.postMessage</code>. It posts the other to the library's worker in the transfer list of an ordinary message on the yellow port. That message carries two ports: one for the library's worker to say it has the line, and the line itself.</p>
+          <p>The library's worker sets <code>onmessage</code> on the port it was sent and keeps it in a set. From that moment the florist's worker holds neither end. A question from the tab goes from the tab's thread to the library's worker's thread and nowhere else, so the florist's worker can lose its yellow port, or be stopped by the browser, and the tab does not notice.</p>
+          <p>The red line lasts as long as the library's worker keeps running. When that worker is stopped, its ends of every line are lost together. A tab is not told. It learns the way a worker does: its next question gets no answer within 1.5 seconds. It then asks its own worker for a new line, and if that worker has no yellow port either, the pages carry a new one across first.</p>
+        </div>
+          <h4>Step by step</h4>
+          <p>What each press of Next does in this demo.</p>
+          <ol>
+          <li><strong>Give the two pages a line to each other.</strong> The florist's page and the library's page get a direct channel between them.</li>
+          <li><strong>Join the two workers.</strong> The florist's Service Worker makes a channel, and the pages carry one port across to the library's Service Worker.</li>
+          <li><strong>Tab one: get a line of its own.</strong> The florist's worker makes a channel, gives tab one a port, and sends the other port to the library's worker over the port that joins them.</li>
+          <li><strong>Tab two: get a line of its own.</strong> A second channel, for the second tab.</li>
+          <li><strong>Tab one: ask about Dune on its line.</strong> Tab one posts to the library's worker. The florist's worker is not involved.</li>
+          <li><strong>Make the florist's worker forget.</strong> The florist's worker closes the port that joins it to the library's worker.</li>
+          <li><strong>Tab two: ask about Dune on its line.</strong> Tab two is still answered. Its line was never part of the florist's worker.</li>
+          <li><strong>Make the library's worker forget.</strong> The library's worker closes every port it holds, as a stop would. Both lines end there.</li>
+          <li><strong>Tab one: ask about Dune on its line.</strong> No answer comes in 1.5 seconds, and the tab says its line is gone.</li>
+          <li><strong>Tab one: get a line of its own.</strong> The florist's worker has no port either, so the pages carry a new one across first. Then tab one gets a new line.</li>
+        </ol>
+        </article>
+        <article class="built" id="built-swfetch">
+          <h3>An address on the florist's site, answered by the library's service worker</h3>
+          <p class="small muted idea">The idea: An address on one site whose content comes from the other site's worker, as a stream.</p>
+          <div class="demo"></div>
+          <h4>What you are looking at</h4>
+          <p>The florist's page fetches <code>/pair/from-other/shelf.txt</code>, an address on the florist's own site. No such file exists on the florist's server, and the request never leaves the browser. The florist's worker takes the request and asks the library's worker for the file over the port that joins them. The library's worker reads its cache and posts back a status, headers and a <code>ReadableStream</code>. The stream is transferred, so the florist's worker returns it as the body of the response while the library's worker is still writing into it. The page reads the file a line at a time as the lines are written. The library's server is not contacted, and the library's page does nothing. If the library's worker was stopped, the first try gets no answer, a new port is carried across, and the same fetch still succeeds, a little later.</p>
+          <h4>The code</h4>
+          <pre><span class="c">// florist's service worker</span>
+addEventListener("fetch", (event) => {
+  if (!new URL(event.request.url).pathname.startsWith("/pair/from-other/")) return;
+  event.respondWith(askPeer({ get: "shelf.txt" }).then((a) => new Response(a.body, a)));
+});
+
+<span class="c">// library's service worker: the body is a stream, and it is moved, not copied</span>
+peer.onmessage = async (event) => {
+  const body = new ReadableStream({ pull(controller) { <span class="c">/* a line every 350 ms */</span> } });
+  event.ports[0].postMessage({ status: 200, headers, body }, [body]);
+};</pre>
+          <h4>How it works</h4>
+          <div class="stack paras">
+          <p>A page's <code>fetch</code> for an address on its own site goes to that site's service worker first. The florist's worker looks at the path. For anything under <code>/pair/from-other/</code> it calls <code>event.respondWith</code> with a promise, and then asks the library's worker for the file over the port that joins them. The question carries a reply port.</p>
+          <p>The library's worker builds the answer as a plain object: a status, some headers, and a <code>ReadableStream</code> for the body. It posts that on the reply port with the stream in the transfer list. A transferred stream is moved. The library's worker keeps the end it writes into, and the florist's worker receives an end it can read from.</p>
+          <p>The florist's worker does not read it. It passes the stream straight to <code>new Response(body, { status, headers })</code> and returns that. So each line the library's worker writes goes to the florist's worker, and from there to the page that called <code>fetch</code>, as it is written. The page reads the response with a stream reader and shows each line when it arrives, 350 milliseconds apart.</p>
+          <p>The page cannot tell that another site was involved. The address is the florist's, the response has no cross-origin restrictions, and no request went to any server. That is also the risk: whatever the library's worker sends is served as the florist's own content, so a site should only do this with a site it trusts as much as itself.</p>
+          <p>If the library's worker has lost its port, the first question gets no answer. The florist's worker waits 1.5 seconds, has a new port carried across, and asks again, all inside the same <code>respondWith</code>. The page sees one fetch that took longer.</p>
+        </div>
+          <h4>Step by step</h4>
+          <p>What each press of Next does in this demo.</p>
+          <ol>
+          <li><strong>Give the two pages a line to each other.</strong> The florist's page and the library's page get a direct channel between them.</li>
+          <li><strong>Join the two workers.</strong> The florist's Service Worker makes a channel, and the pages carry one port across to the library's Service Worker.</li>
+          <li><strong>Florist's page: fetch the library's shelf.</strong> The page fetches an address on its own site. Its worker asks the library's worker, which answers with a stream and writes four lines into it.</li>
+          <li><strong>Make the library's worker forget.</strong> The library's worker closes its port, as a stop would.</li>
+          <li><strong>Florist's page: fetch the library's shelf.</strong> The first try gets no answer. A new port is carried across, and the same fetch is answered.</li>
+          <li><strong>Florist's page: fetch a file the library does not have.</strong> The library's worker answers 404, and that is the status the page sees.</li>
+        </ol>
+        </article>
+        <article class="built" id="built-matchmaker">
+          <h3>A third site introduces two service workers and closes</h3>
+          <p class="small muted idea">The idea: A third site that knows both introduces their workers and leaves.</p>
+          <div class="demo"></div>
+          <h4>What you are looking at</h4>
+          <p>Here neither site opens the other. A third site, the planner, has a frame of each. It makes one channel and posts a port to each page, addressed so that only that site can receive it. Each page gives its port to its own worker. The planner keeps nothing, and when its frame is destroyed the two workers go on talking. This is the cheapest way to join two workers, and it is the least durable. With the planner gone there is nobody who can carry a new port, so the link lasts until either worker is next stopped and then it cannot be repaired. Each page is trusting the planner about who holds the other port: the page accepts a port only from the planner's origin, and what it tells its worker about the other end is what the planner said.</p>
+          <h4>The code</h4>
+          <pre><span class="c">// planner's page: one channel, one port to each site, addressed</span>
+const { port1, port2 } = new MessageChannel();
+floristFrame.postMessage({ pair: "adopt", from: "library" }, floristOrigin, [port1]);
+libraryFrame.postMessage({ pair: "adopt", from: "florist" }, libraryOrigin, [port2]);
+
+<span class="c">// each site's page: take a port only from the planner, and give it to my worker</span>
+addEventListener("message", (event) => {
+  if (event.origin !== plannerOrigin) return;
+  registration.active.postMessage({ pair: "peer", from: event.data.from }, [event.ports[0]]);
+});</pre>
+          <h4>How it works</h4>
+          <div class="stack paras">
+          <p>The planner's page has a frame of the florist and a frame of the library, or here, sits beside them in the same page. It can post to both windows. It calls <code>new MessageChannel()</code> and posts one port to each with <code>window.postMessage</code>, giving the site's origin as the second argument, so the browser will deliver the message only if that window is still showing that site.</p>
+          <p>Each page receives an ordinary window message. This is the one moment the browser says who is speaking: <code>event.origin</code> is the planner's origin. The page checks it, and refuses a port from anywhere else. Then it gives the port to its own worker with <code>registration.active.postMessage</code>, along with what the planner said about the other end.</p>
+          <p>Now the two workers hold the two ends of the planner's channel. The planner kept neither, so it cannot read what they say, and destroying its frame changes nothing.</p>
+          <p>What is missing is a way back. In the demo at the top of the page, the two pages hold a line to each other and can carry a second port when the first is lost. Here the only thing that could reach both sites was the planner. When one worker is stopped, the other gets no answer, asks its pages for one that can carry a port, and none can.</p>
+        </div>
+          <h4>Step by step</h4>
+          <p>What each press of Next does in this demo.</p>
+          <ol>
+          <li><strong>Planner: introduce the two sites.</strong> The planner makes a channel and posts one port to each page. Each page gives its port to its worker.</li>
+          <li><strong>Close the planner.</strong> The planner's frame is destroyed. It held no port, so nothing changes for the workers.</li>
+          <li><strong>Florist's worker: ask about Dune.</strong> The florist's worker asks, and the library's worker answers.</li>
+          <li><strong>Library's worker: ask about tulips.</strong> And the other way.</li>
+          <li><strong>Make the library's worker forget.</strong> The library's worker closes its port, as a stop would.</li>
+          <li><strong>Florist's worker: ask about Dune.</strong> No answer comes. The florist's worker looks for a page that can carry a new port. There is none, because the planner is gone.</li>
+        </ol>
+        </article>
+        <article class="built" id="built-sharedpair">
+          <h3>Join the shared workers of two sites once, and use the link from every tab</h3>
+          <p class="small muted idea">The idea: The same join between two shared workers, used by every tab of both sites, and lasting as long as each site has a tab open.</p>
+          <div class="demo"></div>
+          <h4>What you are looking at</h4>
+          <p>The same join, with shared workers. Each site has one shared worker, and every tab of that site holds a port to it. Tab one of each site carries a port across once. From then on, a note posted by any tab of either site goes to its own worker, over the link, and to every tab of the other site. Close the two tabs that made the link and nothing changes. A shared worker is not stopped while one of its tabs is open, so this link needs no time limits and is never rejoined. It ends when the last tab of either site closes. A shared worker is not told when a tab goes, so each tab says goodbye on <code>pagehide</code>. Inside a frame, as here, a shared worker belongs to the top-level site as well as its own, so these two workers are the florist's and the library's workers for pages embedded on port-authority.dev.</p>
+          <h4>The code</h4>
+          <pre><span class="c">// florist's shared worker: every florist tab is connected</span>
+onconnect = ({ ports: [tab] }) => {
+  tab.onmessage = ({ data, ports }) => {
+    if (data.join) { const c = new MessageChannel(); link = c.port1; tab.postMessage({ carry: true }, [c.port2]); }
+    if (data.peer) link = ports[0];   <span class="c">// on the library's side</span>
+    if (data.note) { everyTab(data.note); link?.postMessage({ note: data.note }); }
+  };
+};
+link.onmessage = ({ data }) => everyTab(data.note);
+
+<span class="c">// a tab: one port to its own worker, and goodbye when it goes</span>
+const { port } = new SharedWorker("/pair-shared.js");
+addEventListener("pagehide", () => port.postMessage({ bye: name }));</pre>
+          <h4>How it works</h4>
+          <div class="stack paras">
+          <p>A shared worker is one thread for every tab of a site. Each tab connects with <code>new SharedWorker(url)</code> and gets a port, and the worker gets the other end in its <code>connect</code> event. The dark cables in the diagram are those ports. The worker keeps them in a list.</p>
+          <p>The join is the same four hops as for service workers. The florist's shared worker makes a channel and posts one port down the port of the tab that asked. That tab sends it over the line to the library's tab, which posts it to the library's shared worker. The yellow cable is that channel.</p>
+          <p>A note takes three hops. The tab posts it to its own worker. The worker posts it to every tab in its list and into the yellow port. The other worker receives it and posts it to every tab in its list. No tab holds a port to the other site, and no tab needs to have taken part in the join.</p>
+          <p>The two tabs that carried the port are not part of the path, so closing them changes nothing. What matters is that each worker stays alive, and a shared worker lives as long as one tab of its site is connected. There is no idle limit, so there are no time limits in this code and no rejoining.</p>
+          <p>Two things are not reported by the browser. A shared worker is not told when a tab closes, so each tab posts a goodbye in <code>pagehide</code> and the worker takes it off the list. And when a site's last tab closes, its worker ends and the other worker is not told. Its next post into the yellow port goes nowhere, with no error.</p>
+        </div>
+          <h4>Step by step</h4>
+          <p>What each press of Next does in this demo.</p>
+          <ol>
+          <li><strong>Give tab one of each site a line.</strong> Florist tab one and library tab one get a direct channel between them.</li>
+          <li><strong>Join the two SharedWorkers.</strong> The florist's SharedWorker makes a channel and tab one carries a port across to the library's SharedWorker.</li>
+          <li><strong>Florist tab two: post a note.</strong> Florist tab two did not take part in the join. Its note reaches both florist tabs and both library tabs.</li>
+          <li><strong>Close tab one of each site.</strong> The two tabs that carried the port are destroyed. Each says goodbye to its worker as it goes.</li>
+          <li><strong>Library tab two: post a note.</strong> The link is still there. The note reaches florist tab two.</li>
+          <li><strong>Close library tab two.</strong> That was the library's last tab, so the browser ends the library's SharedWorker, and its port with it.</li>
+          <li><strong>Florist tab two: post a note.</strong> The florist's worker posts into the link as before. Nothing is at the other end, and nothing says so.</li>
+        </ol>
+        </article>
+        <article class="built" id="built-whoholds">
+          <h3>Check who holds the other end of a port that came over a port</h3>
+          <p class="small muted idea">The idea: A receiver that checks who holds the other end of a port that came over a port, by asking it to sign a random value.</p>
+          <div class="demo"></div>
+          <h4>What you are looking at</h4>
+          <p>A port carries no name. When a port has come over another port, the receiver has only what the sender of the outer message said about it, and the sender may have been told something false by whoever gave it the port. Here this page passes the library two ports, as a page would pass on ports from whoever asked it to. Both ports say "I am the florist" as their first message. One is held by the florist and one by a stranger. The library looks at everything the browser tells it about each message, and it is the same for both: <code>event.origin</code> is an empty string and <code>event.source</code> is null. So the library checks. It has the florist's public key, which a site would publish at an address of its own. It posts a random value into each port and asks for it to be signed. Only the florist has the private key. The port whose signature does not match is closed.</p>
+          <h4>The code</h4>
+          <pre><span class="c">// the receiver: nothing about a port's messages says who holds the other end</span>
+port.onmessage = (event) => { event.origin; <span class="c">// ""</span>  event.source; <span class="c">// null</span> };
+
+<span class="c">// so ask the other end to prove it, with a key only the real holder has</span>
+const challenge = crypto.getRandomValues(new Uint8Array(32));
+port.postMessage({ prove: challenge });
+const { signature } = await nextMessage(port);
+const ok = await crypto.subtle.verify({ name: "ECDSA", hash: "SHA-256" }, floristPublicKey, signature, challenge);
+if (!ok) port.close();
+
+<span class="c">// the florist: its private key cannot be read, so it cannot be given away by mistake</span>
+const keys = await crypto.subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, false, ["sign", "verify"]);</pre>
+          <h4>How it works</h4>
+          <div class="stack paras">
+          <p>When a message arrives from a window, the browser fills in <code>event.origin</code> with the sender's origin, and the sender cannot fake it. A message that arrives on a port has no such field to rely on. A port has no address. Its <code>origin</code> is an empty string and its <code>source</code> is null, whoever posted it.</p>
+          <p>So what a receiver knows about a port is what it was told by whoever handed it over. That is fine for one hop, where the receiver checked the origin of the window that gave it the port. It is weaker after two hops. This page passes on ports it was given, and it has no idea what is at their other ends. Both ports here open by saying "I am the florist", and the library shows what the browser reports for each. The two lines are identical.</p>
+          <p>The check uses a key pair. The florist made one with <code>crypto.subtle.generateKey</code> and marked the private key as not extractable, which means no script can read it, the florist's own included. The public key can be given to anyone. The library has it.</p>
+          <p>The library makes 32 random bytes and posts them into a port. Whoever holds the other end has to post back a signature of those bytes. The library runs <code>crypto.subtle.verify</code> with the florist's public key. The florist's signature passes. The stranger can sign too, but only with a key of its own, and that signature does not pass. The value is new each time, so an old signature cannot be sent again.</p>
+          <p>This proves who was at the other end when it signed, and a port can still be handed on afterwards. It also depends on the library having the right public key, which in practice means fetching it from the florist's own site over HTTPS.</p>
+        </div>
+          <h4>Step by step</h4>
+          <p>What each press of Next does in this demo.</p>
+          <ol>
+          <li><strong>Give the library the florist's public key.</strong> The florist made a key pair when it started. This page passes its public half to the library.</li>
+          <li><strong>Pass the library a port from the florist.</strong> The florist makes a channel and sends one port out. This page passes it on. Its first message says: I am the florist.</li>
+          <li><strong>Pass the library a port from the stranger.</strong> The stranger does exactly the same, with the same first message.</li>
+          <li><strong>Library: check both ports.</strong> The library posts a random value into each port and asks for a signature. The florist's is good. The stranger signs with a key of its own, the signature does not match, and the library closes that port.</li>
+        </ol>
+        </article>
+      </section>
+      <section id="try">
+        <h2>Things to try</h2>
+        <ul>
+          <li>Open the florist's page from the link under the demo. It opens the library's window for real. Join the two workers, close the library's window, and ask again: the workers still talk.</li>
+          <li>Leave that tab alone for a minute, then ask again. The browser has stopped the workers by then, and the page says so: the run name of its worker has changed, and a new port was carried across.</li>
+          <li>In the demo at the top of this page, make the library's worker forget, then run <a href="#built-swfetch">the cross-site fetch demo below</a>. The first try gets no answer and the fetch still succeeds, later.</li>
+        </ul>
+      </section>
+      <section id="traps">
+        <h2>Common mistakes</h2>
+        <ul>
+          <li>A port held in a service worker's variable is lost when the browser stops the worker, and nothing tells the other end. Give every question a time limit and be ready to rejoin.</li>
+          <li>A service worker cannot be asked to stay running. <code>event.waitUntil</code> keeps it alive only until the promise it was given settles, and a browser will still stop one that runs too long.</li>
+          <li>Only a page can carry a port between sites. If neither site has a page open that holds a line to the other, a broken join cannot be repaired.</li>
+          <li>A port does not say who holds its other end. Check the origin of the window that gives it to you, and pass on to the worker only what that window is trusted to say.</li>
+          <li>Inside a frame on another site, a shared worker belongs to the top-level site as well as its own. Tabs of the florist embedded on two different sites reach two different shared workers.</li>
+        </ul>
+      </section>
+      <section id="measured">
+        <h2>Measured</h2>
+        <p class="measured">Chromium 157: two service workers on two origins exchange messages over a port carried through two pages, with both pages gone. After both workers are stopped by the browser, the next question gets no answer in 1.5 seconds, a new port is carried across and the question is answered. A <code>ReadableStream</code> sent from one origin's service worker to another's is returned as a fetch response body and read line by line. A message on a port that came over a port has <code>origin</code> "" and <code>source</code> null. Other browsers are being filled in from <a href="/lab/results/">the lab's results</a>.</p>
+      </section>
+      <section id="related">
+        <h2>Read next</h2>
+        <ul class="cards">
+          <li><a href="/patterns/mounted/"><strong>Mount another site at a path on yours</strong><span>A Service Worker can answer a request by asking a port, and the other end of that port can be on another origin.</span></a></li>
+          <li><a href="/patterns/router/"><strong>A worker that routes between windows that have never met</strong><span>The three windows above the router know two things each: their own name, and how to reach the router.</span></a></li>
+          <li><a href="/patterns/introduce/"><strong>Connect two sites to each other, then remove yourself</strong><span>A port can be passed on by whoever holds it.</span></a></li>
+        </ul>
+      </section>
+      </div>
+      <nav class="pager" id="pager" aria-label="More patterns"><a href="/patterns/audio/"><small>‹ Before this</small>A worker that plays music while this page is frozen</a><a class="pager-all" href="/patterns/">All patterns</a><a class="pager-next" href="/patterns/health-pair/"><small>After this ›</small>Send a second port with the first, only for health checks</a></nav>
+    </main>
+    <footer class="small muted" style="padding-block:2rem 4rem">Port Authority, by <a href="https://paul.kinlan.me">Paul Kinlan</a>. <a href="/about/">About this site</a>.</footer>
+  </div>
+  <script type="module" src="/patterns/page.js"></script>
+  <script type="module" src="/refs.js"></script>
+</body>
+</html>

@@ -4,9 +4,11 @@
   "description": "",
   "type": "module",
   "scripts": {
-    "test": "npm run test:unit && npm run verify:reading",
+    "test": "npm run test:unit && npm run verify:reading && npm run verify:patterns",
     "test:unit": "NODE_OPTIONS=--expose-gc node --test test/*.unit.mjs",
     "verify:reading": "node scripts/reading.mjs --verify",
+    "verify:patterns": "node scripts/patterns.mjs --verify",
+    "build:patterns": "node scripts/patterns.mjs",
     "check:refs": "node scripts/check-refs.mjs"
   },
   "keywords": [],
