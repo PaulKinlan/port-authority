@@ -170,6 +170,39 @@ await chat.press("#prompt", "Enter");
 await chat.locator(".msg.assistant").nth(4).locator(".msg-actions").waitFor();
 check("and the next message is sent with that account's key", seen.at(-1).key === KEY3 && seen.at(-1).body.model === "claude-sonnet-5-5" && (await chat.locator("#model-text b").innerText()) === "claude-sonnet-5-5");
 
+// An image goes with a message. A large one is made smaller first.
+await chat.click("#new-chat");
+// A real one-dot PNG, made by the browser, so that it can be read as an image.
+const DOT = await chat.evaluate(() => { const canvas = document.createElement("canvas"); canvas.width = canvas.height = 1; return canvas.toDataURL("image/png").split(",")[1]; });
+await chat.locator("#attach-file").setInputFiles({ name: "dot.png", mimeType: "image/png", buffer: Buffer.from(DOT, "base64") });
+await chat.locator("#attached .thumb").first().waitFor();
+await chat.evaluate(async () => {
+  const canvas = document.createElement("canvas");
+  canvas.width = 3136; canvas.height = 1200;
+  canvas.getContext("2d").fillRect(0, 0, 400, 400);
+  const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
+  const carry = new DataTransfer();
+  carry.items.add(new File([blob], "wide.png", { type: "image/png" }));
+  document.getElementById("attach-file").files = carry.files;
+  document.getElementById("attach-file").dispatchEvent(new Event("change"));
+});
+await chat.locator("#attached .thumb").nth(1).waitFor();
+const chosen = await chat.locator("#attached .thumb img").evaluateAll(async (all) => { await Promise.all(all.map((img) => img.decode())); return all.map((img) => ({ kind: img.src.slice(0, 15), wide: img.naturalWidth, high: img.naturalHeight })); });
+check("a small image is kept as it is, and a large one is made smaller before it is sent", JSON.stringify(chosen) === JSON.stringify([{ kind: "data:image/png;", wide: 1, high: 1 }, { kind: "data:image/jpeg", wide: 1568, high: 600 }]), JSON.stringify(chosen));
+await chat.click('#attached [data-drop="1"]');
+check("an image can be taken off again before sending", (await chat.locator("#attached .thumb").count()) === 1);
+await chat.fill("#prompt", "What is in this picture?");
+await chat.press("#prompt", "Enter");
+await chat.locator(".msg.assistant .msg-actions").waitFor();
+check("the image is sent to the provider with the words, in that provider's own shape", JSON.stringify(seen.at(-1).body.messages) === JSON.stringify([{ role: "user", content: [
+  { type: "text", text: "What is in this picture?" }, { type: "image", source: { type: "base64", media_type: "image/png", data: DOT } }] }]) && seen.at(-1).key === KEY3, JSON.stringify(seen.at(-1).body.messages).slice(0, 200));
+check("the image is shown in the conversation, and the row of chosen images is cleared", (await chat.locator(".msg.user .shots img").count()) === 1 && (await chat.locator(".msg.user .shots img").getAttribute("src")) === "data:image/png;base64," + DOT
+  && (await chat.locator(".msg.user .bubble").innerText()) === "What is in this picture?" && !(await chat.locator("#attached").isVisible()));
+await chat.reload();
+await chat.locator(".msg.user .shots img").waitFor();
+check("the image is kept with the conversation", (await chat.locator(".msg.user .shots img").getAttribute("src")) === "data:image/png;base64," + DOT && (await chat.locator("#title").innerText()) === "What is in this picture?");
+await chat.locator("#model-jack.on").waitFor();
+
 // What the model writes is shown as Markdown, and none of it runs.
 await chat.click("#new-chat");
 await chat.fill("#prompt", "Show me some markdown");
@@ -180,7 +213,7 @@ check("Markdown in an answer is drawn: a heading, a list and a code block", (awa
   && (await md.locator(".code pre code").innerText()) === "const tea = 1 < 2;" && (await md.locator(".code-bar span").innerText()) === "js");
 check("HTML in an answer is shown as text and does not run", (await md.locator("img").count()) === 0 && /<img src=x onerror=/.test(await md.innerText()) && !/hacked/.test(await chat.title()));
 check("an image in an answer is not loaded, and a javascript: link is not a link", (await md.locator('a[href^="https://attacker.example"]').count()) === 1 && (await md.locator("a").count()) === 2 && (await md.locator('a[href^="javascript"]').count()) === 0);
-check("there are now two conversations, newest first", (await chat.locator("#list a.conv").allInnerTexts()).join("|") === "Show me some markdown|Write a card for Ada");
+check("the conversations are listed, newest first", (await chat.locator("#list a.conv").allInnerTexts()).join("|") === "Show me some markdown|What is in this picture?|Write a card for Ada");
 
 // Stop an answer part way.
 await chat.fill("#prompt", "Answer slowly please");
@@ -191,7 +224,7 @@ await chat.locator(".tail", { hasText: "You stopped this answer" }).waitFor();
 check("an answer can be stopped, and the message box is ready again", (await chat.locator("#send").isVisible()) && !(await chat.locator("#stop").isVisible()));
 
 // Search, rename, export and delete.
-await chat.fill("#search", "ada");
+await chat.fill("#search", "make it shorter");
 check("search finds a conversation by the words in it", (await chat.locator("#list a.conv").allInnerTexts()).join("|") === "Write a card for Ada");
 await chat.fill("#search", "");
 await chat.click("#more");
@@ -202,18 +235,22 @@ await chat.locator("#list a.conv", { hasText: "Tea notes" }).waitFor();
 check("a conversation can be renamed", (await chat.locator("#title").innerText()) === "Tea notes" && (await chat.locator("#list a.conv").first().innerText()) === "Tea notes");
 const [download] = await Promise.all([chat.waitForEvent("download"), chat.click("#export-all")]);
 const exported = JSON.parse(await readFile(await download.path(), "utf8"));
-check("Export all writes every conversation to a file", exported.conversations.length === 2 && exported.conversations.some((c) => c.title === "Tea notes" && c.messages.length === 4) && !JSON.stringify(exported).includes(KEY));
+check("Export all writes every conversation to a file", exported.conversations.length === 3 && exported.conversations.some((c) => c.title === "Tea notes" && c.messages.length === 4) && !JSON.stringify(exported).includes(KEY)
+  && exported.conversations.some((c) => c.messages[0].images && c.messages[0].images[0] === "data:image/png;base64," + DOT));
 await chat.click("#more");
 await chat.click("#menu-delete");
 await chat.click('#delete-dialog button[value="delete"]');
 await chat.locator(".empty").waitFor();
-check("a conversation can be deleted", (await chat.locator("#list a.conv").allInnerTexts()).join("|") === "Write a card for Ada");
+check("a conversation can be deleted", (await chat.locator("#list a.conv").allInnerTexts()).join("|") === "What is in this picture?|Write a card for Ada");
 await chat.locator("#import-file").setInputFiles(await download.path());
-await chat.locator("#notice", { hasText: "2 conversations added" }).waitFor();
-check("Import reads that file back", (await chat.locator("#list a.conv").count()) === 3);
+await chat.locator("#notice", { hasText: "3 conversations added" }).waitFor();
+check("Import reads that file back", (await chat.locator("#list a.conv").count()) === 5);
 await chat.reload();
-await chat.locator("#list a.conv").nth(2).waitFor();
-check("and all of it is still there after a reload", (await chat.locator("#list a.conv").count()) === 3);
+await chat.locator("#list a.conv").nth(4).waitFor();
+check("and all of it is still there after a reload", (await chat.locator("#list a.conv").count()) === 5);
+await chat.locator("#list a.conv", { hasText: "What is in this picture?" }).first().click();
+await chat.locator(".msg.user .shots img").waitFor();
+check("an image read back from a file is still an image", (await chat.locator(".msg.user .shots img").getAttribute("src")) === "data:image/png;base64," + DOT);
 const kept = await chat.evaluate((key) => JSON.stringify({ ...localStorage }).includes(key) || document.documentElement.innerHTML.includes(key), KEY);
 check("the chat app never held the key", !kept);
 

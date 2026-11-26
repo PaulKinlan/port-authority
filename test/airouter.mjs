@@ -45,10 +45,17 @@ await ctx.route("https://api.openai.com/**", async (route) => {
   if (request.method() === "OPTIONS") return route.fulfill({ status: 204, headers: cors });
   const body = JSON.parse(request.postData());
   seenOpenAI.push({ key: request.headers()["authorization"], body, from: request.frame().url(), path: new URL(request.url()).pathname });
-  if (/slowly/.test(body.messages.at(-1).content)) await new Promise((resolve) => setTimeout(resolve, 2500));
+  const last = body.messages.at(-1);
+  if (/slowly/.test(String(last.content))) await new Promise((resolve) => setTimeout(resolve, 2500));
   const data = (o) => `data: ${JSON.stringify(o)}\n\n`;
-  const answer = ["A note ", "from the ", "stand-in."].map((content) => data({ choices: [{ index: 0, delta: { content } }] })).join("")
-    + data({ choices: [], usage: { prompt_tokens: 12, completion_tokens: 6 } }) + "data: [DONE]\n\n";
+  const delta = (d, finish_reason = null) => data({ choices: [{ index: 0, delta: d, finish_reason }] });
+  const usage = data({ choices: [], usage: { prompt_tokens: 12, completion_tokens: 6 } }) + "data: [DONE]\n\n";
+  // Given tools and a question, it asks for the first tool. Given the tool's result, it answers with it.
+  const answer = body.tools && last.role === "user"
+    ? delta({ role: "assistant", content: "" }) + delta({ tool_calls: [{ index: 0, id: "call_stand_in", type: "function", function: { name: body.tools[0].function.name, arguments: "" } }] })
+      + delta({ tool_calls: [{ index: 0, function: { arguments: '{"town":' } }] }) + delta({ tool_calls: [{ index: 0, function: { arguments: '"Hull"}' } }] }) + delta({}, "tool_calls") + usage
+    : last.role === "tool" ? delta({ content: "The tool said: " }) + delta({ content: String(last.content) }) + delta({}, "stop") + usage
+    : ["A note ", "from the ", "stand-in."].map((content) => delta({ content })).join("") + usage;
   if (request.headers()["authorization"] !== "Bearer " + KEY2) return route.fulfill({ status: 401, headers: cors, contentType: "application/json", body: JSON.stringify({ error: { message: "Incorrect API key provided" } }) }).catch(() => {});
   route.fulfill({ status: 200, headers: { ...cors, "content-type": "text/event-stream" }, body: answer }).catch(() => {});   // the page may have stopped waiting
 });
@@ -285,14 +292,24 @@ const lent = await library.locator("#lent").innerText();
 check("a port lent for 3 requests answers 3", /Request 3: A note from the stand-in\./.test(lent));
 check("and refuses the fourth", /Request 4 was refused: This port was lent/.test(lent), lent.split("\n")[0]);
 
-// Chat Completions on the second site: a whole answer, a refusal, a lent port and a stop.
+// Chat Completions on the second site: a whole answer, an image, a tool call, a refusal, a lent port and a stop.
 const plain = await library.evaluate(async (router) => {
   const { connect, fromPort } = await import(router + "/router.js");
   const ai = await connect();
   const caught = async (work) => { try { await work(); return null; } catch (e) { return { name: e.name, message: e.message, code: e.code, status: e.status, param: e.param, type: e.type }; } };
   const hello = [{ role: "user", content: "Hello there" }];
   const answer = await ai.chat.completions.create({ messages: hello, temperature: 0.4, top_p: 0.5, stop: ["X", "Y"], max_completion_tokens: 123 });
-  const refused = await caught(() => ai.chat.completions.create({ messages: hello, tools: [{ type: "function", function: { name: "f" } }] }));
+  const refused = await caught(() => ai.chat.completions.create({ messages: hello, response_format: { type: "json_object" } }));
+  // A tool: the model asks for it, this site runs it, and sends the result back. An image goes with the question.
+  const PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg==";
+  const tools = [{ type: "function", function: { name: "get_weather", description: "The weather in a town.", parameters: { type: "object", properties: { town: { type: "string" } }, required: ["town"] } } }];
+  const question = { role: "user", content: [{ type: "text", text: "What is the weather where this was taken?" }, { type: "image_url", image_url: { url: PNG } }] };
+  const asked = await ai.chat.completions.create({ messages: [question], tools, tool_choice: "auto" });
+  const call = asked.choices[0].message.tool_calls[0];
+  const result = "raining in " + JSON.parse(call.function.arguments).town;       // this site runs the tool. The router does not.
+  const told = await ai.chat.completions.create({ messages: [question, asked.choices[0].message, { role: "tool", tool_call_id: call.id, content: result }], tools });
+  const deltas = [];
+  for await (const chunk of await ai.chat.completions.create({ messages: [question], tools, stream: true })) deltas.push(chunk.choices[0]);
   const lent = fromPort(await ai.lend({ requests: 1 }));
   await lent.started;
   const first = await lent.chat.completions.create({ messages: hello });
@@ -300,14 +317,26 @@ const plain = await library.evaluate(async (router) => {
   const stop = new AbortController();
   setTimeout(() => stop.abort(), 300);
   const stopped = await caught(() => ai.chat.completions.create({ messages: [{ role: "user", content: "Answer slowly" }] }, { signal: stop.signal }));
-  return { answer, refused, first: first.choices[0].message.content, second, stopped };
+  return { answer, refused, first: first.choices[0].message.content, second, stopped, PNG, asked: asked.choices[0], told: told.choices[0], deltas };
 }, base("router"));
 check("without stream, the site gets a whole chat.completion object", plain.answer.object === "chat.completion" && plain.answer.model === "gpt-6.2-sol" && plain.answer.choices[0].message.role === "assistant"
   && plain.answer.choices[0].message.content === "A note from the stand-in." && plain.answer.choices[0].finish_reason === "stop" && plain.answer.usage.prompt_tokens === 12 && plain.answer.usage.total_tokens === 18, JSON.stringify(plain.answer).slice(0, 100));
 const tuned = seenOpenAI.find((c) => c.body.temperature === 0.4);
 check("the site's settings reached a provider that speaks Chat Completions", !!tuned && tuned.body.top_p === 0.5 && JSON.stringify(tuned.body.stop) === '["X","Y"]' && tuned.body.max_completion_tokens === 123
   && JSON.stringify(tuned.body.messages) === JSON.stringify([{ role: "user", content: "Hello there" }]), tuned && JSON.stringify(tuned.body));
-check("a request for tools is refused by name, as an error the site can read", plain.refused && plain.refused.code === "unsupported" && plain.refused.status === 400 && plain.refused.param === "tools" && plain.refused.type === "invalid_request_error", JSON.stringify(plain.refused));
+check("a setting the router does not pass on is refused by name, as an error the site can read", plain.refused && plain.refused.code === "unsupported" && plain.refused.status === 400 && plain.refused.param === "response_format" && plain.refused.type === "invalid_request_error", JSON.stringify(plain.refused));
+check("given a tool, the model's call for it comes back to the site, with finish_reason tool_calls", plain.asked.finish_reason === "tool_calls" && plain.asked.message.content === null
+  && JSON.stringify(plain.asked.message.tool_calls) === JSON.stringify([{ id: "call_stand_in", type: "function", function: { name: "get_weather", arguments: '{"town":"Hull"}' } }]), JSON.stringify(plain.asked));
+check("the site runs the tool and sends the result, and the model answers with it", plain.told.message.content === "The tool said: raining in Hull" && plain.told.finish_reason === "stop" && plain.told.message.tool_calls === undefined, JSON.stringify(plain.told));
+const withTools = seenOpenAI.filter((c) => c.body.tools);
+check("the provider was sent the tools, the image, the call and its result, from the page for that provider", withTools.length === 3 && withTools.every((c) => c.from === base("router") + "/call/openai")
+  && JSON.stringify(withTools[0].body.tools) === JSON.stringify([{ type: "function", function: { name: "get_weather", description: "The weather in a town.", parameters: { type: "object", properties: { town: { type: "string" } }, required: ["town"] } } }])
+  && withTools[0].body.tool_choice === "auto" && JSON.stringify(withTools[0].body.messages[0].content[1]) === JSON.stringify({ type: "image_url", image_url: { url: plain.PNG } })
+  && JSON.stringify(withTools[1].body.messages.slice(1)) === JSON.stringify([{ role: "assistant", content: null, tool_calls: [{ id: "call_stand_in", type: "function", function: { name: "get_weather", arguments: '{"town":"Hull"}' } }] }, { role: "tool", tool_call_id: "call_stand_in", content: "raining in Hull" }]),
+  JSON.stringify(withTools[1] && withTools[1].body.messages.slice(1)));
+const toolDeltas = plain.deltas.flatMap((c) => c.delta.tool_calls || []);
+check("in a stream the call arrives as its name, then its arguments in pieces", toolDeltas.length === 3 && toolDeltas[0].id === "call_stand_in" && toolDeltas[0].function.name === "get_weather"
+  && toolDeltas.map((c) => c.function.arguments).join("") === '{"town":"Hull"}' && plain.deltas.at(-1).finish_reason === "tool_calls", JSON.stringify(toolDeltas));
 check("a lent port speaks it too, and still stops at its limit", plain.first === "A note from the stand-in." && plain.second && plain.second.code === "limit" && plain.second.status === 429, JSON.stringify(plain.second));
 check("a site can stop a request with an AbortSignal", plain.stopped && plain.stopped.name === "AbortError", JSON.stringify(plain.stopped));
 
@@ -358,7 +387,7 @@ await home.bringToFront();
 await home.evaluate(() => dispatchEvent(new Event("focus")));
 await home.locator("#grants li[data-id]").nth(2).waitFor();
 const grants = await home.locator("#grants").innerText();
-check("the router lists both sites with their usage", /florist/.test(grants) && /4 of 5 requests used/.test(grants) && /84 tokens in, 36 out/.test(grants) && /library/.test(grants) && /10 of 20 requests used/.test(grants), grants.replace(/\n/g, " | "));
+check("the router lists both sites with their usage", /florist/.test(grants) && /4 of 5 requests used/.test(grants) && /84 tokens in, 36 out/.test(grants) && /library/.test(grants) && /13 of 20 requests used/.test(grants), grants.replace(/\n/g, " | "));
 
 // Stop the florist. Its next request is refused, and its stored copy of the key cannot be opened.
 await home.locator("#grants li", { hasText: "florist" }).locator("[data-revoke]").click();

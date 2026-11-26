@@ -22,6 +22,7 @@ let current = null;          // the one on screen. A new chat is not saved until
 let ai = null;               // the router, once connected
 let unreachable = null;      // why the router could not be loaded, if it could not
 let busy = null;             // { conversation, reply, stop } while an answer is arriving
+let attached = [];           // images chosen for the next message, each a data: address
 const wanted = new URLSearchParams(location.search).get("via") || localStorage.getItem("chat.via") || "frame";
 
 // Other tabs of this app hear when a conversation changes.
@@ -148,7 +149,10 @@ function drawTop() {
 const who = (message) => message.model || "Model";
 
 function messageHTML(message, last) {
-  if (message.role === "user") return `<article class="msg user" data-id="${esc(message.id)}"><h3 class="visually-hidden">You said</h3><div class="bubble">${esc(message.content)}</div></article>`;
+  if (message.role === "user") {
+    const shots = imagesOf(message).map((url, i) => `<img src="${esc(url)}" alt="Image ${i + 1} that you sent" loading="lazy">`).join("");
+    return `<article class="msg user" data-id="${esc(message.id)}"><h3 class="visually-hidden">You said</h3>${shots ? `<div class="shots">${shots}</div>` : ""}${message.content ? `<div class="bubble">${esc(message.content)}</div>` : ""}</article>`;
+  }
   const pending = busy && busy.reply === message;
   const tail = message.stopped ? `<p class="tail small">You stopped this answer.</p>` : message.interrupted && !pending ? `<p class="tail small">This answer was cut off when the page closed.</p>` : "";
   const failed = message.error ? `<div class="failed"><p>${esc(explain(message.error))}</p><div class="actions">${fix(message.error)}<button type="button" class="tiny quiet" data-act="retry">Try again</button></div></div>` : "";
@@ -163,6 +167,7 @@ function explain(error) {
   if (error.code === "closed") return "The router window was closed before the answer finished.";
   if (error.code === "offline") return "The router's server could not be reached. Check your connection.";
   if (error.code === "key-refused") return "The provider refused the API key for this account. " + (error.message || "");
+  if (error.code === "unsupported") return (error.message || "This model cannot take that.") + " Use the model button to choose another.";
   return error.message || "The model did not answer.";
 }
 const fix = (error) => (["no-grant", "limit", "closed"].includes(error.code) ? `<button type="button" class="tiny accent" data-act="choose">${error.code === "closed" ? "Connect again" : "Choose a model"}</button>` : "");
@@ -211,12 +216,17 @@ function paint() {
 function forModel(conversation, upTo) {
   const out = [];
   if (conversation.system.trim()) out.push({ role: "system", content: conversation.system.trim() });
+  const parts = (content) => (typeof content === "string" ? [{ type: "text", text: content }] : content);
   for (const message of conversation.messages) {
     if (message === upTo) break;
-    if (!message.content.trim()) continue;
+    const images = message.role === "user" ? imagesOf(message) : [];
+    if (!message.content.trim() && !images.length) continue;
+    // A message with images is a list of parts: its words, then each image.
+    const content = images.length ? [...(message.content.trim() ? [{ type: "text", text: message.content }] : []), ...images.map((url) => ({ type: "image_url", image_url: { url } }))] : message.content;
     const before = out.at(-1);
-    if (before && before.role === message.role) before.content += "\n\n" + message.content;
-    else out.push({ role: message.role, content: message.content });
+    if (!before || before.role !== message.role) out.push({ role: message.role, content });
+    else if (typeof before.content === "string" && typeof content === "string") before.content += "\n\n" + content;
+    else before.content = [...parts(before.content), ...parts(content)];
   }
   return out;
 }
@@ -262,14 +272,17 @@ async function answer(conversation) {
 async function send() {
   const box = $("prompt");
   const text = box.value.trim();
-  if (!text || busy) return;
+  if ((!text && !attached.length) || busy) return;
   // The router window can only open during a click or a key press, and this is one.
   if (!ai || !ai.ready) { if (!(await choose())) return; }
   box.value = "";
   grow();
+  const images = attached;
+  attached = [];
+  drawAttached();
   const conversation = current;
-  conversation.messages.push({ id: db.newId(), role: "user", content: text, at: Date.now() });
-  if (!conversation.named && conversation.messages.length === 1) conversation.title = text.split("\n")[0].replace(/\s+/g, " ").slice(0, 60) || "New chat";
+  conversation.messages.push({ id: db.newId(), role: "user", content: text, ...(images.length ? { images } : {}), at: Date.now() });
+  if (!conversation.named && conversation.messages.length === 1) conversation.title = text.split("\n")[0].replace(/\s+/g, " ").slice(0, 60) || (images.length ? "An image" : "New chat");
   await keep(conversation);
   if (conversation === current) history.replaceState(null, "", location.pathname + location.search + "#c=" + conversation.id);
   await answer(conversation);
@@ -318,6 +331,84 @@ $("prompt").addEventListener("keydown", (event) => {
 });
 $("composer").addEventListener("submit", (event) => { event.preventDefault(); send(); });
 $("stop").addEventListener("click", () => busy && busy.stop.abort());
+
+// ------------------------------------------------------------------- images
+
+// An image is kept as a data: address, in the message it was sent with. Only
+// these four kinds are sent, and only an address of this shape is ever drawn.
+const IMAGE = /^data:image\/(png|jpeg|gif|webp);base64,[A-Za-z0-9+/=]+$/;
+const MOST_IMAGES = 6;          // in one message
+const LONGEST_SIDE = 1568;      // a model sees no more in a larger picture
+const imagesOf = (message) => (Array.isArray(message.images) ? message.images.filter((url) => typeof url === "string" && IMAGE.test(url)) : []);
+
+const asDataUrl = (blob) => new Promise((resolve, reject) => {
+  const reader = new FileReader();
+  reader.onload = () => resolve(String(reader.result));
+  reader.onerror = () => reject(reader.error);
+  reader.readAsDataURL(blob);
+});
+// A large photo is made smaller before it is kept or sent. A small one is left as it is.
+async function shrink(file) {
+  const known = ["image/png", "image/jpeg", "image/gif", "image/webp"].includes(file.type);
+  const picture = await createImageBitmap(file);
+  const scale = Math.min(1, LONGEST_SIDE / Math.max(picture.width, picture.height));
+  if (known && scale === 1 && file.size <= 1_500_000) { picture.close(); return asDataUrl(file); }
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(picture.width * scale));
+  canvas.height = Math.max(1, Math.round(picture.height * scale));
+  const pen = canvas.getContext("2d");
+  pen.fillStyle = "#fff";     // a see-through picture gets a white ground, since JPEG has none
+  pen.fillRect(0, 0, canvas.width, canvas.height);
+  pen.drawImage(picture, 0, 0, canvas.width, canvas.height);
+  picture.close();
+  const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.86));
+  if (!blob) throw new Error("could not be read");
+  return asDataUrl(blob);
+}
+async function addImages(files) {
+  const pictures = [...files].filter((file) => file.type.startsWith("image/"));
+  if (!pictures.length) return;
+  let failed = 0;
+  for (const file of pictures) {
+    if (attached.length >= MOST_IMAGES) { notice(`A message can carry up to ${MOST_IMAGES} images.`); break; }
+    try {
+      const url = await shrink(file);
+      if (IMAGE.test(url)) attached.push(url); else failed++;
+    } catch { failed++; }
+  }
+  if (failed) notice(failed === 1 ? "One of those could not be read as an image." : `${failed} of those could not be read as images.`);
+  drawAttached();
+  $("prompt").focus();
+}
+function drawAttached() {
+  const row = $("attached");
+  row.hidden = !attached.length;
+  row.innerHTML = attached.map((url, i) => `<span class="thumb"><img src="${esc(url)}" alt="Image ${i + 1} to send"><button type="button" class="quiet" data-drop="${i}" aria-label="Remove image ${i + 1}">×</button></span>`).join("");
+}
+$("attached").addEventListener("click", (event) => {
+  const button = event.target.closest("[data-drop]");
+  if (!button) return;
+  attached.splice(Number(button.dataset.drop), 1);
+  drawAttached();
+});
+$("attach").addEventListener("click", () => $("attach-file").click());
+$("attach-file").addEventListener("change", () => { const files = [...$("attach-file").files]; $("attach-file").value = ""; addImages(files); });
+// An image can be pasted into the message box, or dropped anywhere on the conversation.
+$("prompt").addEventListener("paste", (event) => {
+  const files = [...(event.clipboardData?.files || [])].filter((file) => file.type.startsWith("image/"));
+  if (!files.length) return;
+  event.preventDefault();
+  addImages(files);
+});
+const carriesFiles = (event) => [...(event.dataTransfer?.types || [])].includes("Files");
+$("main").addEventListener("dragover", (event) => { if (carriesFiles(event)) { event.preventDefault(); $("main").classList.add("dropping"); } });
+$("main").addEventListener("dragleave", (event) => { if (!$("main").contains(event.relatedTarget)) $("main").classList.remove("dropping"); });
+$("main").addEventListener("drop", (event) => {
+  if (!carriesFiles(event)) return;
+  event.preventDefault();
+  $("main").classList.remove("dropping");
+  addImages(event.dataTransfer.files);
+});
 
 // ------------------------------------------------------------------ buttons
 
@@ -422,7 +513,11 @@ $("menu-export").addEventListener("click", () => {
   closeMenu();
   const parts = [`# ${current.title}`];
   if (current.system) parts.push(`> Instructions: ${current.system.replace(/\n/g, "\n> ")}`);
-  for (const m of current.messages) if (m.content) parts.push(`**${m.role === "user" ? "You" : who(m)}**\n\n${m.content}`);
+  for (const m of current.messages) {
+    const pictures = m.role === "user" ? imagesOf(m).length : 0;
+    const said = [m.content, pictures ? `_(${pictures === 1 ? "an image" : pictures + " images"})_` : ""].filter(Boolean).join("\n\n");
+    if (said) parts.push(`**${m.role === "user" ? "You" : who(m)}**\n\n${said}`);
+  }
   download(fileName(current.title) + ".md", "text/markdown", parts.join("\n\n") + "\n");
 });
 $("export-all").addEventListener("click", () => {

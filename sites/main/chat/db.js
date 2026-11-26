@@ -6,7 +6,8 @@
 //
 // One record for each conversation:
 //   { id, title, named, created, updated, system, messages: [
-//       { id, role: "user" | "assistant", content, at, model, usage, stopped, error } ] }
+//       { id, role: "user" | "assistant", content, images, at, model, usage, stopped, error } ] }
+//   images:  for a user message, the pictures sent with it, each a data: address
 //   named:   true once the person has typed a title, so it is not replaced
 //   system:  instructions sent before the messages, if any
 //   stopped: the person stopped the answer part way
@@ -50,12 +51,14 @@ export async function remove(id) { await done((await store("readwrite")).delete(
 // left out, and every text is kept as text.
 export function clean(raw) {
   if (!raw || typeof raw !== "object" || !Array.isArray(raw.messages)) return null;
+  const isImage = (url) => typeof url === "string" && url.length < 8 * 1024 * 1024 && /^data:image\/(png|jpeg|gif|webp);base64,[A-Za-z0-9+/=]+$/.test(url);
   const text = (value, most) => (typeof value === "string" ? value.slice(0, most) : "");
   const time = (value) => (Number.isFinite(value) ? value : Date.now());
   const messages = raw.messages
     .filter((m) => m && typeof m === "object" && (m.role === "user" || m.role === "assistant") && typeof m.content === "string")
     .map((m) => ({
       id: newId(), role: m.role, content: m.content, at: time(m.at),
+      ...(m.role === "user" && Array.isArray(m.images) && m.images.some(isImage) ? { images: m.images.filter(isImage).slice(0, 6) } : {}),
       ...(typeof m.model === "string" ? { model: m.model.slice(0, 200) } : {}),
       ...(m.stopped === true ? { stopped: true } : {}),
       ...(m.error && typeof m.error === "object" && typeof m.error.message === "string" ? { error: { message: m.error.message.slice(0, 2000), code: text(m.error.code, 60) || undefined } } : {}),

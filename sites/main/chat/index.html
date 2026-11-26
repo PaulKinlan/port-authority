@@ -72,6 +72,11 @@
       <div class="dock">
         <p class="notice small" id="notice" role="status" hidden></p>
         <form class="composer" id="composer">
+          <div class="attached" id="attached" hidden></div>
+          <button type="button" class="icon quiet attach" id="attach" aria-label="Add an image">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4zM4 16l4.5-4.5 3.5 3.5 3-3 5 5"/><circle cx="9" cy="9" r="1.4"/></svg>
+          </button>
+          <input type="file" id="attach-file" accept="image/png,image/jpeg,image/gif,image/webp" multiple hidden>
           <label class="visually-hidden" for="prompt">Message</label>
           <textarea id="prompt" rows="1" placeholder="Ask anything" autocomplete="off" enterkeyhint="send"></textarea>
           <button type="submit" class="icon send" id="send" aria-label="Send">

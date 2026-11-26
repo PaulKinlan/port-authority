@@ -57,7 +57,8 @@ const refuse = (code, text) => Object.assign(new Error(text), { code });
 // provider, and yield each piece of text. Returns { usage, left } at the end.
 // The API key stays encrypted here: the encrypted copy and the unlock key are
 // passed on together.
-// request: { system, messages, maxTokens, temperature, topP, stop }
+// request: { system, messages, maxTokens, temperature, topP, stop, tools, toolChoice, parallel }
+// The shapes are set out above generate() in providers.js.
 async function* answer(request, budget, signal) {
   if (!grant) throw refuse("no-grant", "This site has no model yet. Ask the person to choose one.");
   if (budget) {
@@ -75,7 +76,7 @@ async function* answer(request, budget, signal) {
   info = allowed.grant;
   let usage = null;
   try {
-    const wanted = { system: request.system, messages: request.messages, maxTokens: request.maxTokens, temperature: request.temperature, topP: request.topP, stop: request.stop };
+    const wanted = { system: request.system, messages: request.messages, maxTokens: request.maxTokens, temperature: request.temperature, topP: request.topP, stop: request.stop, tools: request.tools, toolChoice: request.toolChoice, parallel: request.parallel };
     const pieces = grant.provider === "builtin" ? askOver(builtin, wanted, signal)
       : PROVIDERS[grant.provider] && PROVIDERS[grant.provider].kind
         ? askOver(await callerFor(grant.provider), { account: { provider: grant.provider, model: grant.model, wrap: allowed.wrap, sealed: grant.sealed }, ask: wanted }, signal)
@@ -88,7 +89,7 @@ async function* answer(request, budget, signal) {
     return { usage, left: info.requests - info.used };
   } finally {
     announce();
-    if (usage && (usage.tokensIn || usage.tokensOut)) ask("report", usage).catch(() => {});
+    if (usage && (usage.tokensIn || usage.tokensOut)) ask("report", { tokensIn: usage.tokensIn, tokensOut: usage.tokensOut }).catch(() => {});
   }
 }
 
@@ -101,7 +102,7 @@ async function run(message, reply, budget) {
     for (;;) {
       const { value, done } = await pieces.next();
       if (done) { reply.postMessage({ t: "done", usage: value.usage, left: value.left }); break; }
-      reply.postMessage({ t: "text", text: value });
+      if (typeof value === "string") reply.postMessage({ t: "text", text: value });   // these few messages carry text only
     }
   } catch (error) {
     reply.postMessage({ t: "error", code: error.name === "AbortError" ? "cancelled" : error.code || "provider", message: String(error.message || error) });

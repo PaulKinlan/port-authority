@@ -150,12 +150,52 @@ for await (const chunk of stream) {
 }</pre>
         <ul>
           <li>The person chose the model, so <code>model</code> in the request is ignored. The answer says which model it was.</li>
-          <li>The router reads <code>messages</code>, <code>stream</code>, <code>stream_options.include_usage</code>, <code>max_completion_tokens</code> or <code>max_tokens</code>, <code>temperature</code>, <code>top_p</code> and <code>stop</code>. The browser's built-in model takes no notice of the last three.</li>
-          <li>Messages are text. A request with tools, images, a <code>response_format</code> other than text, or any setting the router does not pass on is refused, and the error names the field. The router does not drop a setting and answer anyway.</li>
+          <li>The router reads <code>messages</code>, <code>stream</code>, <code>stream_options.include_usage</code>, <code>max_completion_tokens</code> or <code>max_tokens</code>, <code>temperature</code>, <code>top_p</code>, <code>stop</code>, <code>tools</code>, <code>tool_choice</code> and <code>parallel_tool_calls</code>. The browser's built-in model takes no notice of <code>temperature</code>, <code>top_p</code> or <code>stop</code>.</li>
+          <li>A <code>response_format</code> other than text, or any setting the router does not pass on, is refused, and the error names the field. The router does not drop a setting and answer anyway.</li>
           <li>The token limit can be up to 4,000. With no limit in the request, the router asks for 600.</li>
           <li>An error has the fields an OpenAI client puts on its errors: <code>status</code>, <code>code</code>, <code>type</code> and <code>param</code>. A site with no grant gets 401. A site that has used its requests gets 429.</li>
           <li>Pass <code>{ signal }</code> as the second argument to stop a request.</li>
-          <li><code>finish_reason</code> is always <code>"stop"</code>. The router is not told when an answer was cut short by the token limit.</li>
+          <li><code>finish_reason</code> is <code>"stop"</code>, or <code>"length"</code> when the answer ran out of tokens, or <code>"tool_calls"</code> when the model is waiting for tools to be run.</li>
+        </ul>
+        <h3 id="images">Images</h3>
+        <p>A user message can carry images beside its words. Each is an <code>image_url</code> part, with an <code>https:</code> address or a <code>data:</code> address of a PNG, JPEG, GIF or WebP. The router sends them on in the shape each provider takes. An image can be up to 8 MB, and a request can carry 20.</p>
+<pre>const answer = await ai.chat.completions.create({
+  messages: [{
+    role: "user",
+    content: [
+      { type: "text", text: "What plant is this?" },
+      { type: "image_url", image_url: { url: photoAsDataUrl } },
+    ],
+  }],
+});</pre>
+        <h3 id="tools">Tools</h3>
+        <p>A request can list tools: functions your site has, each with a name, a description and a JSON Schema for its arguments. If the model wants one run, the answer says so in <code>tool_calls</code>, and <code>finish_reason</code> is <code>"tool_calls"</code>. The router never runs a tool. Your site decides whether to, and sends what came of it back as a <code>tool</code> message.</p>
+<pre>const tools = [{
+  type: "function",
+  function: {
+    name: "stock_of",
+    description: "How many of a flower are in the shop today.",
+    parameters: { type: "object", properties: { flower: { type: "string" } }, required: ["flower"] },
+  },
+}];
+const messages = [{ role: "user", content: "Do you have tulips?" }];
+
+let answer = await ai.chat.completions.create({ messages, tools });
+while (answer.choices[0].finish_reason === "tool_calls") {
+  messages.push(answer.choices[0].message);              <span class="c">// what the model asked for</span>
+  for (const call of answer.choices[0].message.tool_calls) {
+    const result = await stockOf(JSON.parse(call.function.arguments));   <span class="c">// your code runs it</span>
+    messages.push({ role: "tool", tool_call_id: call.id, content: JSON.stringify(result) });
+  }
+  answer = await ai.chat.completions.create({ messages, tools });
+}
+output.textContent = answer.choices[0].message.content;</pre>
+        <ul>
+          <li><code>tool_choice</code> can be <code>"auto"</code>, <code>"none"</code>, <code>"required"</code>, or one function by name. <code>parallel_tool_calls: false</code> asks for one call at a time.</li>
+          <li>In a stream, a call arrives as its name first, and then its arguments in pieces of JSON text, as the Chat Completions API sends them.</li>
+          <li>Every call to <code>create()</code> is one request against the site's limit. So a question that needs a tool costs two: one to be asked for the tool, and one to answer with its result.</li>
+          <li>Only functions are passed on. <code>strict</code> is refused, because not every provider can promise it.</li>
+          <li>The browser's built-in model is given text only. With that model chosen, a request with images or tools is refused, and the error says so.</li>
         </ul>
         <p>The calls are carried by <a href="/comlink/">Hawser</a>, the remote-object library from this site. The first call to <code>create()</code> asks the router's worker for one more port. On that port the worker answers <code>chat.completions.create</code> and nothing else. A port from <code>lend()</code> can do the same, inside its own limit.</p>
       </section>
@@ -374,8 +414,8 @@ for await (const chunk of stream) {
           <li>Your key is visible in your own browser's network tools when the call page calls the provider. Other sites still can't see it.</li>
           <li>Limits are counted in requests and days, not money. A site with 20 requests can still send 20 long prompts.</li>
           <li>The site sees every answer. The router controls who pays and how much. It does not control what the site does with the text.</li>
-          <li>The Anthropic path was tested against a stand-in server, not with a real key. The OpenAI, OpenRouter, Gemini and Ollama paths have not been run at all yet. Only Chromium has been tested.</li>
-          <li>There is no tool calling and no images yet. Prompts and answers are text.</li>
+          <li>The Anthropic and OpenAI paths were tested against stand-in servers, not with real keys. That includes images and tool calls. OpenRouter, Gemini and Ollama use the same code as OpenAI, and have not been run at all yet. Only Chromium has been tested.</li>
+          <li>Images and tool calls are passed on, and nothing else yet. There is no sound and no file going in, no image coming out, and no promise that an answer is JSON that fits a schema.</li>
         </ul>
       </section>
     </main>

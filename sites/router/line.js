@@ -1,7 +1,8 @@
 // Ask over a port that speaks the router's few messages, and yield the answer.
 //
 // The request goes in with a new port for the reply. The reply port then
-// carries { t: "text", text } for each piece, and ends with { t: "done", usage }
+// carries { t: "text", text } for each piece of text and { t: "tool", tool }
+// for each piece of a tool call, and ends with { t: "done", usage }
 // or { t: "error", code, message }. Posting { t: "cancel" } on it stops the work.
 // Works in a page and in a worker.
 export async function* askOver(port, request, signal) {
@@ -11,6 +12,7 @@ export async function* askOver(port, request, signal) {
   line.port1.onmessage = (event) => {
     const m = event.data || {};
     if (m.t === "text") queue.push(m.text);
+    else if (m.t === "tool") queue.push({ tool: m.tool });
     else if (m.t === "done") { finished = true; usage = m.usage || null; }
     else if (m.t === "error") { finished = true; failure = Object.assign(new Error(m.message), { code: m.code }); }
     wake?.(); wake = null;

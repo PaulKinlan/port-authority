@@ -152,9 +152,11 @@ function channel() {
     // request in, and the same completion object out, or with stream: true
     // something you can `for await` over for the same chunks. The person
     // chose the model, so `model` in the request is ignored and the answer
-    // says which model it was. Text only: a request that asks for tools,
-    // images or a setting the router does not pass on is refused, not
-    // quietly changed. Pass { signal } as the second argument to stop it.
+    // says which model it was. A user message can carry images, and the
+    // request can list tools: the answer then names the calls the model
+    // wants made, and this site decides whether to make them. A setting the
+    // router does not pass on is refused, not quietly dropped. Pass
+    // { signal } as the second argument to stop it.
     chat: {
       completions: {
         async create(body, options = {}) {

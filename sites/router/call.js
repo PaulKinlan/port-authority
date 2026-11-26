@@ -32,7 +32,7 @@ function serve(port) {
       for (;;) {
         const { value, done } = await pieces.next();
         if (done) { reply.postMessage({ t: "done", usage: value }); break; }
-        reply.postMessage({ t: "text", text: value });
+        reply.postMessage(typeof value === "string" ? { t: "text", text: value } : { t: "tool", tool: value.tool });
       }
     } catch (error) {
       reply.postMessage({ t: "error", code: error.name === "AbortError" ? "cancelled" : error.code || "provider", message: String(error.message || error) });

@@ -13,18 +13,18 @@ test.afterEach(() => { for (const p of open) p.close(); open.clear(); });
 
 // A stand-in for the worker: it answers in three pieces, a little apart, and
 // records what it was asked and whether it was stopped.
-function model({ fail = null, pause = 5 } = {}) {
+function model({ fail = null, pause = 5, pieces = ["Dear Ada, ", "well done ", "on passing."], finish = undefined } = {}) {
   const log = { asks: [], stopped: 0, finished: 0 };
   async function* answer(ask, signal) {
     log.asks.push(ask);
     if (fail) throw Object.assign(new Error(fail.message), { code: fail.code });
     try {
-      for (const piece of ["Dear Ada, ", "well done ", "on passing."]) {
+      for (const piece of pieces) {
         await sleep(pause);
         if (signal.aborted) throw signal.reason;
         yield piece;
       }
-      return { usage: { tokensIn: 21, tokensOut: 9 } };
+      return { usage: { tokensIn: 21, tokensOut: 9, ...(finish ? { finish } : {}) } };
     } finally { log.finished++; if (signal.aborted) log.stopped++; }
   }
   const { port1, port2 } = new MessageChannel();
@@ -88,14 +88,35 @@ test("a request the router cannot honour is refused by name, and the model is no
   const { api, log } = model();
   const refused = async (body) => (await api.chat.completions.create(body)).error;
   for (const [body, param, code] of [
-    [{ messages: hello, tools: [{ type: "function", function: { name: "f" } }] }, "tools", "unsupported"],
+    [{ messages: hello, tools: [{ type: "web_search" }] }, "tools[0].type", "unsupported"],
+    [{ messages: hello, tools: [{ type: "function", function: { name: "f", strict: true } }] }, "tools[0].function.strict", "unsupported"],
+    [{ messages: hello, tools: [{ type: "function", function: { name: "not a name!" } }] }, "tools[0].function.name", "invalid"],
+    [{ messages: hello, tools: [{ type: "function", function: { name: "f" } }, { type: "function", function: { name: "f" } }] }, "tools[1].function.name", "invalid"],
+    [{ messages: hello, tools: [{ type: "function", function: { name: "f", parameters: "string" } }] }, "tools[0].function.parameters", "invalid"],
+    [{ messages: hello, tools: "f" }, "tools", "invalid"],
+    [{ messages: hello, tool_choice: "auto" }, "tool_choice", "invalid"],
+    [{ messages: hello, tools: [{ type: "function", function: { name: "f" } }], tool_choice: { type: "function", function: { name: "g" } } }, "tool_choice", "invalid"],
+    [{ messages: hello, tools: [{ type: "function", function: { name: "f" } }], tool_choice: "sometimes" }, "tool_choice", "invalid"],
+    [{ messages: hello, tools: [{ type: "function", function: { name: "f" } }], parallel_tool_calls: "yes" }, "parallel_tool_calls", "invalid"],
+    [{ messages: hello, functions: [{ name: "f" }] }, "functions", "unsupported"],
     [{ messages: hello, response_format: { type: "json_object" } }, "response_format", "unsupported"],
     [{ messages: hello, n: 2 }, "n", "unsupported"],
     [{ messages: hello, seed: 7 }, "seed", "unsupported"],
     [{ messages: hello, frequency_penalty: 0.5 }, "frequency_penalty", "unsupported"],
-    [{ messages: [{ role: "user", content: [{ type: "image_url", image_url: { url: "https://example.com/a.png" } }] }] }, "messages[0].content[0]", "unsupported"],
-    [{ messages: [...hello, { role: "tool", tool_call_id: "1", content: "4" }] }, "messages[1]", "unsupported"],
-    [{ messages: [{ role: "assistant", content: null, tool_calls: [] }] }, "messages[0]", "unsupported"],
+    [{ messages: [{ role: "user", content: [{ type: "image_url", image_url: { url: "http://example.com/a.png" } }] }] }, "messages[0].content[0].image_url.url", "invalid"],
+    [{ messages: [{ role: "user", content: [{ type: "image_url", image_url: { url: "data:text/html;base64,PHNjcmlwdD4=" } }] }] }, "messages[0].content[0].image_url.url", "invalid"],
+    [{ messages: [{ role: "user", content: [{ type: "image_url", image_url: { url: "javascript:alert(1)" } }] }] }, "messages[0].content[0].image_url.url", "invalid"],
+    [{ messages: [{ role: "user", content: [{ type: "image_url", image_url: "https://example.com/a.png" }] }] }, "messages[0].content[0].image_url.url", "invalid"],
+    [{ messages: [{ role: "user", content: [{ type: "input_audio", input_audio: { data: "AAAA", format: "wav" } }] }] }, "messages[0].content[0]", "unsupported"],
+    [{ messages: [{ role: "system", content: [{ type: "image_url", image_url: { url: "https://example.com/a.png" } }] }, ...hello] }, "messages[0].content[0]", "unsupported"],
+    [{ messages: [...hello, { role: "assistant", content: [{ type: "image_url", image_url: { url: "https://example.com/a.png" } }] }] }, "messages[1].content[0]", "unsupported"],
+    [{ messages: [{ role: "user", content: Array.from({ length: 21 }, () => ({ type: "image_url", image_url: { url: "https://example.com/a.png" } })) }] }, "messages[0].content[20]", "invalid"],
+    [{ messages: [...hello, { role: "tool", content: "4" }] }, "messages[1].tool_call_id", "invalid"],
+    [{ messages: [...hello, { role: "function", name: "f", content: "4" }] }, "messages[1]", "unsupported"],
+    [{ messages: [...hello, { role: "assistant", content: null, function_call: { name: "f", arguments: "{}" } }] }, "messages[1]", "unsupported"],
+    [{ messages: [{ role: "assistant", content: null, tool_calls: [] }] }, "messages[0].content", "invalid"],
+    [{ messages: [...hello, { role: "assistant", content: null, tool_calls: [{ id: "c1", type: "function", function: { name: "f", arguments: { a: 1 } } }] }] }, "messages[1].tool_calls[0]", "invalid"],
+    [{ messages: [...hello, { role: "assistant", content: null, tool_calls: "c1" }] }, "messages[1].tool_calls", "invalid"],
     [{ messages: [] }, "messages", "invalid"],
     [{}, "messages", "invalid"],
     [{ messages: [{ role: "system", content: "Only a system message" }] }, "messages", "invalid"],
@@ -131,6 +152,13 @@ test("a function or an object sent by reference is never called, only refused", 
     { messages: hello, temperature: trap },
     { messages: hello, stream: trap },
     { messages: hello, response_format: trap },
+    { messages: hello, tools: trap },
+    { messages: hello, tools: [{ type: "function", function: trap }] },
+    { messages: hello, tools: [{ type: "function", function: { name: "f", parameters: { type: "object", properties: { a: trap } } } }] },
+    { messages: hello, tools: [{ type: "function", function: { name: "f", parameters: share(new Sneaky()) } }] },
+    { messages: hello, tools: [{ type: "function", function: { name: "f" } }], tool_choice: trap },
+    { messages: [{ role: "user", content: [{ type: "image_url", image_url: { url: trap } }] }] },
+    { messages: [...hello, { role: "assistant", content: null, tool_calls: [trap] }] },
   ]) {
     const answer = await api.chat.completions.create(body);
     assert.equal(answer.error && answer.error.status, 400, Object.keys(body).join());
@@ -199,4 +227,91 @@ test("readRequest: what is left out stays left out", () => {
   assert.deepEqual(request, { stream: false, includeUsage: false, ask: { system: "", messages: hello, maxTokens: undefined, temperature: undefined, topP: undefined, stop: undefined } });
   assert.equal(readRequest({ messages: hello, max_tokens: 50 }).ask.maxTokens, 50);
   assert.deepEqual(readRequest({ messages: hello, stop: ["a", "b"], temperature: null, tools: null }).ask.stop, ["a", "b"]);
+});
+
+// ---- tools and images
+
+const weather = { type: "function", function: { name: "get_weather", description: "The weather in a town.", parameters: { type: "object", properties: { town: { type: "string" } }, required: ["town"] } } };
+const PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg==";
+
+test("readRequest: tools, a tool choice, images and the results of tool calls", () => {
+  const { ask } = readRequest({
+    tools: [weather, { type: "function", function: { name: "now" } }], tool_choice: { type: "function", function: { name: "get_weather" } }, parallel_tool_calls: false,
+    messages: [
+      { role: "user", content: [{ type: "text", text: "What is this, and what is the weather there?" }, { type: "image_url", image_url: { url: PNG, detail: "low" } }, { type: "image_url", image_url: { url: "https://example.com/a.jpg" } }] },
+      { role: "assistant", content: null, tool_calls: [{ id: "call_1", type: "function", function: { name: "get_weather", arguments: '{"town":"Hull"}' } }] },
+      { role: "tool", tool_call_id: "call_1", content: [{ type: "text", text: "Rain, " }, { type: "text", text: "9 degrees" }] },
+      { role: "assistant", content: "It is raining in Hull." },
+    ],
+  });
+  assert.deepEqual(ask.tools, [{ name: "get_weather", description: "The weather in a town.", parameters: weather.function.parameters }, { name: "now" }]);
+  assert.deepEqual(ask.toolChoice, { name: "get_weather" });
+  assert.equal(ask.parallel, false);
+  assert.deepEqual(ask.messages, [
+    { role: "user", content: [{ type: "text", text: "What is this, and what is the weather there?" }, { type: "image", url: PNG }, { type: "image", url: "https://example.com/a.jpg" }] },
+    { role: "assistant", content: "", toolCalls: [{ id: "call_1", name: "get_weather", arguments: '{"town":"Hull"}' }] },
+    { role: "tool", id: "call_1", content: "Rain, 9 degrees" },
+    { role: "assistant", content: "It is raining in Hull." },
+  ]);
+  for (const choice of ["auto", "none", "required"]) assert.equal(readRequest({ messages: hello, tools: [weather], tool_choice: choice }).ask.toolChoice, choice);
+  // With no tools there is nothing about tools in what the worker is asked.
+  assert.deepEqual(Object.keys(readRequest({ messages: hello }).ask).sort(), ["maxTokens", "messages", "stop", "system", "temperature", "topP"]);
+});
+
+test("a tool call comes back as tool_calls on the message, with finish_reason tool_calls", async () => {
+  const pieces = [
+    "Let me look. ",
+    { tool: { index: 0, id: "toolu_1", name: "get_weather", arguments: "" } }, { tool: { index: 0, arguments: '{"town":' } }, { tool: { index: 0, arguments: '"Hull"}' } },
+    { tool: { index: 1, id: "toolu_2", name: "now", arguments: "" } },
+  ];
+  const { api, log } = model({ pieces, finish: "tool_calls" });
+  const answer = await api.chat.completions.create({ messages: hello, tools: [weather, { type: "function", function: { name: "now" } }] });
+  assert.deepEqual(answer.choices[0], {
+    index: 0, logprobs: null, finish_reason: "tool_calls",
+    message: { role: "assistant", content: "Let me look. ", refusal: null, tool_calls: [
+      { id: "toolu_1", type: "function", function: { name: "get_weather", arguments: '{"town":"Hull"}' } },
+      { id: "toolu_2", type: "function", function: { name: "now", arguments: "{}" } },
+    ] },
+  });
+  assert.deepEqual(log.asks[0].tools.map((t) => t.name), ["get_weather", "now"]);
+
+  // With no words before the calls, content is null, as the API has it.
+  const quiet = model({ pieces: pieces.slice(1), finish: "tool_calls" });
+  const silent = await quiet.api.chat.completions.create({ messages: hello, tools: [weather, { type: "function", function: { name: "now" } }] });
+  assert.equal(silent.choices[0].message.content, null);
+  assert.equal(silent.choices[0].message.tool_calls.length, 2);
+});
+
+test("in a stream, a tool call arrives as its name and then its arguments in pieces", async () => {
+  const { api } = model({ pieces: [{ tool: { index: 0, id: "toolu_1", name: "get_weather", arguments: "" } }, { tool: { index: 0, arguments: '{"town":' } }, { tool: { index: 0, arguments: '"Hull"}' } }], finish: "tool_calls" });
+  const deltas = [];
+  let finish = null;
+  for await (const chunk of await api.chat.completions.create({ messages: hello, tools: [weather], stream: true })) { deltas.push(chunk.choices[0].delta); finish = chunk.choices[0].finish_reason || finish; }
+  assert.deepEqual(deltas, [
+    { role: "assistant", content: "" },
+    { tool_calls: [{ index: 0, id: "toolu_1", type: "function", function: { name: "get_weather", arguments: "" } }] },
+    { tool_calls: [{ index: 0, function: { arguments: '{"town":' } }] },
+    { tool_calls: [{ index: 0, function: { arguments: '"Hull"}' } }] },
+    {},
+  ]);
+  assert.equal(finish, "tool_calls");
+  // Put together the way a client does, the arguments are the JSON that was sent.
+  assert.deepEqual(JSON.parse(deltas.flatMap((d) => d.tool_calls || []).map((c) => c.function.arguments).join("")), { town: "Hull" });
+});
+
+test("finish_reason says when an answer ran out of tokens", async () => {
+  const cut = model({ finish: "length" });
+  assert.equal((await cut.api.chat.completions.create({ messages: hello })).choices[0].finish_reason, "length");
+  const chunks = [];
+  for await (const chunk of await model({ finish: "length" }).api.chat.completions.create({ messages: hello, stream: true })) chunks.push(chunk);
+  assert.equal(chunks.at(-1).choices[0].finish_reason, "length");
+  // A worker that says nothing, or something odd, about why it stopped is taken to have stopped.
+  assert.equal((await model({ finish: "exploded" }).api.chat.completions.create({ messages: hello })).choices[0].finish_reason, "stop");
+});
+
+test("an odd piece from the worker is left out, not passed on", async () => {
+  const { api } = model({ pieces: ["a", { tool: { index: -1, name: "x" } }, { tool: { index: 9999, name: "x" } }, { tool: "x" }, { other: true }, 7, null, "b"] });
+  const answer = await api.chat.completions.create({ messages: hello });
+  assert.equal(answer.choices[0].message.content, "ab");
+  assert.equal(answer.choices[0].message.tool_calls, undefined);
 });
