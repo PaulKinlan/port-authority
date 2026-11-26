@@ -132,9 +132,9 @@ repository and runs one deploy per Worker on every push to `main`:
 All five run `src/worker.js` and carry the whole `sites/` folder as static
 assets; the script picks the folder by hostname. The three demo sites use the
 main Worker's Durable Objects (hub, lab, meeting point), so `portauthority`
-has to exist before they deploy. `pa-router` still has a Router class of its own from
-when the router kept grants on the server. Nothing reaches it now (`/r/` answers 410).
-It is kept only because deleting the class deletes what it stored, for good.
+has to exist before they deploy. `pa-router` has no Durable Object: the router keeps
+nothing on a server. The Router class that once kept grants there was deleted by a
+migration, with what it stored, and `/r/` answers 410.
 
 A build's log is in the Cloudflare dashboard under the Worker, in Deployments.
 A new Worker name needs a file in `deploy/` and a build trigger on Cloudflare.

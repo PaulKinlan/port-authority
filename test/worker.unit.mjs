@@ -1,8 +1,9 @@
-// Unit tests for Hub and Router Durable Objects in src/worker.js.
+// Unit tests for the Hub Durable Object in src/worker.js, and for what the Worker sends for the AI router's pages.
 //   node --test test/worker.unit.mjs
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import worker, { Hub, Router } from "../src/worker.js";
+import worker, * as everything from "../src/worker.js";
+const { Hub } = everything;
 
 function memoryStorage() {
   const map = new Map();
@@ -56,36 +57,6 @@ function makeHub() {
   };
   return { hub, attach, state };
 }
-
-test("Router allows more than 200 lifetime grants when old ones are revoked or replaced", async () => {
-  const router = new Router({ storage: memoryStorage() });
-  const owner = "owner-secret-key-at-least-20-chars";
-  const secret = "grant-secret-key-at-least-20-chars";
-  const call = (action, body) => router.fetch(new Request(`https://router.example/r/person1234567890/${action}`, {
-    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body),
-  })).then((r) => r.json());
-
-  // Weak secret must not revoke an existing active grant for the same site.
-  const first = await call("grant", { owner, secret, site: "https://a.example", label: "k", provider: "anthropic", model: "m" });
-  assert.equal(first.ok, true);
-  const weak = await call("grant", { owner, secret: "short", site: "https://a.example", label: "k", provider: "anthropic", model: "m" });
-  assert.equal(weak.ok, false);
-  const stillActive = await call("status", { id: first.id, secret });
-  assert.equal(stillActive.ok, true);
-
-  // Create 205 grants by replacing/revoking; inactive history is pruned so it never locks out.
-  for (let i = 0; i < 205; i++) {
-    const made = await call("grant", { owner, secret, site: `https://site-${i}.example`, label: "k", provider: "anthropic", model: "m" });
-    assert.equal(made.ok, true, `grant ${i} failed: ${made.why}`);
-    if (i < 200) {
-      const rev = await call("revoke", { owner, id: made.id });
-      assert.equal(rev.ok, true);
-    }
-  }
-  const listed = await call("list", { owner });
-  assert.equal(listed.ok, true);
-  assert.ok(listed.grants.length <= 200);
-});
 
 test("Hub routes ACP session/request_permission to the owner, not the requesting site", async () => {
   const { hub, attach } = makeHub();
@@ -209,6 +180,10 @@ const policy = async (path) => {
   const header = (await worker.fetch(new Request("https://llmchannel.dev" + path), routerEnv())).headers.get("content-security-policy") || "";
   return Object.fromEntries(header.split("; ").map((part) => [part.split(" ")[0], part.split(" ").slice(1).join(" ")]));
 };
+
+test("the class that kept the router's grants on the server is gone", () => {
+  assert.equal("Router" in everything, false);
+});
 
 test("the router has no server: the address that kept grants answers that it has gone", async () => {
   let reached = false;

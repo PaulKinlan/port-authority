@@ -221,11 +221,13 @@ export default {
       return env.MEET.get(env.MEET.idFromName(code)).fetch(request);
     }
 
-    // /r/ was the AI router's list of grants, kept on this server. The router
-    // no longer has a server: a grant is kept in the person's browser, and
-    // nothing is asked here. The address answers that it has gone.
+    // /r/ was the AI router's list of grants, kept on this server in a Durable
+    // Object. The router no longer has a server: a grant is kept in the
+    // person's browser (sites/router/grants.js), and nothing is asked here.
+    // The class that kept the list has been deleted, with everything it
+    // stored. The address answers that it has gone.
     if (url.pathname.startsWith("/r/") && site === "router") {
-      return new Response("The AI router no longer keeps anything on a server.", { status: 410, headers: { "content-type": TYPES.txt, "cache-control": "no-store" } });
+      return new Response("The AI router keeps nothing on a server. What was kept here has been deleted.", { status: 410, headers: { "content-type": TYPES.txt, "cache-control": "no-store" } });
     }
 
     // The lab's results: every browser that runs the lab reports what it saw.
@@ -930,88 +932,4 @@ export class Meet {
   }
 
   webSocketClose(ws) { try { ws.close(1000); } catch (err) {} }
-}
-
-// ------------------------------------------------------------ the AI router
-
-// NOT USED ANY MORE. Nothing reaches this class: /r/ answers 410 above, and the
-// router's pages are not allowed to connect to this server at all. A grant is
-// now kept in the person's browser (sites/router/grants.js).
-//
-// The class is still here because Cloudflare keeps what it stored until the
-// class is deleted by a migration, and deleting it cannot be undone. What it
-// stored, for each person who used the router before: the list of sites they
-// allowed, the account and model names, the counts, and an unlock key for each
-// grant. It never held an API key or a prompt.
-//
-// What it did: one per person. It held the list of grants. For each grant it
-// kept an unlock key. The router frame inside a site stored the API key
-// encrypted with it, and had to ask for it again on every request.
-export class Router {
-  constructor(state) { this.storage = state.storage; }
-
-  async fetch(request) {
-    const action = new URL(request.url).pathname.split("/")[3];
-    let body;
-    try { body = await request.json(); } catch { return Response.json({ ok: false, why: "bad request" }, { status: 400 }); }
-    const grants = (await this.storage.get("grants")) || {};
-    const save = () => this.storage.put("grants", grants);
-    const state = (g) => g.revoked ? "revoked" : Date.now() > g.expires ? "expired" : g.used >= g.requests ? "used up" : "active";
-    const view = (g) => ({ id: g.id, site: g.site, label: g.label, provider: g.provider, model: g.model, requests: g.requests, used: g.used, tokensIn: g.tokensIn, tokensOut: g.tokensOut, made: g.made, expires: g.expires, last: g.last, state: state(g) });
-
-    if (action === "grant" || action === "list" || action === "revoke") {
-      // The first owner key presented claims this store. After that only that key opens it.
-      const key = String(body.owner || "");
-      const have = await this.storage.get("owner");
-      const mine = await sha(key);
-      if (!have) { if (key.length < 20) return Response.json({ ok: false, why: "weak key" }, { status: 403 }); await this.storage.put("owner", mine); }
-      else if (have !== mine) return Response.json({ ok: false, why: "wrong key" }, { status: 403 });
-
-      if (action === "list") return Response.json({ ok: true, grants: Object.values(grants).sort((a, b) => b.made - a.made).map(view) });
-      if (action === "revoke") {
-        const g = grants[body.id];
-        if (g) { g.revoked = true; delete g.wrap; await save(); }
-        return Response.json({ ok: true });
-      }
-      let site;
-      try { site = new URL(String(body.site)).origin; } catch { return Response.json({ ok: false, why: "bad site" }, { status: 400 }); }
-      if (String(body.secret || "").length < 20) return Response.json({ ok: false, why: "weak secret" }, { status: 400 });
-      const active = Object.values(grants).filter((g) => g.site !== site && state(g) === "active");
-      if (active.length >= 200) return Response.json({ ok: false, why: "too many grants, revoke some first" }, { status: 400 });
-      // One live grant per site: a new one replaces the old.
-      for (const old of Object.values(grants)) if (old.site === site && !old.revoked) { old.revoked = true; delete old.wrap; }
-      // Keep stored history bounded at 200 entries by pruning the oldest inactive grants first.
-      const inactive = Object.values(grants).filter((g) => state(g) !== "active").sort((a, b) => a.made - b.made);
-      while (Object.keys(grants).length >= 200 && inactive.length) delete grants[inactive.shift().id];
-      const clamp = (n, lo, hi, d) => Math.min(hi, Math.max(lo, Math.round(Number(n)) || d));
-      const g = {
-        id: rand(9), secret: await sha(String(body.secret || "")), wrap: rand(32), site,
-        label: String(body.label || "").slice(0, 80), provider: String(body.provider || "").slice(0, 24), model: String(body.model || "").slice(0, 80),
-        requests: clamp(body.requests, 1, 100000, 20), used: 0, tokensIn: 0, tokensOut: 0,
-        made: Date.now(), expires: Date.now() + clamp(body.days, 1, 365, 7) * 86400000, last: 0,
-      };
-      grants[g.id] = g;
-      await save();
-      return Response.json({ ok: true, id: g.id, wrap: g.wrap, grant: view(g) });
-    }
-
-    // The rest are asked by the router frame inside a site, which proves it
-    // holds the grant by its secret.
-    const g = grants[body.id];
-    if (!g || g.secret !== (await sha(String(body.secret || "")))) return Response.json({ ok: false, why: "unknown grant" });
-    if (action === "status") return Response.json({ ok: state(g) === "active", why: state(g), grant: view(g) });
-    if (action === "use") {
-      if (state(g) !== "active") return Response.json({ ok: false, why: state(g), grant: view(g) });
-      g.used++; g.last = Date.now();
-      await save();
-      return Response.json({ ok: true, wrap: g.wrap, grant: view(g) });
-    }
-    if (action === "report") {
-      g.tokensIn += Math.max(0, Math.round(Number(body.tokensIn)) || 0);
-      g.tokensOut += Math.max(0, Math.round(Number(body.tokensOut)) || 0);
-      await save();
-      return Response.json({ ok: true });
-    }
-    return Response.json({ ok: false, why: "unknown action" }, { status: 404 });
-  }
 }

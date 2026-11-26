@@ -1,6 +1,8 @@
 {
   // The AI router's origin: the same script and files as the main site, under
-  // its own Worker name. It keeps the list of grants in a Router class of its own.
+  // its own Worker name. It keeps nothing: the router has no server side. It used
+  // to keep the list of grants in a Router class of its own. Migration r2
+  // deleted that class, and everything it had stored.
   "name": "pa-router",
   "main": "../src/worker.js",
   "compatibility_date": "2026-10-01",
@@ -20,6 +22,8 @@
   // workers.dev address still answers as the router, so that keys someone
   // saved there can still be removed.
   "vars": { "MAIN_HOST": "port-authority.dev", "ROUTER_HOST": "llmchannel.dev", "DEMO_SUFFIX": ".kinlan-test.workers.dev" },
-  "durable_objects": { "bindings": [{ "name": "ROUTER", "class_name": "Router" }] },
-  "migrations": [{ "tag": "r1", "new_sqlite_classes": ["Router"] }]
+  "migrations": [
+    { "tag": "r1", "new_sqlite_classes": ["Router"] },
+    { "tag": "r2", "deleted_classes": ["Router"] }
+  ]
 }

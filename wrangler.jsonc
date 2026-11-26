@@ -28,14 +28,15 @@
   // sites stay on workers.dev. Every Worker has the same three settings,
   // because each one tells its pages where the other sites are.
   "vars": { "MAIN_HOST": "port-authority.dev", "ROUTER_HOST": "llmchannel.dev", "DEMO_SUFFIX": ".kinlan-test.workers.dev" },
-  // ROUTER is here for local development. In production only pa-router answers
-  // /r/, with its own Router class (deploy/router.jsonc).
-  "durable_objects": { "bindings": [{ "name": "HUB", "class_name": "Hub" }, { "name": "LAB", "class_name": "Lab" }, { "name": "MEET", "class_name": "Meet" }, { "name": "ROUTER", "class_name": "Router" }] },
+  // There was a Router class here too, for the AI router's list of grants. The
+  // router keeps nothing on a server now, and migration v6 deleted the class.
+  "durable_objects": { "bindings": [{ "name": "HUB", "class_name": "Hub" }, { "name": "LAB", "class_name": "Lab" }, { "name": "MEET", "class_name": "Meet" }] },
   "migrations": [
     { "tag": "v1", "new_sqlite_classes": ["Relay"] },
     { "tag": "v2", "new_sqlite_classes": ["Hub"], "deleted_classes": ["Relay"] },
     { "tag": "v3", "new_sqlite_classes": ["Lab"] },
     { "tag": "v4", "new_sqlite_classes": ["Meet"] },
-    { "tag": "v5", "new_sqlite_classes": ["Router"] }
+    { "tag": "v5", "new_sqlite_classes": ["Router"] },
+    { "tag": "v6", "deleted_classes": ["Router"] }
   ]
 }
