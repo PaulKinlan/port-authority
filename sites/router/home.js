@@ -4,7 +4,7 @@ import { sites } from "/_sites.js";
 import { PROVIDERS, generate } from "/providers.js";
 import { openCaller } from "/caller.js";
 import { askOver } from "/line.js";
-import { accounts, removeAccount, allowed, stopped } from "/store.js";
+import { accounts, removeAccount, secretOf, allowed, stopped } from "/store.js";
 import { all as keptHere, remove as deleteHere, stateOf } from "/grants.js";
 import { accountForm } from "/account-form.js";
 import "/keep.js";
@@ -32,7 +32,7 @@ if (location.hash === "#add") { $("add").open = true; $("label").focus(); }
 function drawAccounts() {
   const all = accounts();
   $("accounts").innerHTML = all.length ? all.map((a) => `<li data-id="${esc(a.id)}">
-    <span><strong>${esc(a.label)}</strong><br><span class="small muted">${esc(PROVIDERS[a.provider].name)} · ${esc(a.models.join(", "))} ${a.key ? " · key ends " + esc(a.key.slice(-4)) : ""}</span><br><span class="small" data-result></span></span>
+    <span><strong>${esc(a.label)}</strong><br><span class="small muted">${esc(PROVIDERS[a.provider].name)} · ${esc(a.models.join(", "))} ${a.ends ? " · key ends " + esc(a.ends) : ""}</span><br><span class="small" data-result></span></span>
     <span class="actions"><button class="tiny quiet" data-test>Test</button><button class="tiny quiet" data-remove>Remove</button></span></li>`).join("")
     : `<li class="muted">None yet. A site can only use an account you add here.</li>`;
 }
@@ -48,7 +48,7 @@ $("accounts").onclick = async (event) => {
     const using = allowed().filter((a) => !a.stopped && !a.gone && Date.now() < a.expires && a.label === account.label && a.provider === account.provider);
     const warning = using.length ? ` ${using.length === 1 ? "One site you allowed" : using.length + " sites you allowed"} may still be using it: ${using.map((a) => a.site.replace(/^https?:\/\//, "")).join(", ")}. Removing it here does not stop them. They stop when their limit runs out, or when you stop them from the site, or when you cancel the key at the provider.` : "";
     if (!confirm(`Remove "${account.label}" from this browser?${warning}`)) return;
-    removeAccount(account.id);
+    await removeAccount(account.id);
     drawAccounts();
     return;
   }
@@ -67,7 +67,10 @@ $("accounts").onclick = async (event) => {
       // connect to this account's provider and to nowhere else.
       const opened = PROVIDERS[account.provider].kind ? await openCaller(account.provider) : null;
       try {
-        const pieces = opened ? askOver(opened.port, { account: { provider: account.provider, model, key: account.key }, ask }) : generate({ ...account, model }, ask);
+        // The key goes to the caller as it is kept: encrypted, with the key that opens it. This page does not open it.
+        const secret = opened ? await secretOf(account.id) : null;
+        const how = !secret ? {} : secret.plain ? { key: secret.plain } : { sealed: secret.sealed, opens: secret.key };
+        const pieces = opened ? askOver(opened.port, { account: { provider: account.provider, model, ...how }, ask }) : generate({ ...account, model }, ask);
         for await (const piece of pieces) { text += piece; out.textContent = "It answered: " + text; }
       } finally { if (opened) opened.close(); }
     } catch (error) {

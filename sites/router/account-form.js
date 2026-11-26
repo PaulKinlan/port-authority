@@ -2,7 +2,7 @@
 //
 // Only the router's own page has it. A key is typed there and nowhere else:
 // never in the window a site opens, and never in a frame. The account is saved
-// in this browser, in the router's own storage.
+// in this browser, in the router's own storage, with the key encrypted.
 
 import { PROVIDERS } from "/providers.js";
 import { saveAccount, random } from "/store.js";
@@ -39,7 +39,7 @@ export function accountForm(form, onSaved) {
   field("provider").onchange = providerChanged;
   providerChanged();
 
-  form.onsubmit = (event) => {
+  form.onsubmit = async (event) => {
     event.preventDefault();
     const provider = field("provider").value;
     const p = PROVIDERS[provider];
@@ -49,8 +49,10 @@ export function accountForm(form, onSaved) {
     if (!label) { say("Enter a name for this account.", true); field("label").focus(); return; }
     if (p.needsKey && !key) { say("Enter an API key for " + p.name + ".", true); field("key").focus(); return; }
     if (!models.length) { say("Enter at least one model name.", true); field("models").focus(); return; }
-    const account = { id: random(6), provider, label, key, models };
-    saveAccount(account);
+    // The key is encrypted as it is saved. From here on it is not kept anywhere as text.
+    const account = { id: random(6), provider, label, models };
+    try { await saveAccount(account, key); }
+    catch (error) { say("That could not be saved: " + (error.message || error), true); return; }
     form.reset();
     providerChanged();
     say("Account saved.");

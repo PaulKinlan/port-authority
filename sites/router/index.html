@@ -32,12 +32,12 @@
       </div>
 
       <aside class="notice stack" aria-label="Before you add an API key">
-        <p class="small muted"><strong>Experimental &amp; local storage note:</strong> API keys added here are stored in plaintext in this browser's <code>localStorage</code> for this origin. They are not sent to a server: the router has none. This is an experiment—if you test with a real provider key, use a low-limit or easily revocable key.</p>
+        <p class="small muted"><strong>Experimental:</strong> API keys added here are kept encrypted in this browser, beside a key that the browser will use and will not export. They are not sent to a server: the router keeps nothing on one. Someone who can read this browser's files on your computer could still recover a key. This is an experiment, so if you test with a real provider key, use a low-limit or easily revocable key.</p>
       </aside>
 
       <section class="panel stack">
         <h2>Your accounts</h2>
-        <p class="small muted">Keys stay in this browser's storage for this address and are sent only to the provider they belong to. The browser enforces that. Each call is made by a page that is allowed to connect to one address at one provider, and to nothing else.</p>
+        <p class="small muted">Keys stay in this browser's storage for this address and are sent only to the provider they belong to. The browser enforces that. Each call is made by a worker that is allowed to connect to one address at one provider, and to nothing else.</p>
         <ul class="rows" id="accounts"></ul>
         <details id="add">
           <summary class="button quiet">Add an account</summary>
@@ -83,8 +83,8 @@
         <ol>
           <li>The prompt goes down the site's port to a worker inside the frame.</li>
           <li>The worker reads what you allowed from the browser's storage for that site. If the limit is not used up and the days have not run out, it counts the request. If not, it deletes what it kept and refuses.</li>
-          <li>The worker hands the prompt, the encrypted key and the key that opens it to one more hidden page inside the frame. That page is served with a rule that lets it connect to the provider you chose and to nothing else, not even the router.</li>
-          <li>That page decrypts your API key in memory and calls the provider straight from your browser. The answer comes back down the port a few words at a time.</li>
+          <li>The worker hands the prompt, the encrypted key and the key that opens it to a second worker. That worker's script is served with a rule that lets it connect to the provider you chose and to nothing else, not even the router. It has no page, so it cannot be sent anywhere else either. In a browser that does not hold a worker to a rule of its own, a hidden page with the same rule does this job.</li>
+          <li>That worker decrypts your API key in memory and calls the provider straight from your browser. The answer comes back down the port a few words at a time.</li>
         </ol>
         <h3>When a site cannot have the frame</h3>
         <p>A site whose own rules forbid frames from other addresses passes its port to the window instead. The window then does the frame's job, and stays open while the site uses the model. Closing it disconnects the site.</p>
@@ -100,7 +100,7 @@
         <h3>What you are trusting</h3>
         <ul>
           <li>You are trusting the router's code. The frame and the window are pages from this address, and they handle your API key. A site is kept away from the key by the browser's rule that a page cannot read a frame from another origin.</li>
-          <li>The router's pages can run only the router's own scripts. The page that holds your key in the clear can connect to one address: the one where the provider you chose for that site takes prompts. No other router page can connect to anything at all. If you chose Anthropic, no router page can reach OpenAI, or any other address. The rule is a <code>Content-Security-Policy</code> header, and your browser enforces it, not the router's code. The same rule lets that page run only the router's own script files, so nothing a site sends or a model answers can become code in it.</li>
+          <li>The router's pages can run only the router's own scripts. The worker that holds your key in the clear can connect to one address: the one where the provider you chose for that site takes prompts. No other router page can connect to anything at all. If you chose Anthropic, no router page can reach OpenAI, or any other address. The rule is a <code>Content-Security-Policy</code> header, and your browser enforces it, not the router's code. The same rule lets that worker run only the router's own script files, so nothing a site sends or a model answers can become code in it.</li>
           <li>The server that sends that rule also sends the scripts. You are trusting it to send the same ones to everybody.</li>
           <li>A site you allowed keeps an encrypted copy of your key, inside this browser, until its limit runs out or you stop it. Removing an account from this page does not take that copy back.</li>
           <li>Limits are counted in requests and days, not money. A site with 20 requests can still send 20 long prompts.</li>

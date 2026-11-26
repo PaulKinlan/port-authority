@@ -12,7 +12,7 @@
 // calls the provider is handed both, and opens the API key in memory.
 //
 //   frame     const mine = await offer();          mine.pub goes to the window
-//   window    const sealed = await seal(pub, apiKey);
+//   window    const sealed = await reseal(pub, kept);   kept is the key as the window keeps it, itself encrypted
 //   frame     const key = await mine.open(sealed.from);
 //   call page const apiKey = await unseal(key, sealed);
 
@@ -38,6 +38,21 @@ export async function seal(pub, secret) {
   const key = await crypto.subtle.deriveKey({ name: "ECDH", public: await theirs(pub) }, pair.privateKey, AES, false, ["encrypt"]);
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const data = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, new TextEncoder().encode(secret));
+  return { from: await crypto.subtle.exportKey("jwk", pair.publicKey), iv: text64(iv), data: text64(data) };
+}
+
+// The window's half, for an API key that the window itself keeps encrypted
+// (store.js). kept is { sealed, key }. The browser opens it and encrypts it
+// again for the frame in one go, as a key wrapped in a key: at no point is the
+// API key text, or bytes, that the window's code can see.
+export async function reseal(pub, kept) {
+  if (kept.plain) return seal(pub, kept.plain);
+  const pair = await crypto.subtle.generateKey(CURVE, false, ["deriveKey"]);
+  const to = await crypto.subtle.deriveKey({ name: "ECDH", public: await theirs(pub) }, pair.privateKey, AES, false, ["wrapKey"]);
+  // The API key is carried as the bytes of a key. HMAC is used only because such a key may be of any length.
+  const inside = await crypto.subtle.unwrapKey("raw", bytes(kept.sealed.data), kept.key, { name: "AES-GCM", iv: bytes(kept.sealed.iv) }, { name: "HMAC", hash: "SHA-256" }, true, ["sign"]);
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const data = await crypto.subtle.wrapKey("raw", inside, to, { name: "AES-GCM", iv });
   return { from: await crypto.subtle.exportKey("jwk", pair.publicKey), iv: text64(iv), data: text64(data) };
 }
 

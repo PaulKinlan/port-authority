@@ -10,8 +10,8 @@
 // window a port instead. Then this window does the frame's job (host.js), and
 // it has to stay open for as long as the site is to have its model.
 
-import { choices, random, remember, sighting, stopped } from "/store.js";
-import { seal } from "/seal.js";
+import { choices, random, remember, sighting, stopped, secretOf } from "/store.js";
+import { reseal } from "/seal.js";
 import { PROVIDERS } from "/providers.js";
 import { startHost } from "/host.js";
 import "/keep.js";
@@ -226,7 +226,7 @@ if (boxed) {
       const id = choice.key.split("|")[0];
       let group = groups.at(-1);
       if (!group || group.id !== id) {
-        const about = choice.note || choice.providerName + (choice.secretKey ? ", key ends " + choice.secretKey.slice(-4) : "");
+        const about = choice.note || choice.providerName + (choice.ends ? ", key ends " + choice.ends : "");
         groups.push(group = { id, label: choice.label, about, items: [] });
       }
       group.items.push({ ...choice, index });
@@ -287,9 +287,12 @@ if (boxed) {
       const within = (value, low, high, otherwise) => Math.min(high, Math.max(low, Math.round(Number(value)) || otherwise));
       const made = Date.now();
       try {
-        // The API key is encrypted here, to a key pair made by the page that will keep it:
-        // the frame inside the site, or this window's own worker. Only that page can open it.
-        const sealed = choice.secretKey ? await seal(host ? await host.offer() : frame.pub, choice.secretKey) : null;
+        // The API key is kept encrypted at the router's address. Here the browser encrypts it again, to a key
+        // pair made by the page that will keep it: the frame inside the site, or this window's own worker.
+        // Only that page can open it. This window's code never sees the key as text.
+        const secret = choice.hasKey ? await secretOf(choice.account) : null;
+        if (choice.hasKey && !secret) throw new Error("The key for this account could not be read from this browser's storage. Remove the account and add it again at the router's own page.");
+        const sealed = secret ? await reseal(host ? await host.offer() : frame.pub, secret) : null;
         const grant = {
           id: random(9), site, provider: choice.provider, providerName: choice.providerName, model: choice.model, label: choice.label,
           requests: within(document.getElementById("requests").value, 1, 100000, 20), expires: made + within(document.getElementById("days").value, 1, 365, 7) * 86400000,
