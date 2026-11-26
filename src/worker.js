@@ -41,21 +41,35 @@ function callPageFor(path) {
   // not a provider, so it is sent with a policy that allows nothing.
   return path.startsWith("/call/") ? path.slice(6) : null;
 }
-// The Content-Security-Policy for a router page. Every page may connect to the
-// router's own server and to nothing else. The one exception is the call page.
-// It may connect to one address: the chat endpoint of the provider named in
-// its own address. Not the rest of that provider, and not the router. So a
-// prompt and an API key can only leave for the provider the person chose.
+// The Content-Security-Policy for a router page.
+//
+// The call page is the only place an API key is ever in the clear, so it gets
+// the least. It may run the router's own script files and nothing else: no
+// inline script, no eval, no script from another address. It may connect to
+// one address: the chat endpoint of the provider named in its own address.
+// Not the rest of that provider, and not the router. It may load nothing
+// else at all: no image, style, font or frame, and no form may be sent. So a
+// key and a prompt can only leave for the provider the person chose, and
+// nothing a site or a provider says can become code in that page.
+//
+// The frame has nothing to look at either. It may run the router's scripts,
+// start its worker, hold the call page, and connect to the router's server.
+//
+// Every other page may connect to the router's own server and to nothing else.
 // /frame.html is put inside other sites, and the call page inside /frame.html,
 // so those two cannot say which pages may frame them. The rest cannot be framed.
 function routerCsp(path) {
   const provider = callPageFor(path);
-  const call = provider !== null;
-  const connect = !call ? "'self'" : Object.hasOwn(ROUTER_ENDPOINTS, provider) ? ROUTER_ENDPOINTS[provider] : "'none'";
+  if (provider !== null) {
+    const connect = Object.hasOwn(ROUTER_ENDPOINTS, provider) ? ROUTER_ENDPOINTS[provider] : "'none'";
+    return ["default-src 'none'", "script-src 'self'", "connect-src " + connect, "base-uri 'none'", "form-action 'none'"].join("; ");
+  }
+  if (path === "/frame.html") {
+    return ["default-src 'none'", "script-src 'self'", "worker-src 'self'", "frame-src 'self'", "connect-src 'self'", "base-uri 'none'", "form-action 'none'"].join("; ");
+  }
   return [
     "default-src 'none'", "script-src 'self'", "worker-src 'self'", "frame-src 'self'", "style-src 'self' https://fonts.googleapis.com", "font-src https://fonts.gstatic.com",
-    "img-src 'self' data:", "connect-src " + connect, "base-uri 'none'", "form-action 'none'",
-    ...(call || path === "/frame.html" ? [] : ["frame-ancestors 'none'"]),
+    "img-src 'self' data:", "connect-src 'self'", "base-uri 'none'", "form-action 'none'", "frame-ancestors 'none'",
   ].join("; ");
 }
 

@@ -100,7 +100,7 @@
         <h3>What you are trusting</h3>
         <ul>
           <li>You are trusting the router's code. The frame and the window are pages from this address, and they handle your API key. A site is kept away from the key by the browser's rule that a page cannot read a frame from another origin.</li>
-          <li>The router's pages can run only the router's own scripts. The page that holds your key in the clear can connect to one address: the one where the provider you chose for that site takes prompts. Every other router page can connect only to the router's own server. If you chose Anthropic, no router page can reach OpenAI, or any other address. The rule is a <code>Content-Security-Policy</code> header, and your browser enforces it, not the router's code.</li>
+          <li>The router's pages can run only the router's own scripts. The page that holds your key in the clear can connect to one address: the one where the provider you chose for that site takes prompts. Every other router page can connect only to the router's own server. If you chose Anthropic, no router page can reach OpenAI, or any other address. The rule is a <code>Content-Security-Policy</code> header, and your browser enforces it, not the router's code. The same rule lets that page run only the router's own script files, so nothing a site sends or a model answers can become code in it.</li>
           <li>That rule does not cover the router's own server. The router's code sends it no prompts and no keys, and you are trusting the code for that.</li>
           <li>Limits are counted in requests and days, not money. A site with 20 requests can still send 20 long prompts.</li>
         </ul>

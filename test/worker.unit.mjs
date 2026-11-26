@@ -257,6 +257,26 @@ test("a call page that names no provider, or one that is not listed, may connect
   assert.equal((await policy("/call/nothing?provider=anthropic"))["connect-src"], "'none'");
 });
 
+test("the call page and the frame are sent with the least a page can have", async () => {
+  // The call page: its own scripts, one address, and nothing else at all.
+  assert.deepEqual(await policy("/call/anthropic"), {
+    "default-src": "'none'", "script-src": "'self'", "connect-src": "https://api.anthropic.com/v1/messages", "base-uri": "'none'", "form-action": "'none'",
+  });
+  // The frame: its own scripts, its worker, the call page, and the router's server.
+  assert.deepEqual(await policy("/frame.html"), {
+    "default-src": "'none'", "script-src": "'self'", "worker-src": "'self'", "frame-src": "'self'", "connect-src": "'self'", "base-uri": "'none'", "form-action": "'none'",
+  });
+  // No policy on any router page lets code in by another way.
+  for (const path of ["/", "/pick.html", "/frame.html", "/call/anthropic", "/call/nope", "/call.html"]) {
+    const header = (await worker.fetch(new Request("https://llmchannel.dev" + path), routerEnv())).headers.get("content-security-policy");
+    assert.ok(!/unsafe-inline|unsafe-eval|unsafe-hashes|wasm-unsafe-eval|\*|data:(?!;)|blob:/.test(header.replace("img-src 'self' data:", "")), path + ": " + header);
+    assert.match(header, /(^|; )script-src 'self'(;|$)/, path);
+  }
+  // The only address other than the router's own in a call page's policy is the provider's.
+  const call = (await worker.fetch(new Request("https://llmchannel.dev/call/openai"), routerEnv())).headers.get("content-security-policy");
+  assert.deepEqual(call.match(/https?:\/\/[^\s;]+/g), ["https://api.openai.com/v1/chat/completions"]);
+});
+
 test("only the frame and the call page can be put inside another page", async () => {
   assert.equal((await policy("/"))["frame-ancestors"], "'none'");
   assert.equal((await policy("/pick.html"))["frame-ancestors"], "'none'");

