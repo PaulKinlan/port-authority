@@ -12,16 +12,19 @@
 //      and counts every request against it (grants.js)
 //   2. takes a new grant from the router window: it makes the key pair the
 //      window encrypts the API key to, and keeps the key that opens it (seal.js)
-//   3. opens the one page that may call the provider the person chose, and
-//      gives the worker a port to it
+//   3. starts the one thing that may call the provider the person chose, and
+//      gives the worker a port to it. That is a worker of its own where the
+//      browser holds a worker to its own policy, and a hidden page where it
+//      does not (caller.js)
 //   4. lends the worker a port for the browser's built-in model, which a
 //      worker cannot use itself
 //
 // After that, prompts go from the site to the worker over the port. This page
 // and its worker cannot connect to anything: there is no server, and the
 // browser is told to allow them no connection at all. The call to the provider
-// is made by /call/<provider>, which the browser lets connect to that one
-// provider only. The API key is opened there and nowhere else. See call.js.
+// is made by /call/<provider>.js, a worker which the browser lets connect to
+// that one provider only. The API key is opened there and nowhere else. See
+// call-worker.js, and call.js for the page that stands in for it.
 
 import { generate, PROVIDERS } from "/providers.js";
 import { openCaller } from "/caller.js";
@@ -42,11 +45,11 @@ export function startHost(site, sitePort) {
   const askWorker = (message) => new Promise((resolve) => { const n = ++count; waiting.set(n, resolve); worker.postMessage({ ...message, n }); });
 
   const worker = new Worker("/frame-worker.js", { type: "module" });
-  let caller = null;  // { provider, close }: the page that may call this grant's provider
+  let caller = null;  // { provider, close }: the call worker (or call page) for this grant's provider
 
-  // Open the page for the grant's provider, and close the one for the provider
+  // Start the caller for the grant's provider, and stop the one for the provider
   // before it. The browser's built-in model makes no network call, so it gets
-  // no such page.
+  // none.
   // A request that is already with the provider is let finish first: the page it
   // is using is not closed under it. The worker says how many are under way.
   let wanted = null;    // the grant the page should be open for

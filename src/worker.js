@@ -61,6 +61,13 @@ function callPageFor(path) {
 // /frame.html is put inside other sites, and the call page inside /frame.html,
 // so those two cannot say which pages may frame them. The rest cannot be framed.
 function routerCsp(path) {
+  // The call worker, /call/<provider>.js. A worker is held to the policy on
+  // its own script. It needs the router's scripts and that one address, and it
+  // has no document, so there is nothing else to allow or forbid. The worker
+  // checks that it is held to exactly these words before it takes a key
+  // (callWorkerPolicy() in sites/router/providers.js).
+  const worker = /^\/call\/([^/]+)\.js$/.exec(path);
+  if (worker) return ["default-src 'none'", "script-src 'self'", "connect-src " + (Object.hasOwn(ROUTER_ENDPOINTS, worker[1]) ? ROUTER_ENDPOINTS[worker[1]] : "'none'")].join("; ");
   const provider = callPageFor(path);
   if (provider !== null) {
     const connect = Object.hasOwn(ROUTER_ENDPOINTS, provider) ? ROUTER_ENDPOINTS[provider] : "'none'";
@@ -119,6 +126,8 @@ async function serve(env, site, pathname) {
   // Every /call/<provider> on the router is the same page. What differs is the
   // policy it is sent with, which is made from the address below.
   if (site === "router" && /^\/call\/[^/]+$/.test(path)) candidates = ["router/call.html"];
+  // And every /call/<provider>.js is the same worker script, sent with the policy for that provider.
+  if (site === "router" && /^\/call\/[^/]+\.js$/.test(path)) candidates = ["router/call-worker.js"];
   if (!/\.[a-z0-9]+$/i.test(path)) candidates.push(site + path + "/index.html");
   // Each pattern has a page of its own, all drawn by one file.
   if (site === "main" && /^\/patterns\/[a-z0-9-]+\/index\.html$/.test(path) && !path.startsWith("/patterns/served/")) candidates.push("main/patterns/_page.html");

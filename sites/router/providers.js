@@ -67,6 +67,14 @@ export function endpointOf(id) {
   return provider.baseUrl + (provider.kind === "anthropic" ? "/messages" : "/chat/completions");
 }
 
+// The policy the call worker for a provider is sent with, and checks that it is
+// held to before it will take a key (call-worker.js). The server builds the
+// same words (routerCsp() in src/worker.js), and a test checks the two agree.
+export function callWorkerPolicy(id) {
+  const endpoint = endpointOf(id);
+  return endpoint ? `default-src 'none'; script-src 'self'; connect-src ${endpoint}` : null;
+}
+
 // account: { provider, key, model }
 // ask: {
 //   system, maxTokens, temperature, topP, stop: ["text"],     the last three are optional

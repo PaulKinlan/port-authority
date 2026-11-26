@@ -4,7 +4,7 @@
 import { createRequire } from "node:module";
 import { readFile } from "node:fs/promises";
 const { chromium } = createRequire(import.meta.url)("playwright");
-import { launchWithPartitioning } from "./real-browser.mjs";
+import { launchWithPartitioning, callers } from "./real-browser.mjs";
 const PORT = process.env.PORT || 8787;
 const base = (name) => `http://${name}.localhost:${PORT}`;
 // Storage partitioning has to be on, as it is in a person's own browser. Playwright switches it off.
@@ -18,6 +18,10 @@ let failed = 0;
 const check = (name, ok, extra = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${name}${extra ? " " + extra : ""}`); if (!ok) failed++; };
 const popupFrom = async (page, click) => { const [popup] = await Promise.all([page.waitForEvent("popup"), click()]); await popup.waitForLoadState(); return popup; };
 const KEY = "sk-test-THIS-KEY-MUST-NOT-LEAK-0123456789";
+// A call to a provider is made by the router's call worker. The browser files a worker's request under the page
+// that started it: the router frame, or the router window when that serves the site.
+const byRouter = (call) => !!call && [base("router") + "/frame.html", base("router") + "/", base("router") + "/pick.html#window"].includes(call.from);
+const callerUrls = async (page) => (await callers(page)).map((c) => c.url()).join();
 // In the router window an account is a group, and its models are the choices inside it.
 const pickModel = (popup, account, model) => popup.locator("#choices .account", { hasText: account }).locator("label", { hasText: model }).click();
 const KEY2 = "sk-spare-THIS-ONE-MUST-NOT-LEAK-EITHER-9876543210";
@@ -83,7 +87,7 @@ await Promise.all([popup.waitForEvent("close"), allow(popup)]);
 await chat.locator(".msg.assistant .msg-actions").waitFor();
 check("after the person allows it, the message is sent and the answer arrives", (await chat.locator(".msg.user .bubble").innerText()) === "Write a card for Ada" && (await chat.locator(".msg.assistant .md").innerText()) === "Dear Ada, well done on passing.");
 check("the answer is labelled with the model the person chose", (await chat.locator(".msg.assistant .who").innerText()).toLowerCase() === "claude-sonnet-5-5" && (await chat.locator("#model-text b").innerText()) === "claude-sonnet-5-5" && (await chat.locator("#model-text .from").innerText()) === "Work key");
-check("the call was made by the router's page for that provider, with the key", seen.at(-1).from === base("router") + "/call/anthropic" && seen.at(-1).key === KEY && seen.at(-1).body.max_tokens === 4000);
+check("the call was made by the router's worker for that provider, with the key", byRouter(seen.at(-1)) && (await callerUrls(chat)) === base("router") + "/call/anthropic.js" && seen.at(-1).key === KEY && seen.at(-1).body.max_tokens === 4000);
 check("the conversation is named after the first message and listed", (await chat.locator("#title").innerText()) === "Write a card for Ada" && (await chat.locator("#list a.conv").count()) === 1 && /^#c=/.test(new URL(chat.url()).hash));
 
 // A second message carries the conversation so far.
@@ -137,12 +141,11 @@ await chat.fill("#prompt", "Now with the other one");
 await chat.press("#prompt", "Enter");
 await chat.locator(".msg.assistant").nth(3).locator(".msg-actions").waitFor();
 check("after the change the app's next message goes to the new provider, with the conversation so far", (await chat.locator(".msg.assistant .md").nth(3).innerText()) === "A note from the stand-in." && seen.length === anthropicBefore
-  && seenOpenAI.at(-1).from === base("router") + "/call/openai" && seenOpenAI.at(-1).key === "Bearer " + KEY2 && seenOpenAI.at(-1).body.model === "gpt-6.2-sol" && seenOpenAI.at(-1).body.messages.length === 8, JSON.stringify(seenOpenAI.at(-1) && seenOpenAI.at(-1).body.messages.length));
-const callPages = chat.frames().filter((f) => f.url().includes("/call/")).map((f) => f.url());
-check("the page for the old provider is gone, and there is one page, for the new provider", callPages.join() === base("router") + "/call/openai", callPages.join());
-const newCall = chat.frames().find((f) => f.url().includes("/call/"));
+  && byRouter(seenOpenAI.at(-1)) && seenOpenAI.at(-1).key === "Bearer " + KEY2 && seenOpenAI.at(-1).body.model === "gpt-6.2-sol" && seenOpenAI.at(-1).body.messages.length === 8, JSON.stringify(seenOpenAI.at(-1) && seenOpenAI.at(-1).body.messages.length));
+check("the call worker for the old provider is gone, and there is one, for the new provider", (await callerUrls(chat)) === base("router") + "/call/openai.js", (await callerUrls(chat)));
+const newCall = (await callers(chat))[0];
 const reach = (address) => newCall.evaluate((a) => fetch(a, { mode: "no-cors" }).then(() => "allowed", () => "blocked"), address);
-check("the new page cannot connect to the old provider", (await reach("https://api.anthropic.com/v1/messages")) === "blocked" && seen.length === anthropicBefore);
+check("the new call worker cannot connect to the old provider", (await reach("https://api.anthropic.com/v1/messages")) === "blocked" && seen.length === anthropicBefore);
 check("the answer is labelled with the model that wrote it, and the earlier ones keep theirs", (await chat.locator(".msg.assistant .who").allInnerTexts()).map((t) => t.toLowerCase()).join() === "claude-sonnet-5-5,claude-sonnet-5-5,claude-sonnet-5-5,gpt-6.2-sol");
 // And back again.
 popup = await popupFrom(chat, () => chat.click("#model"));
@@ -151,10 +154,9 @@ check("the router window ticks the model in use", JSON.stringify(await ticked())
 await pickModel(popup, "Work key", "claude-sonnet-5-5");
 await Promise.all([popup.waitForEvent("close"), popup.click("#yes")]);
 await chat.locator("#model-text", { hasText: "claude-sonnet-5-5" }).waitFor();
-// The frame opens the page for the provider as soon as it has the grant. Give it a moment to load.
-const callPagesNow = () => chat.frames().filter((f) => f.url().includes("/call/")).map((f) => f.url()).join();
-for (let i = 0; i < 50 && callPagesNow() !== base("router") + "/call/anthropic"; i++) await chat.waitForTimeout(100);
-check("the model can be changed back, and the page for the other provider is closed again", callPagesNow() === base("router") + "/call/anthropic", callPagesNow());
+// The frame starts the call worker for the provider as soon as it has the grant. Give it a moment to load.
+for (let i = 0; i < 50 && (await callerUrls(chat)) !== base("router") + "/call/anthropic.js"; i++) await chat.waitForTimeout(100);
+check("the model can be changed back, and the call worker for the other provider is closed again", (await callerUrls(chat)) === base("router") + "/call/anthropic.js", (await callerUrls(chat)));
 
 // The same provider can be added again under another name, with another key. The two are told apart.
 const KEY3 = "sk-other-A-SECOND-ANTHROPIC-KEY-5550001111";
@@ -299,7 +301,7 @@ const through = await locked.evaluate(async () => {
   return { chat: answer.choices[0].message.content, model: answer.model, prompt: text };
 });
 check("the site's requests are answered through the window, both ways of asking", through.chat === "Dear Ada, well done on passing." && through.prompt === "Dear Ada, well done on passing." && through.model === "claude-sonnet-5-5");
-check("the call is made by the page for the one provider, inside the router window", seen.at(-1).from === base("router") + "/call/anthropic" && seen.at(-1).parent === base("router") + "/pick.html#window" && seen.at(-1).key === KEY, seen.at(-1).parent);
+check("the call is made by the worker for the one provider, started by the router window", seen.at(-1).from === base("router") + "/pick.html#window" && (await callerUrls(popup)) === base("router") + "/call/anthropic.js" && seen.at(-1).key === KEY, seen.at(-1).from + " " + (await callerUrls(popup)));
 await popup.locator("#left", { hasText: "18 requests left" }).waitFor();
 check("the window shows how many requests are left", true);
 check("the site holds no frame and no key", locked.frames().length === 1 && !(await locked.evaluate((key) => JSON.stringify({ ...localStorage }).includes(key), KEY)));
@@ -366,7 +368,7 @@ await viaWindow.locator("#model-jack.on").waitFor();
 await viaWindow.fill("#prompt", "A card through the window");
 await viaWindow.press("#prompt", "Enter");
 await viaWindow.locator(".msg.assistant .msg-actions").waitFor();
-check("a message is answered through the window", (await viaWindow.locator(".msg.assistant .md").innerText()) === "Dear Ada, well done on passing." && seen.at(-1).parent === base("router") + "/pick.html#window");
+check("a message is answered through the window", (await viaWindow.locator(".msg.assistant .md").innerText()) === "Dear Ada, well done on passing." && seen.at(-1).from === base("router") + "/pick.html#window", seen.at(-1).from);
 await popup.close();
 await viaWindow.locator("#model.ask").waitFor();
 await viaWindow.fill("#prompt", "Is anyone there");

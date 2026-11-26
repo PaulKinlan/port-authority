@@ -195,6 +195,23 @@ test("the router has no server: the address that kept grants answers that it has
   assert.equal(reached, false);
 });
 
+test("every /call/<provider>.js is the one call worker, sent with the policy it checks itself against", async () => {
+  const { PROVIDERS, callWorkerPolicy } = await import("../sites/router/providers.js");
+  const header = async (path) => (await worker.fetch(new Request("https://llmchannel.dev" + path), routerEnv())).headers.get("content-security-policy");
+  assetsAsked.length = 0;
+  for (const [id, provider] of Object.entries(PROVIDERS)) {
+    if (!provider.kind) continue;
+    assert.equal(await header("/call/" + id + ".js"), callWorkerPolicy(id), id);
+    assert.equal(assetsAsked.at(-1), "/router/call-worker.js", id);
+  }
+  assert.equal(await header("/call/anthropic.js"), "default-src 'none'; script-src 'self'; connect-src https://api.anthropic.com/v1/messages");
+  // A worker for a provider the router does not have may connect to nothing, and will not judge itself fit.
+  assert.equal(await header("/call/nothing.js"), "default-src 'none'; script-src 'self'; connect-src 'none'");
+  assert.equal(callWorkerPolicy("nothing"), null);
+  // The call page keeps its own, longer policy.
+  assert.equal(await header("/call/anthropic"), "default-src 'none'; script-src 'self'; connect-src https://api.anthropic.com/v1/messages; base-uri 'none'; form-action 'none'");
+});
+
 test("the service worker may fetch the router's own files, and nothing else", async () => {
   assert.deepEqual(await policy("/sw.js"), { "default-src": "'none'", "connect-src": "'self'" });
 });
@@ -204,8 +221,9 @@ test("the service worker keeps a copy of every file a router page can ask for", 
   const { PROVIDERS } = await import("../sites/router/providers.js");
   const source = await readFile(new URL("../sites/router/sw.js", import.meta.url), "utf8");
   const listed = JSON.parse(/const FILES = (\[[^\]]*\]);/.exec(source)[1].replace(/,\s*\]/, "]"));
-  const files = (await readdir(new URL("../sites/router/", import.meta.url))).filter((name) => !["sw.js", "call.html", "index.html"].includes(name)).map((name) => "/" + name);
-  const calls = Object.entries(PROVIDERS).filter(([, provider]) => provider.kind).map(([id]) => "/call/" + id);
+  const files = (await readdir(new URL("../sites/router/", import.meta.url))).filter((name) => !["sw.js", "call.html", "call-worker.js", "index.html"].includes(name)).map((name) => "/" + name);
+  // The call page and the call worker are each served once for every provider, at an address that names it.
+  const calls = Object.entries(PROVIDERS).filter(([, provider]) => provider.kind).flatMap(([id]) => ["/call/" + id, "/call/" + id + ".js"]);
   // What the pages ask for that is not a file in that folder: the home page, shared files, and the list of sites.
   const others = ["/", "/base.css", "/favicon.svg", "/hawser.js", "/_sites.js"];
   assert.deepEqual([...listed].sort(), [...files, ...calls, ...others].sort());

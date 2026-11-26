@@ -1,8 +1,8 @@
 // The worker inside the router frame, or inside the router window when that
 // serves a site (see host.js). It holds the ports that sites, their workers
 // and their frames send prompts on. It keeps the site's grant in storage and
-// counts every prompt against it. Then it hands the request to the page that
-// may call the provider (call.js). This worker cannot connect to anything: no
+// counts every prompt against it. Then it hands the request to the worker that
+// may call the provider (call-worker.js). This worker cannot connect to anything: no
 // server is asked, and the browser allows it no connection. Nothing can reach
 // it except through a port it was given.
 
