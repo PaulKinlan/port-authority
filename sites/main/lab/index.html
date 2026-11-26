@@ -164,6 +164,18 @@
     addEventListener("scroll", () => { if (openFor) closePop(); }, { passive: true, capture: true });
     addEventListener("resize", () => { if (openFor) closePop(); }, { passive: true });
 
+    // The same thing, sent to the other places in this run. When one place fails, the others say what kind of place it is.
+    function elsewhere(kind, here) {
+      const by = {};
+      for (const dest of destinations) {
+        const r = results[dest.id]?.[kind.name];
+        if (!r || dest.id === here.id || ["cannot-make", "no-destination"].includes(r.outcome)) continue;
+        (by[r.outcome] ||= []).push(dest.label);
+      }
+      const lines = Object.entries(by).map(([outcome, places]) => `<li><b>${OUTCOMES[outcome].mark}</b> ${esc(OUTCOMES[outcome].label)}: ${esc(places.join(", "))}</li>`);
+      return lines.length ? `<p class="small said">The same thing, sent elsewhere in this run:</p><ul class="elsewhere">${lines.join("")}</ul>` : "";
+    }
+
     $("matrix").addEventListener("click", (event) => {
       const td = event.target.closest("td[data-k]");
       if (!td) return;
@@ -173,7 +185,9 @@
       const html = r
         ? `<div class="pop-head"><p class="what"><strong>${esc(kind.name)}</strong> ${kind.how === "move" ? "moved" : "copied"} to <strong>${esc(dest.label)}</strong></p><button type="button" class="pop-close" aria-label="Close">×</button></div>
            <p class="outcome" data-o="${r.outcome}"><b>${OUTCOMES[r.outcome].mark}</b> ${esc(OUTCOMES[r.outcome].label)}. ${esc(OUTCOMES[r.outcome].text)}</p>
-           ${r.note ? `<p class="small muted" style="margin:0">${bad ? "What it said:" : "What happened there:"}</p><pre class="note ${bad ? "bad" : ""}">${esc(r.note)}</pre>` : ""}`
+           ${r.note ? `<p class="small said">${esc(OUTCOMES[r.outcome].said || "What happened there:")}</p><pre class="note ${bad ? "bad" : ""}">${esc(r.note)}</pre>` : ""}
+           ${OUTCOMES[r.outcome].why ? `<p class="small why">${esc(OUTCOMES[r.outcome].why)}</p>` : ""}
+           ${bad ? elsewhere(kind, dest) : ""}`
         : `<div class="pop-head"><p class="what"><strong>${esc(kind.name)}</strong> to <strong>${esc(dest.label)}</strong></p><button type="button" class="pop-close" aria-label="Close">×</button></div><p>That test has not run yet.</p>`;
       $("detail").innerHTML = r ? `<strong>${esc(kind.name)}</strong> ${kind.how === "move" ? "moved" : "copied"} to <strong>${esc(dest.label)}</strong>: ${esc(OUTCOMES[r.outcome].text)} ${r.note ? `<span class="muted">${esc(r.note)}</span>` : ""}` : "That test has not run yet.";
       if (!pop.showPopover) return;

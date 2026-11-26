@@ -175,7 +175,12 @@
         out.postMessage({ seq: mine, outcome: "arrives-broken", note: String((err && err.message) || err).slice(0, 160), type });
       } finally { globalThis.labRelease(data.value); }
     };
-    inlet.onmessageerror = () => out.postMessage({ seq, outcome: "unreadable", note: "arrived, but could not be rebuilt here" });
+    // The browser could not rebuild what was sent, and fires messageerror in place of message. The event
+    // has no error in it and no reason. What little it does carry is written down, so that can be seen.
+    inlet.onmessageerror = (event) => {
+      const data = event && "data" in event ? (event.data === null ? "null" : typeof event.data) : "absent";
+      out.postMessage({ seq, outcome: "unreadable", note: `messageerror event. The browser gave no reason. event.data: ${data}. event.ports: ${event && event.ports ? event.ports.length : 0}.` });
+    };
     out.postMessage({ hello: where });
   };
 })();

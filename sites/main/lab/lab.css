@@ -169,7 +169,8 @@
 /* What happened in one test, opened beside its mark. */
 .cell-pop {
   position: fixed; inset: auto; margin: 0;
-  width: max-content; max-width: min(24rem, calc(100vw - 16px));
+  width: max-content; max-width: min(28rem, calc(100vw - 16px));
+  max-height: calc(100vh - 16px); overflow: auto;
   border: 2px solid var(--ink); border-radius: 12px;
   padding: 0.75rem 0.9rem;
   background: var(--paper); color: var(--ink);
@@ -201,13 +202,20 @@
 .cell-pop .outcome { font-weight: 600; }
 .cell-pop .outcome b { display: inline-block; min-width: 1.1em; text-align: center; }
 
+/* A note is a <pre>, and the site's <pre> is light text on a dark ground. Here the ground is light,
+   so the text has to be set too, or it is light on light. */
 .note {
-  margin: 0.2rem 0 0; padding: 0.45rem 0.6rem; border-radius: 8px;
-  font: 12px/1.45 var(--mono, ui-monospace, Menlo, monospace);
+  margin: 0.2rem 0 0; padding: 0.5rem 0.65rem; border-radius: 8px; border: 0;
+  font: 0.8125rem/1.5 var(--mono, ui-monospace, Menlo, monospace);
   white-space: pre-wrap; overflow-wrap: anywhere;
-  background: color-mix(in srgb, var(--ink) 8%, transparent);
+  color: var(--ink);
+  background: color-mix(in srgb, var(--ink) 8%, var(--paper));
 }
-.note.bad { border-left: 4px solid var(--red); background: color-mix(in srgb, var(--red) 12%, transparent); }
+.note.bad { border-left: 4px solid var(--red); background: color-mix(in srgb, var(--red) 10%, var(--paper)); }
+.cell-pop .said { margin: 0.5rem 0 0; font-weight: 600; color: var(--ink); }
+.cell-pop .why { margin: 0.5rem 0 0; color: var(--ink); }
+.cell-pop .elsewhere { list-style: none; margin: 0.2rem 0 0; padding: 0; display: grid; gap: 0.15rem; color: var(--ink); }
+.cell-pop .elsewhere b { display: inline-block; min-width: 1.1em; text-align: center; }
 .problems ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.6rem; }
 .problems { border-left: 6px solid var(--red); }
 
