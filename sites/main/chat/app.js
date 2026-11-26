@@ -47,7 +47,9 @@ function drawConnection() {
   jack.classList.toggle("on", ready);
   button.classList.toggle("ask", !!ai && !ready);
   button.disabled = !ai && !unreachable;
-  text.textContent = unreachable ? "Router out of reach" : !ai ? "Connecting" : ready ? `${ai.model.account} · ${ai.model.name}` : ai.mode === "window" ? "Connect a model" : "Choose a model";
+  // The model's name is the provider's. The account's name is the one the person gave it. They are shown apart.
+  if (ready) text.innerHTML = `<b>${esc(ai.model.name)}</b> <span class="from">${esc(ai.model.account)}</span>`;
+  else text.textContent = unreachable ? "Router out of reach" : !ai ? "Connecting" : ai.mode === "window" ? "Connect a model" : "Choose a model";
   button.title = ready ? "Choose a different model, or set up another account" : "";
 
   const state = $("connection-state");
@@ -55,7 +57,9 @@ function drawConnection() {
   else if (!ai) state.textContent = "Connecting to your router.";
   else if (ready) {
     const left = ai.left == null ? "" : ` It has ${ai.left} ${ai.left === 1 ? "request" : "requests"} left.`;
-    state.innerHTML = `This app is using <strong>${esc(ai.model.account)} · ${esc(ai.model.name)}</strong>, from ${esc(ai.model.provider)}.${esc(left)}`;
+    state.innerHTML = ai.model.id === "builtin"
+      ? `This app is using <strong>this browser's built-in model</strong>. It runs on this device.${esc(left)}`
+      : `This app is using <strong class="model-name">${esc(ai.model.name)}</strong> from ${esc(ai.model.provider)}, on your account <strong>${esc(ai.model.account)}</strong>.${esc(left)}`;
   } else state.textContent = ai.mode === "window" ? "No model is connected. The router window opens when you connect, and stays open while you chat." : "No model yet. Choose one of your accounts in the router window.";
   $("connection-choose").textContent = ready ? "Choose a different model" : ai && ai.mode === "window" ? "Connect a model" : "Choose a model";
   $("connection-choose").disabled = !ai;

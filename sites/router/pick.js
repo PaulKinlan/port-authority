@@ -120,7 +120,7 @@ if (!frame && !direct) {
     main.innerHTML = `
       <p class="origin">${esc(site)}</p>
       <h1 tabindex="-1">Keep this window open</h1>
-      <p>This site is using <strong>${esc(now.label)} · ${esc(now.model)}</strong> through this window. <span id="left" role="status"></span></p>
+      <p>This site is using <strong class="model-name">${esc(now.model)}</strong>, from your account <strong>${esc(now.label)}</strong>, through this window. <span id="left" role="status"></span></p>
       <p class="note small">Most sites hold the router in a hidden frame, and this window closes once you have chosen. This site is not using that frame, so its prompts come through this window. Closing it disconnects the site. Your choice is kept, so the site can open this window again without asking you to choose.</p>
       <div class="actions"><button class="quiet" id="again">Choose a different model</button><button class="quiet" id="bye">Disconnect</button></div>
       <p class="small muted">You can see what this site has used, and stop it, at <a href="/" target="_blank" rel="noopener">your router</a>.</p>`;
@@ -150,6 +150,22 @@ if (!frame && !direct) {
       return;
     }
     const currentIndex = current ? list.findIndex((c) => c.label === current.label && c.model === current.model) : -1;
+    // An account has the name you gave it. A model has the name its provider gave it.
+    // They are shown apart: each account is a group, and its models are the choices in it.
+    // Two accounts can offer the same model, so the end of the key is shown to tell them apart.
+    const groups = [];
+    list.forEach((choice, index) => {
+      const id = choice.key.split("|")[0];
+      let group = groups.at(-1);
+      if (!group || group.id !== id) {
+        const about = choice.note || choice.providerName + (choice.secretKey ? ", key ends " + choice.secretKey.slice(-4) : "");
+        groups.push(group = { id, label: choice.label, about, items: [] });
+      }
+      group.items.push({ ...choice, index });
+    });
+    const using = currentIndex >= 0 ? list[currentIndex] : null;
+    const usesNow = !current ? "" : using && using.provider === "builtin" ? "It uses this browser's built-in model now."
+      : `It uses <strong class="model-name">${esc(current.model)}</strong> from your account <strong>${esc(current.label)}</strong> now.`;
     const preferIndex = prefer ? list.findIndex((c) => c.key === prefer) : -1;
     const selectedIndex = preferIndex >= 0 ? preferIndex : currentIndex >= 0 ? currentIndex : 0;
     document.title = `Choose a model | AI router`;
@@ -157,11 +173,15 @@ if (!frame && !direct) {
       <p class="origin">${esc(site)}</p>
       <h1 tabindex="-1">This site wants to use an AI model</h1>
       <p>Choose which of your accounts it may use. The site can send prompts and read the answers. It cannot see your API key.</p>
-      ${current ? `<p class="note small">It uses ${esc(current.label)} · ${esc(current.model)} now. Choosing again replaces that.</p>` : ""}
+      ${current ? `<p class="note small">${usesNow} Choosing again replaces that.</p>` : ""}
       ${host ? `<p class="note small">This site is not holding the router in a hidden frame. This window will stay open after you choose, and the site's prompts will come through it.</p>` : ""}
       <fieldset class="choices" id="choices">
-        <legend class="small muted">Choose an account and model</legend>
-        ${list.map((c, i) => `<label><input type="radio" name="choice" value="${esc(c.key)}" ${i === selectedIndex ? "checked" : ""}><span><strong>${esc(c.label)} · ${esc(c.model)}</strong><span class="muted small">${esc(c.note || c.providerName)}</span></span></label>`).join("")}
+        <legend class="small muted">Choose a model from one of your accounts</legend>
+        ${groups.map((group, n) => `
+          <div class="account" role="group" aria-labelledby="account-${n}">
+            <p class="account-name" id="account-${n}"><strong>${esc(group.label)}</strong><span class="muted small">${esc(group.about)}</span></p>
+            ${group.items.map((c) => `<label><input type="radio" name="choice" value="${esc(c.key)}" ${c.index === selectedIndex ? "checked" : ""}><span>${esc(c.model)}</span></label>`).join("")}
+          </div>`).join("")}
       </fieldset>
       <details id="add"><summary class="button quiet tiny">Add an account</summary><form class="fields" id="form" novalidate></form></details>
       <p class="note small" id="lock" aria-live="polite"></p>

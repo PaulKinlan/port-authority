@@ -16,6 +16,8 @@ let failed = 0;
 const check = (name, ok, extra = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${name}${extra ? " " + extra : ""}`); if (!ok) failed++; };
 const popupFrom = async (page, click) => { const [popup] = await Promise.all([page.waitForEvent("popup"), click()]); await popup.waitForLoadState(); return popup; };
 const KEY = "sk-test-THIS-KEY-MUST-NOT-LEAK-0123456789";
+// In the router window an account is a group, and its models are the choices inside it.
+const pickModel = (popup, account, model) => popup.locator("#choices .account", { hasText: account }).locator("label", { hasText: model }).click();
 const KEY2 = "sk-spare-THIS-ONE-MUST-NOT-LEAK-EITHER-9876543210";
 
 // A stand-in for Anthropic. What it says depends on the last thing it was asked.
@@ -78,7 +80,7 @@ check("the router window names the chat app's address", (await popup.locator(".o
 await Promise.all([popup.waitForEvent("close"), allow(popup)]);
 await chat.locator(".msg.assistant .msg-actions").waitFor();
 check("after the person allows it, the message is sent and the answer arrives", (await chat.locator(".msg.user .bubble").innerText()) === "Write a card for Ada" && (await chat.locator(".msg.assistant .md").innerText()) === "Dear Ada, well done on passing.");
-check("the answer is labelled with the model the person chose", (await chat.locator(".msg.assistant .who").innerText()).toLowerCase() === "claude-sonnet-5-5" && /Work key · claude-sonnet-5-5/.test(await chat.locator("#model-text").innerText()));
+check("the answer is labelled with the model the person chose", (await chat.locator(".msg.assistant .who").innerText()).toLowerCase() === "claude-sonnet-5-5" && (await chat.locator("#model-text b").innerText()) === "claude-sonnet-5-5" && (await chat.locator("#model-text .from").innerText()) === "Work key");
 check("the call was made by the router's page for that provider, with the key", seen.at(-1).from === base("router") + "/call/anthropic" && seen.at(-1).key === KEY && seen.at(-1).body.max_tokens === 4000);
 check("the conversation is named after the first message and listed", (await chat.locator("#title").innerText()) === "Write a card for Ada" && (await chat.locator("#list a.conv").count()) === 1 && /^#c=/.test(new URL(chat.url()).hash));
 
@@ -105,22 +107,24 @@ await chat.reload();
 await chat.locator(".msg.assistant").nth(2).waitFor();
 await chat.locator("#model-jack.on").waitFor();
 check("after a reload the conversation is still there", (await chat.locator(".msg").count()) === 6 && (await chat.locator("#title").innerText()) === "Write a card for Ada");
-check("and so is the model, with no window", /Work key · claude-sonnet-5-5/.test(await chat.locator("#model-text").innerText()) && ctx.pages().length === 2);
+check("and so is the model, with no window", /claude-sonnet-5-5 Work key/.test(await chat.locator("#model-text").innerText()) && ctx.pages().length === 2);
 
 // Change the model. The model button opens the router window again, and an account can be set up there.
 popup = await popupFrom(chat, () => chat.click("#model"));
 await popup.waitForSelector("#yes");
-check("the model button opens the router window, which says what the app uses now", /It uses Work key · claude-sonnet-5-5 now/.test(await popup.locator("#main").innerText()) && (await popup.locator("#add").count()) === 1);
+check("the model button opens the router window, which says what the app uses now", /It uses claude-sonnet-5-5 from your account Work key now\./.test(await popup.locator("#main").innerText()) && (await popup.locator("#add").count()) === 1);
 await popup.click("#add summary");
 await popup.selectOption("#provider", "openai");
 await popup.fill("#label", "Spare key");
 await popup.fill("#key", KEY2);
 await popup.click("#form button");
-await popup.locator("#choices label", { hasText: "Spare key · gpt-6.2-sol" }).waitFor();
-check("an account set up in the router window is offered at once, and ticked", /Spare key · gpt-6\.2-sol/.test(await popup.locator("#choices label:has(input:checked)").innerText()) && /prompts to api\.openai\.com\./.test(await popup.locator("#lock").innerText()));
+await popup.locator("#choices .account", { hasText: "Spare key" }).waitFor();
+const ticked = async () => ({ account: await popup.locator("#choices .account:has(input:checked) .account-name strong").innerText(), model: (await popup.locator("#choices label:has(input:checked)").innerText()).trim() });
+check("an account set up in the router window is offered at once, and its first model is ticked", JSON.stringify(await ticked()) === JSON.stringify({ account: "Spare key", model: "gpt-6.2-sol" }) && /prompts to api\.openai\.com\./.test(await popup.locator("#lock").innerText()), JSON.stringify(await ticked()));
 check("the new account is saved in the router, for the next site too", (await home.evaluate(() => JSON.parse(localStorage.getItem("router.accounts")).map((a) => a.label).join())) === "Work key,Spare key");
 await Promise.all([popup.waitForEvent("close"), popup.click("#yes")]);
-await chat.locator("#model-text", { hasText: "Spare key · gpt-6.2-sol" }).waitFor();
+await chat.locator("#model-text", { hasText: "gpt-6.2-sol" }).waitFor();
+check("the app shows the model, and the account it comes from, apart", (await chat.locator("#model-text b").innerText()) === "gpt-6.2-sol" && (await chat.locator("#model-text .from").innerText()) === "Spare key");
 const anthropicBefore = seen.length;
 await chat.fill("#prompt", "Now with the other one");
 await chat.press("#prompt", "Enter");
@@ -136,14 +140,35 @@ check("the answer is labelled with the model that wrote it, and the earlier ones
 // And back again.
 popup = await popupFrom(chat, () => chat.click("#model"));
 await popup.waitForSelector("#yes");
-check("the router window ticks the model in use", /Spare key · gpt-6\.2-sol/.test(await popup.locator("#choices label:has(input:checked)").innerText()));
-await popup.locator("#choices label", { hasText: "Work key · claude-sonnet-5-5" }).click();
+check("the router window ticks the model in use", JSON.stringify(await ticked()) === JSON.stringify({ account: "Spare key", model: "gpt-6.2-sol" }) && /It uses gpt-6\.2-sol from your account Spare key now\./.test(await popup.locator("#main").innerText()));
+await pickModel(popup, "Work key", "claude-sonnet-5-5");
 await Promise.all([popup.waitForEvent("close"), popup.click("#yes")]);
-await chat.locator("#model-text", { hasText: "Work key · claude-sonnet-5-5" }).waitFor();
+await chat.locator("#model-text", { hasText: "claude-sonnet-5-5" }).waitFor();
 // The frame opens the page for the provider as soon as it has the grant. Give it a moment to load.
 const callPagesNow = () => chat.frames().filter((f) => f.url().includes("/call/")).map((f) => f.url()).join();
 for (let i = 0; i < 50 && callPagesNow() !== base("router") + "/call/anthropic"; i++) await chat.waitForTimeout(100);
 check("the model can be changed back, and the page for the other provider is closed again", callPagesNow() === base("router") + "/call/anthropic", callPagesNow());
+
+// The same provider can be added again under another name, with another key. The two are told apart.
+const KEY3 = "sk-other-A-SECOND-ANTHROPIC-KEY-5550001111";
+popup = await popupFrom(chat, () => chat.click("#model"));
+await popup.waitForSelector("#yes");
+await popup.click("#add summary");
+await popup.selectOption("#provider", "anthropic");
+await popup.fill("#label", "Team key");
+await popup.fill("#key", KEY3);
+await popup.click("#form button");
+await popup.locator("#choices .account", { hasText: "Team key" }).waitFor();
+const sameModel = await popup.locator("#choices .account").evaluateAll((all) => all.filter((group) => [...group.querySelectorAll("label")].some((label) => label.textContent.trim() === "claude-sonnet-5-5"))
+  .map((group) => group.querySelector(".account-name").innerText.replace(/\s+/g, " ").trim()));
+check("the same model can be offered by two accounts, told apart by the name each was given and the end of its key", sameModel.length === 2 && sameModel[0] === "Work key Anthropic, key ends " + KEY.slice(-4) && sameModel[1] === "Team key Anthropic, key ends " + KEY3.slice(-4), JSON.stringify(sameModel));
+check("the account just added is the one ticked, not the other with the same model", JSON.stringify(await ticked()) === JSON.stringify({ account: "Team key", model: "claude-sonnet-5-5" }));
+await Promise.all([popup.waitForEvent("close"), popup.click("#yes")]);
+await chat.locator("#model-text .from", { hasText: "Team key" }).waitFor();
+await chat.fill("#prompt", "Which key is this");
+await chat.press("#prompt", "Enter");
+await chat.locator(".msg.assistant").nth(4).locator(".msg-actions").waitFor();
+check("and the next message is sent with that account's key", seen.at(-1).key === KEY3 && seen.at(-1).body.model === "claude-sonnet-5-5" && (await chat.locator("#model-text b").innerText()) === "claude-sonnet-5-5");
 
 // What the model writes is shown as Markdown, and none of it runs.
 await chat.click("#new-chat");
@@ -225,7 +250,7 @@ check("the router window knows the site from the browser, with no frame to ask",
 await popup.click("#yes");
 await popup.locator("h1", { hasText: "Keep this window open" }).waitFor();
 await locked.waitForFunction(() => document.title === "ready");
-check("after Allow the window stays open and says why", !popup.isClosed() && /Work key · claude-sonnet-5-5/.test(await popup.locator("#main").innerText()) && /chose: true/.test(await locked.locator("#out").innerText()));
+check("after Allow the window stays open and says why", !popup.isClosed() && /claude-sonnet-5-5, from your account Work key/.test(await popup.locator("#main").innerText()) && /chose: true/.test(await locked.locator("#out").innerText()));
 const through = await locked.evaluate(async () => {
   const answer = await window.ai.chat.completions.create({ messages: [{ role: "user", content: "A card for Ada" }] });
   let text = "";
@@ -257,7 +282,7 @@ check("opening the window again connects at once, with nothing to choose", (awai
 await locked.evaluate(() => { document.getElementById("out").textContent = ""; });
 await locked.click("#go");
 await popup.waitForSelector("#yes");
-check("the site can ask the person to choose again in the open window", /It uses Work key · claude-sonnet-5-5 now/.test(await popup.locator("#main").innerText()) && (await popup.locator("#no").innerText()) === "Keep what it has");
+check("the site can ask the person to choose again in the open window", /It uses claude-sonnet-5-5 from your account Work key now\./.test(await popup.locator("#main").innerText()) && (await popup.locator("#no").innerText()) === "Keep what it has");
 await popup.click("#no");
 await popup.locator("h1", { hasText: "Keep this window open" }).waitFor();
 await locked.locator("#out", { hasText: "chose: false" }).waitFor();

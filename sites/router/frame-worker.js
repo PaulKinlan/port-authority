@@ -25,7 +25,7 @@ const forget = () => { grant = null; info = null; postMessage({ t: "forget" }); 
 
 function state() {
   if (!grant) return { t: "state", ready: false };
-  return { t: "state", ready: true, model: { provider: grant.providerName, name: grant.model, account: grant.label }, left: info ? info.requests - info.used : null, expires: info ? info.expires : null };
+  return { t: "state", ready: true, model: { id: grant.provider, provider: grant.providerName, name: grant.model, account: grant.label }, left: info ? info.requests - info.used : null, expires: info ? info.expires : null };
 }
 const announce = () => { for (const port of ports) port.postMessage(state()); };
 

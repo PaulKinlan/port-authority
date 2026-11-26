@@ -107,7 +107,7 @@ function channel() {
 
   const api = {
     get ready() { return !!current.ready; },
-    get model() { return current.model || null; },      // { provider, name, account }
+    get model() { return current.model || null; },      // { id, provider, name, account }: name is the model, account is what the person called their account
     get left() { return current.left ?? null; },         // requests left on the grant
     get expires() { return current.expires ?? null; },
     started,

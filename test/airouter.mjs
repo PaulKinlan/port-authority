@@ -15,6 +15,8 @@ let failed = 0;
 const check = (name, ok, extra = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${name}${extra ? " " + extra : ""}`); if (!ok) failed++; };
 const popupFrom = async (page, click) => { const [popup] = await Promise.all([page.waitForEvent("popup"), click()]); await popup.waitForLoadState(); return popup; };
 const KEY = "sk-test-THIS-KEY-MUST-NOT-LEAK-0123456789";
+// In the router window an account is a group, and its models are the choices inside it.
+const pickModel = (popup, account, model) => popup.locator("#choices .account", { hasText: account }).locator("label", { hasText: model }).click();
 const KEY2 = "sk-spare-THIS-ONE-MUST-NOT-LEAK-EITHER-9876543210";
 
 // A stand-in for Anthropic: answers the streaming Messages API and records the key it was sent.
@@ -104,7 +106,12 @@ check("the home page can test the second account, and the call goes to its provi
 // The window that was open shows the accounts as soon as they are saved. Don't allow: nothing changes.
 await popup.locator("#choices", { hasText: "Spare key" }).waitFor();
 const offered = await popup.locator("#choices").innerText();
-check("the router window lists both accounts, and nothing that is not an account", /Work key · claude-sonnet-5-5/.test(offered) && /Spare key · gpt-6\.2-sol/.test(offered) && !/practice|not a real model/i.test(await popup.locator("#main").innerText()));
+check("the router window lists both accounts, and nothing that is not an account", /Work key/.test(offered) && /Spare key/.test(offered) && !/practice|not a real model/i.test(await popup.locator("#main").innerText()));
+const groups = await popup.locator("#choices .account").evaluateAll((all) => all.map((group) => ({
+  name: group.querySelector(".account-name strong").textContent, about: group.querySelector(".account-name span").textContent, models: [...group.querySelectorAll("label")].map((label) => label.textContent.trim()) })));
+check("each account is shown by the name it was given, with its provider and the end of its key, apart from its models", groups.length === 2
+  && groups[0].name === "Work key" && groups[0].about === "Anthropic, key ends " + KEY.slice(-4) && groups[0].models[0] === "claude-sonnet-5-5" && groups[0].models.length === 4
+  && groups[1].name === "Spare key" && groups[1].about === "OpenAI, key ends " + KEY2.slice(-4) && groups[1].models[0] === "gpt-6.2-sol" && !groups.some((g) => g.models.some((m) => /key/i.test(m))), JSON.stringify(groups));
 await popup.click("#no");
 await florist.waitForFunction(() => /closed without a grant/.test(document.querySelector("#log").textContent));
 check("refusing leaves the site with no model", /No model yet/.test(await florist.locator("#state").innerText()));
@@ -114,9 +121,9 @@ popup = await popupFrom(florist, () => florist.click("#choose"));
 await popup.waitForSelector("#yes");
 await popup.selectOption("#requests", "5");
 check("the router window says where the prompts can go", /prompts to api\.anthropic\.com\./.test(await popup.locator("#lock").innerText()), await popup.locator("#lock").innerText());
-await popup.locator("#choices label", { hasText: "Spare key · gpt-6.2-sol" }).click();
+await pickModel(popup, "Spare key", "gpt-6.2-sol");
 check("and says so for the other account when that one is ticked", /prompts to api\.openai\.com\./.test(await popup.locator("#lock").innerText()) && !/anthropic/.test(await popup.locator("#lock").innerText()), await popup.locator("#lock").innerText());
-await popup.locator("#choices label", { hasText: "Work key · claude-sonnet-5-5" }).click();
+await pickModel(popup, "Work key", "claude-sonnet-5-5");
 await Promise.all([popup.waitForEvent("close"), popup.click("#yes")]);
 await florist.waitForSelector("#write:not([disabled])");
 check("after allowing, the site is told the model's name", /Using Work key · claude-sonnet-5-5, 5 requests left/.test(await florist.locator("#state").innerText()), await florist.locator("#state").innerText());
@@ -209,7 +216,7 @@ await library.waitForSelector("#choose:not([disabled])");
 check("a second site does not inherit the first site's grant", /No model yet/.test(await library.locator("#state").innerText()));
 popup = await popupFrom(library, () => library.click("#choose"));
 await popup.waitForSelector("#yes");
-await popup.locator("#choices label", { hasText: "Spare key · gpt-6.2-sol" }).click();
+await pickModel(popup, "Spare key", "gpt-6.2-sol");
 await Promise.all([popup.waitForEvent("close"), popup.click("#yes")]);
 await library.waitForSelector("#run:not([disabled])");
 check("the second site was given the other account", /Using Spare key · gpt-6\.2-sol/.test(await library.locator("#state").innerText()), await library.locator("#state").innerText());
@@ -271,7 +278,7 @@ await main.waitForSelector("#choose:not([disabled])");
 popup = await popupFrom(main, () => main.click("#choose"));
 await popup.waitForSelector("#yes");
 check("the explainer page is named in the router window", (await popup.locator(".origin").innerText()) === base("hub"));
-await popup.locator("#choices label", { hasText: "Spare key · gpt-6.2-sol" }).click();
+await pickModel(popup, "Spare key", "gpt-6.2-sol");
 await Promise.all([popup.waitForEvent("close"), popup.click("#yes")]);
 await main.waitForSelector("#send:not([disabled])");
 await main.click("#send");

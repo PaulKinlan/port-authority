@@ -112,7 +112,7 @@ async function drawGrants(force = false) {
   $("grants-error").textContent = "";
   $("grants").innerHTML = grants.length ? grants.map((g) => `<li data-id="${esc(g.id)}">
     <span><strong>${esc(g.site.replace(/^https?:\/\//, ""))}</strong><br>
-    <span class="small muted">${esc(g.label)} · ${esc(g.model)} · ${g.used} of ${g.requests} requests used${g.tokensIn + g.tokensOut ? ` · ${g.tokensIn} tokens in, ${g.tokensOut} out` : ""} · ${g.state === "active" ? "until " + day(g.expires) : "allowed " + day(g.made)}</span></span>
+    <span class="small muted"><span class="model-name">${esc(g.model)}</span>, from ${esc(g.label)} · ${g.used} of ${g.requests} requests used${g.tokensIn + g.tokensOut ? ` · ${g.tokensIn} tokens in, ${g.tokensOut} out` : ""} · ${g.state === "active" ? "until " + day(g.expires) : "allowed " + day(g.made)}</span></span>
     <span class="actions"><span class="tag ${g.state === "active" ? "active" : "off"}">${g.state === "active" ? "Allowed" : g.state === "revoked" ? "Stopped" : g.state === "expired" ? "Expired" : "Used up"}</span>${g.state === "active" ? `<button class="tiny quiet" data-revoke>Stop</button>` : ""}</span></li>`).join("")
     : `<li class="muted">No site has asked yet. Try one of the sites below.</li>`;
 }
