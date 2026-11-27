@@ -60,7 +60,8 @@ export const TYPES = [
   ["Network", "EventSource", () => new EventSource("data:text/event-stream,")],
 
   // Pictures, video and sound
-  ["Media", "ImageBitmap", () => createImageBitmap(canvas())],
+  // A detached <canvas> bitmap deadlocks Chrome 159 when transferred to a sandboxed frame; ImageData makes a plain bitmap.
+  ["Media", "ImageBitmap", () => createImageBitmap(new ImageData(2, 2))],
   ["Media", "ImageData", () => new ImageData(2, 2)],
   ["Media", "OffscreenCanvas", () => new OffscreenCanvas(2, 2)],
   ["Media", "OffscreenCanvas that has been drawn on", () => { const c = new OffscreenCanvas(2, 2); c.getContext("2d").fillRect(0, 0, 1, 1); return c; }],

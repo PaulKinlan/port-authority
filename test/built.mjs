@@ -313,10 +313,12 @@ check("router: a service worker that has forgotten asks who is here, and still d
 await page.goto(root + "/guide/");
 const cards = await page.locator(".live").count();
 at = "#live-built-cap";
-await page.locator(at).scrollIntoViewIfNeeded(); await page.waitForSelector(`${at} .fwd`, { timeout: 15000 }); await page.locator(`${at} .stage-el`).scrollIntoViewIfNeeded(); await wait(800);
+await page.locator(at).scrollIntoViewIfNeeded();
+await page.locator(`${at} .run-demo`).click();
+await page.waitForSelector(`${at} .fwd`, { timeout: 15000 }); await page.locator(`${at} .stage-el`).scrollIntoViewIfNeeded(); await wait(800);
 for (let i = 0; i < 4; i++) { await page.locator(`${at} .fwd`).click(); await wait(1300); }
 check("guide: every section has running demos, and they step with Next", cards >= 64 && /4 of 4/.test(await page.locator(`${at} .caption`).innerText()) && /refused: over the limit/.test(await frameText("shop")), `${cards} demos`);
-const guideDemo = async (id) => { at = "#live-" + id; await page.locator(at).scrollIntoViewIfNeeded(); await page.waitForSelector(`${at} .controls button`, { timeout: 15000 }); await page.locator(`${at} .stepper .caption`).waitFor(); if (/\?play=0/.test(page.url()) === false) await page.evaluate((sel) => document.querySelector(sel + " .stage-el")?.scrollIntoView({ block: "center" }), at); await wait(600); };
+const guideDemo = async (id) => { at = "#live-" + id; await page.locator(at).scrollIntoViewIfNeeded(); const run = page.locator(`${at} .run-demo`); if (await run.isVisible().catch(() => false)) await run.click(); await page.waitForSelector(`${at} .controls button`, { timeout: 15000 }); await page.locator(`${at} .stepper .caption`).waitFor(); if (/\?play=0/.test(page.url()) === false) await page.evaluate((sel) => document.querySelector(sel + " .stage-el")?.scrollIntoView({ block: "center" }), at); await wait(600); };
 await page.goto(root + "/guide/?play=0");
 await guideDemo("bite-start");
 await click("Send a message"); await click("Send a message"); await wait(500);

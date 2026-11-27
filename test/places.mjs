@@ -36,7 +36,7 @@ const direct = await until(async () => /Connected directly/.test(await phone.loc
 check("far: a separate page connects directly", !!direct, await phone.locator("#state").innerText());
 check("far: this page gave the far port to the counter", /gave the far port to the counter/.test(await boxText("#far", "page")), flat(await boxText("#far", "page")));
 await phone.locator("#add").click(); await phone.locator("#add").click(); await phone.locator("#colour").click();
-await until(async () => (await phone.locator("#count").innerText()) === "2");
+await until(async () => (await phone.locator("#count").innerText()) === "2" && /asked for another colour/.test(await frameText("#far", "tool")));
 check("far: the far page's presses reach a sandboxed frame here", /asked to add one/.test(await frameText("#far", "tool")) && /asked for another colour/.test(await frameText("#far", "tool")), flat(await frameText("#far", "tool")));
 check("far: and the answer comes back down the port", (await phone.locator("#count").innerText()) === "2");
 await click("#far", "Hang up");
@@ -90,7 +90,7 @@ await tab.close();
 // ---- one socket for every tab
 await page.locator("#socket").scrollIntoViewIfNeeded();
 await click("#socket", "Connect both tabs to the SharedWorker");
-await until(async () => /tab \d+, tab \d+/.test(await boxText("#socket", "worker")));
+await until(async () => /tab \d+, tab \d+/.test(await boxText("#socket", "worker")) && (await page.locator("#socket [data-open]").innerText()) === "1");
 const opened = () => page.locator("#socket [data-opened]").innerText().then(Number);
 const first = await opened();
 check("socket: two tabs, one socket", /Open now: 1/.test(flat(await boxText("#socket", "worker")).replace(/ \| /g, " ")) || (await page.locator("#socket [data-open]").innerText()) === "1", flat(await boxText("#socket", "worker")));

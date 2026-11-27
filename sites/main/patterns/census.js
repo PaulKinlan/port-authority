@@ -12,7 +12,8 @@ export const KINDS = [
   { name: "WritableStream", note: "Hand someone a sink to write into.", move: true, make: () => new WritableStream() },
   { name: "TransformStream", note: "Both ends of a transform at once.", move: true, make: () => new TransformStream() },
   { name: "OffscreenCanvas", note: "A drawing surface, including one tied to a canvas on your page.", move: true, make: () => new OffscreenCanvas(2, 2) },
-  { name: "ImageBitmap", note: "Decoded pixels, ready to draw.", move: true, make: () => createImageBitmap(canvas()) },
+  // A detached <canvas> bitmap deadlocks Chrome 159 when transferred to a sandboxed frame; ImageData makes a plain bitmap.
+  { name: "ImageBitmap", note: "Decoded pixels, ready to draw.", move: true, make: () => createImageBitmap(new ImageData(2, 2)) },
   { name: "VideoFrame", note: "One frame of video, from a camera or a decoder.", move: true, make: () => new VideoFrame(canvas(), { timestamp: 0 }) },
   { name: "AudioData", note: "A buffer of raw audio samples.", move: true, make: () => new AudioData({ format: "f32", sampleRate: 48000, numberOfFrames: 1, numberOfChannels: 1, timestamp: 0, data: new Float32Array(1) }) },
   { name: "MediaStreamTrack", note: "A live camera, microphone or screen track.", move: true, make: () => canvas().captureStream().getVideoTracks()[0] },
