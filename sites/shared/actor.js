@@ -110,7 +110,12 @@ const ROLES = {
         },
       });
       log("made a transform, giving away both ends");
-      parent.postMessage({ wire: "transform", writable, readable }, "*", [writable, readable]);
+      try {
+        parent.postMessage({ wire: "transform", writable, readable }, "*", [writable, readable]);
+      } catch {
+        log("this browser cannot transfer streams yet");
+        tell("error", { message: "This browser cannot transfer streams yet." });
+      }
     });
   },
 

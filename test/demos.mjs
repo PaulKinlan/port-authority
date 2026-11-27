@@ -1,33 +1,62 @@
-// Every demo runs to the end. Each pattern's page is opened, and Next is pressed
-// on its demo and on every built idea under it until the button says Start again.
-// A demo fails here if its step bar stops ("Stopped ...", "This browser cannot ..."),
-// if it never finishes, or if the page throws or crashes.
+// Every demo runs to the end and actually does what it says.
+//
+// Each pattern's page is opened in a browser configured like a real one
+// (partitioned third-party storage, no fake autoplay override), and Next is
+// pressed on its demo and on every built idea under it until the button says
+// Start again. A demo fails here if:
+//   - its step bar stops ("Stopped ...", "This browser cannot ..."),
+//   - it never finishes,
+//   - the page or any sandboxed frame throws (pageerror / pa-error),
+//   - or any box or iframe shows broken output ("undefined", "NaN",
+//     "the fetch failed", "delivered 0 blocks", "drew 0 readings", "played 0 notes").
 //
 //   node test/demos.mjs                 every pattern
-//   ONLY=filter,roundtrip node ...      some of them
-//   SKIP=far,lend node ...              all but these (the two need a WebSocket server, which a plain local server may not have)
+//   ONLY=swpair,audio,router node ...   some of them
+//   SKIP=far,lend node ...              all but these (the two need a WebSocket server)
 //   CHANNEL=chrome-canary node ...      another installed browser
 // Needs `npx wrangler dev --port 8787` running, or LIVE=<workers.dev subdomain>.
 import { createRequire } from "node:module";
+import { launchWithPartitioning } from "./real-browser.mjs";
+
 const { chromium } = createRequire(import.meta.url)("playwright");
 const LIVE = process.env.LIVE;
 const root = LIVE ? process.env.LIVE_MAIN || `https://portauthority.${LIVE}` : `http://hub.localhost:${process.env.PORT || 8787}`;
 const list = (value) => (value || "").split(",").filter(Boolean);
 const only = list(process.env.ONLY), skip = list(process.env.SKIP);
-const browser = await chromium.launch({
+const browser = await launchWithPartitioning(chromium, {
   ...(process.env.CHANNEL ? { channel: process.env.CHANNEL } : {}),
   ...(process.env.HTTPS_PROXY && LIVE ? { proxy: { server: process.env.HTTPS_PROXY } } : {}),
-  // The filter demo can use a camera, and the audio ones make sound: give them stand-ins and no prompts.
-  args: ["--use-fake-device-for-media-stream", "--use-fake-ui-for-media-stream", "--autoplay-policy=no-user-gesture-required"],
 });
-const context = await browser.newContext({ viewport: { width: 1280, height: 1000 }, permissions: ["camera", "microphone"] });
+const context = await browser.newContext({ viewport: { width: 1280, height: 1000 } });
 await context.route(/^https:\/\/fonts\.(googleapis|gstatic)\.com\//, (route) => route.abort());
+await context.addInitScript(() => {
+  window.__paErrors = [];
+  window.addEventListener("pa-error", (e) => window.__paErrors.push(e.detail));
+});
 const STOP = /^Stopped|Could not run|This browser (cannot|does not|lacks)|does not support|not available here/i;
+const BROKEN_TEXT = /\bundefined\b|\bNaN\b|the fetch failed|delivered 0 blocks|drew 0 readings|played 0 notes/i;
 
 const index = await context.newPage();
 await index.goto(root + "/patterns/", { waitUntil: "domcontentloaded" });
 const ids = (await index.locator('#contents a[href^="/patterns/"]').evaluateAll((as) => as.map((a) => a.getAttribute("href").split("/")[2]))).filter((id) => (!only.length || only.includes(id)) && !skip.includes(id));
 await index.close();
+
+async function checkBoxes(page, where) {
+  const problems = [];
+  const count = await page.locator(`${where} .stage-el .box`).count().catch(() => 0);
+  for (let i = 0; i < count; i++) {
+    const box = page.locator(`${where} .stage-el .box`).nth(i);
+    const bname = (await box.getAttribute("data-name").catch(() => "")) || `box-${i}`;
+    const hasIframe = (await box.locator("iframe").count().catch(() => 0)) > 0;
+    const text = (hasIframe
+      ? await box.locator("iframe").first().contentFrame().locator("body").innerText({ timeout: 2500 }).catch(() => "")
+      : await box.innerText({ timeout: 2500 }).catch(() => "")
+    ).replace(/\s+/g, " ").trim();
+    const match = text.match(BROKEN_TEXT);
+    if (match) problems.push(`box ${bname} showed "${match[0]}": ${text.slice(0, 140)}`);
+  }
+  return problems;
+}
 
 const good = [], bad = [], still = [];
 for (const id of ids) {
@@ -50,7 +79,6 @@ for (const id of ids) {
       const said = async () => (await caption.innerText().catch(() => "")).replace(/\s+/g, " ").trim();
       await page.locator(where).scrollIntoViewIfNeeded().catch(() => {});
       if (!(await fwd.isVisible().catch(() => false))) {
-        // No step bar. Either the demo is one a person drives by hand, or it has said why it cannot run here.
         const text = await said();
         (STOP.test(text) ? bad : still).push(`${name}: ${text.slice(0, 160) || "no steps"}`);
         continue;
@@ -65,10 +93,17 @@ for (const id of ids) {
         const text = await said();
         if (STOP.test(text)) { verdict = `stopped at "${label.replace(/^Next: /, "").replace(/ ›$/, "")}": ${text.slice(0, 200)}`; break; }
       }
+      if (!verdict && !crashed) {
+        await page.waitForTimeout(500);
+        const boxProblems = await checkBoxes(page, where);
+        if (boxProblems.length) verdict = boxProblems.join(" ; ");
+      }
       if (crashed) verdict = "the page crashed";
       (verdict ? bad : good).push(verdict ? `${name}: ${verdict}` : name);
     }
+    const paErrors = await page.evaluate(() => window.__paErrors || []).catch(() => []);
     if (errors.length) bad.push(`${id}: the page threw: ${[...new Set(errors)].slice(0, 2).join(" ; ")}`);
+    if (paErrors.length) bad.push(`${id}: frame threw: ${paErrors.slice(0, 2).map((e) => `${e.where}: ${e.message}`).join(" ; ")}`);
   } catch (e) {
     bad.push(`${id}: ${crashed ? "the page crashed" : "could not be run: " + e.message.split("\n")[0].slice(0, 140)}`);
   }

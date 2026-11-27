@@ -132,8 +132,10 @@ export async function mount(root) {
     catch (err) { return stopLane(l, `This browser could not make one to send (${err.name}).`); }
     l.makeMs += performance.now() - started;
     const picture = message.frame || message.bitmap;
-    try { l.port.postMessage({ ...message, id: ++l.sent, effect: effects[effect] }, [picture]); }
-    catch (err) { picture.close(); return stopLane(l, `postMessage threw ${err.name}: this browser refuses to send it to another origin.`); }
+    try {
+      l.port.postMessage({ ...message, id: ++l.sent, effect: effects[effect] }, [picture]);
+      picture.close();
+    } catch (err) { picture.close(); return stopLane(l, `postMessage threw ${err.name}: this browser refuses to send it to another origin.`); }
     l.sentAt = performance.now();
     l.timer = setTimeout(() => stopLane(l, "Nothing came back in 3 seconds."), 3000);
   };

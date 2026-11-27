@@ -549,17 +549,21 @@ export function mount(container, demo, tours = TOURS, { autoplay = false } = {})
   const limit = () => [...container.querySelectorAll(".stage-el li, .stage-el p")].map((el) => el.textContent.trim()).find((text) => /^This browser (cannot|does not|lacks) /.test(text)) || "";
 
   // Do step i: wait for its button, show which one it is, press it, say what it did.
+  // When lead is 0 and the button is already ready (as when a person presses Next),
+  // run the click before any await so user activation carries through to audio or popups.
   async function step(i, mine, lead = 450) {
     const [start, text] = tour.steps[i];
-    let button = null;
-    for (let waited = 0; waited < 10000 && playing === mine; waited += 150) {
-      button = find(start);
-      if (button && !button.disabled) break;
-      // If the button does not exist in DOM at all after 1.2s, stop early instead of hanging 10s.
-      if (!button && waited >= 1200) break;
-      // The demo has said what this browser cannot do, and the button is still shut: waiting longer will not open it.
-      if (waited >= 1500 && limit()) break;
-      await sleep(150);
+    let button = find(start);
+    if (!button || button.disabled) {
+      for (let waited = 0; waited < 10000 && playing === mine; waited += 150) {
+        button = find(start);
+        if (button && !button.disabled) break;
+        // If the button does not exist in DOM at all after 1.2s, stop early instead of hanging 10s.
+        if (!button && waited >= 1200) break;
+        // The demo has said what this browser cannot do, and the button is still shut: waiting longer will not open it.
+        if (waited >= 1500 && limit()) break;
+        await sleep(150);
+      }
     }
     if (playing !== mine) return false;
     if (!button || button.disabled) {
@@ -567,11 +571,13 @@ export function mount(container, demo, tours = TOURS, { autoplay = false } = {})
       say(why ? `<span class="step">Stopped</span> ${esc(why)} So "${esc(start)}" cannot run here.` : `<span class="step">Stopped</span> Could not run "${esc(start)}" in this browser.`);
       return false;
     }
-    button.classList.add("next");
     say(`<span class="step">${i + 1} of ${total}</span> <strong>${esc(button.textContent)}.</strong> ${esc(text)}`);
-    await sleep(reducedMotion() ? Math.min(lead, 120) : lead);
-    button.classList.remove("next");
-    if (playing !== mine) return false;
+    if (lead > 0) {
+      button.classList.add("next");
+      await sleep(reducedMotion() ? Math.min(lead, 120) : lead);
+      button.classList.remove("next");
+      if (playing !== mine) return false;
+    }
     button.click();
     at = i + 1; sync();
     return true;
@@ -668,7 +674,7 @@ export function mount(container, demo, tours = TOURS, { autoplay = false } = {})
     const i = at;
     let ok = false;
     try {
-      ok = await step(i, mine);
+      ok = await step(i, mine, 0);
     } finally {
       if (playing === mine) { busy = false; sync(); }
     }

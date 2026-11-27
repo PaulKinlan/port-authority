@@ -9,7 +9,7 @@
 // Embedded in a diagram on port-authority.dev it is told what to do by the
 // page around it. Opened in a tab of its own it has buttons, and it opens the
 // other site in a real window.
-import { runtime } from "/wire.js";
+import { runtime, waitActive } from "/wire.js";
 import { sites } from "/_sites.js";
 
 const params = new URLSearchParams(location.search);
@@ -49,8 +49,7 @@ async function start() {
   let registration;
   try {
     registration = await navigator.serviceWorker.register("/pair-sw.js", { scope: "/pair/" });
-    const worker = registration.active || registration.waiting || registration.installing;
-    if (worker.state !== "activated") await new Promise((resolve) => worker.addEventListener("statechange", () => worker.state === "activated" && resolve()));
+    await waitActive(registration);
   } catch (err) { return log("could not start my service worker: " + err.message); }
   // Posting to a service worker starts it if the browser had stopped it.
   const worker = () => registration.active;

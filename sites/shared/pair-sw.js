@@ -60,34 +60,59 @@ function adopt(port, name) {
 }
 
 // Ask my pages which of them can pass a port to the other site.
-let wantCarrier = null;
-function findCarrier() {
+// Several pages of this site may be open at once (for example, several demos on
+// one page, one of which has already closed the other site's frame). Collect
+// every page that answers, and put the page that asked first.
+let collectCarrier = null;
+function findCarriers(preferId = null) {
   return new Promise(async (resolve) => {
-    const timer = setTimeout(() => { wantCarrier = null; resolve(null); }, 1200);
-    wantCarrier = (found) => { clearTimeout(timer); wantCarrier = null; resolve(found); };
-    for (const client of await pages()) client.postMessage({ pair: "need-carrier" });
+    const found = [], seen = new Set();
+    let shortTimer = 0;
+    const finish = () => {
+      clearTimeout(longTimer); clearTimeout(shortTimer);
+      collectCarrier = null;
+      found.sort((a, b) => (b.client.id === preferId) - (a.client.id === preferId));
+      resolve(found);
+    };
+    const longTimer = setTimeout(finish, 1200);
+    collectCarrier = (entry) => {
+      if (seen.has(entry.client.id)) return;
+      seen.add(entry.client.id);
+      found.push(entry);
+      if (preferId && entry.client.id === preferId) {
+        if (!shortTimer) shortTimer = setTimeout(finish, 80);
+      } else if (!shortTimer) {
+        shortTimer = setTimeout(finish, 200);
+      }
+    };
+    const clients = await pages();
+    if (!clients.length) return finish();
+    for (const client of clients) client.postMessage({ pair: "need-carrier" });
   });
 }
 
 // Make a channel, keep one port, and send the other out through a page.
 let joining = null, heardHello = null;
-function join() {
+function join(preferId = null) {
   return (joining ||= (async () => {
     try {
-      const carrier = await findCarrier();
-      if (!carrier) { await report("none of my pages has a line to the other site, so I cannot be joined to its worker"); return false; }
-      const { port1, port2 } = new MessageChannel();
-      adopt(port1, carrier.to);
-      const heard = new Promise((resolve) => { heardHello = () => resolve(true); setTimeout(() => resolve(false), 2500); });
-      carrier.client.postMessage({ pair: "carry" }, [port2]);
-      await report("made a channel. Kept one port and gave the other to my page to pass on");
-      if (!(await heard)) {
-        peer.close(); peer = null; peerName = null;
-        await report("nothing answered on the port I sent out. I have closed my end");
-        return false;
+      const carriers = await findCarriers(preferId);
+      if (!carriers.length) { await report("none of my pages has a line to the other site, so I cannot be joined to its worker"); return false; }
+      for (const carrier of carriers) {
+        const { port1, port2 } = new MessageChannel();
+        adopt(port1, carrier.to);
+        const heard = new Promise((resolve) => { heardHello = () => resolve(true); setTimeout(() => resolve(false), 2500); });
+        carrier.client.postMessage({ pair: "carry" }, [port2]);
+        await report("made a channel. Kept one port and gave the other to my page to pass on");
+        if (await heard) {
+          await report(`the ${peerName}'s worker answered on the new port. We are joined, and no page is in between`, { got: true });
+          return true;
+        }
+        if (peer === port1) { peer.close(); peer = null; peerName = null; }
+        else port1.close();
       }
-      await report(`the ${peerName}'s worker answered on the new port. We are joined, and no page is in between`, { got: true });
-      return true;
+      await report("nothing answered on the port I sent out. I have closed my end");
+      return false;
     } finally { joining = null; heardHello = null; }
   })());
 }
@@ -95,19 +120,25 @@ function join() {
 // Ask the other worker something and wait a short time for the answer. Each
 // question carries a port of its own for the answer to come back on. `make`
 // is called once per try, because a port that was posted cannot be posted again.
-async function askPeer(make, tries = 2) {
+async function askPeer(make, tries = 2, preferId = null) {
   for (let i = 0; i < tries; i++) {
-    if (!peer && !(await join())) return null;
+    if (!peer && !(await join(preferId))) return null;
+    const current = peer;
+    if (!current) continue;
     const { message, transfer = [] } = make();
     const answer = await new Promise((resolve) => {
       const { port1, port2 } = new MessageChannel();
       const timer = setTimeout(() => { port1.close(); resolve(null); }, WAIT);
       port1.onmessage = (event) => { clearTimeout(timer); port1.close(); resolve(event.data); };
-      peer.postMessage(message, [port2, ...transfer]);
-      report(null, { sent: true });
+      try {
+        current.postMessage(message, [port2, ...transfer]);
+        report(null, { sent: true });
+      } catch {
+        clearTimeout(timer); port1.close(); resolve(null);
+      }
     });
     if (answer) return answer;
-    peer.close(); peer = null;
+    if (peer === current) { peer.close(); peer = null; }
     await report(`no answer in ${WAIT / 1000} seconds. The other worker has lost its end of the port` + (i + 1 < tries ? ". Making a new channel" : ""));
   }
   return null;
@@ -165,11 +196,11 @@ self.addEventListener("message", (event) => {
       peer.postMessage({ hello: SITE, run });
       return report(`my page gave me a port and says the other end is the ${data.from}'s worker. Said hello on it`, { sent: true });
     },
-    carrier: () => wantCarrier?.({ client: from, to: data.to }),
-    join: () => join(),
+    carrier: () => collectCarrier?.({ client: from, to: data.to }),
+    join: () => join(from?.id),
     ask: async () => {
       counts.asked++;
-      const answer = await askPeer(() => ({ message: { ask: data.item, from: SITE } }));
+      const answer = await askPeer(() => ({ message: { ask: data.item, from: SITE } }), 2, from?.id);
       from.postMessage({ pair: "answer", item: data.item, answer });
       return report(answer ? `asked the ${peerName}'s worker about ${data.item}. It said: ${answer.answer}` : `could not ask about ${data.item}. There is no way to the other worker`);
     },
@@ -177,7 +208,7 @@ self.addEventListener("message", (event) => {
     // give the tab one port, and send the other over my port to the other worker.
     line: async () => {
       let mine = null;
-      const ok = await askPeer(() => { const channel = new MessageChannel(); mine = channel.port1; return { message: { line: true, from: SITE }, transfer: [channel.port2] }; });
+      const ok = await askPeer(() => { const channel = new MessageChannel(); mine = channel.port1; return { message: { line: true, from: SITE }, transfer: [channel.port2] }; }, 2, from?.id);
       if (!ok) { from.postMessage({ pair: "line", failed: true }); return report("could not get a line for my tab. There is no way to the other worker"); }
       from.postMessage({ pair: "line", by: ok.by, run: ok.run }, [mine]);
       return report(`made a channel for one of my tabs. Sent one port to the ${peerName}'s worker over our port, and gave the tab the other`);
@@ -202,7 +233,7 @@ self.addEventListener("fetch", (event) => {
   if (url.origin !== location.origin || !url.pathname.startsWith(FROM)) return;
   event.respondWith((async () => {
     const name = url.pathname.slice(FROM.length);
-    const answer = await askPeer(() => ({ message: { get: name, from: SITE } }));
+    const answer = await askPeer(() => ({ message: { get: name, from: SITE } }), 2, event.clientId);
     if (!answer) return new Response("The other site's worker could not be reached.", { status: 503, headers: { "content-type": "text/plain; charset=utf-8" } });
     report(`a page of mine fetched ${FROM}${name}. The ${peerName}'s worker answered with ${answer.status}, and I passed its body on as the response`);
     return new Response(answer.body, { status: answer.status, headers: answer.headers });

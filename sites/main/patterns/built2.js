@@ -37,8 +37,7 @@ function postRoom(stage, kind, title, ui) {
   let count = 0;
   const open = async (name, extra = "") => {
     const color = colors[count++ % colors.length];
-    const box = stage.box(name, { src: `/patterns/desk.html?room=${room}&name=${name}${extra}`, title: `${name} window` });
-    stage.el.insertBefore(box.wrap, hub.wrap);
+    const box = stage.box(name, { src: `/patterns/desk.html?room=${room}&name=${name}${extra}`, title: `${name} window`, before: hub.wrap });
     await box.whenReady;
     stage.cable("c-" + name, name, "router", color);
     return box;

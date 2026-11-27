@@ -3,6 +3,7 @@
 import { sites } from "/_sites.js";
 import { far } from "/farport.js";
 import { qrSvg } from "/qr.js";
+import { waitActive } from "/wire.js";
 
 const logBox = (stage, name, title, extra = "", what = {}) => {
   const box = stage.box(name, { html: `<div class="here"><div class="box-title">${title}</div>${extra}<ul class="log" role="log" aria-live="polite"></ul></div>`, ...what });
@@ -227,8 +228,7 @@ return new Response(answer.body, answer);`,
         const m = mounts[name];
         try {
           m.registration = await navigator.serviceWorker.register("/patterns/mount-sw.js", { scope: `/patterns/mounted/${name}/` });
-          const worker = m.registration.active || m.registration.waiting || m.registration.installing;
-          if (worker.state !== "activated") await new Promise((resolve) => worker.addEventListener("statechange", () => worker.state === "activated" && resolve()));
+          await waitActive(m.registration);
         } catch (err) { sw.say("could not start: " + err.message); return false; }
         m.mounted = true; introduce(name);
         stage.cable(m.cable, m.box, "sw", m.color, name);
@@ -368,7 +368,7 @@ port.postMessage({ freq: 440 });`,
         if (!audio) return;
         try {
           await audio.resume();
-          if (audio.state === "running") { btn.hidden = true; me.say("audio resumed — notes are playing directly from the worker"); }
+          if (audio.state === "running") { btn.hidden = true; freeze.disabled = false; me.say("audio resumed — notes are playing directly from the worker"); }
         } catch (err) { me.say("could not resume audio: " + err.message); }
       }, false);
       resumeBtn.hidden = true;
@@ -390,13 +390,14 @@ port.postMessage({ freq: 440 });`,
           await Promise.race([resuming, new Promise((r) => setTimeout(r, 250))]);
         } catch (err) { btn.disabled = false; return me.say("could not start: " + err.message); }
         stage.cable("notes", "composer", "audio", "teal", "notes");
+        quiet.disabled = false;
         if (audio.state === "running") {
+          freeze.disabled = false;
           me.say("introduced the worker to the audio thread, and kept no port");
         } else {
           resumeBtn.hidden = false;
           me.say("the browser paused audio until a real tap — press Tap to resume audio");
         }
-        freeze.disabled = quiet.disabled = false;
       }, false, true);
     },
   },

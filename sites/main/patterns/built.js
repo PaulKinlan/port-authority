@@ -2,6 +2,7 @@
 // Each entry names the pattern it belongs to and which of that pattern's
 // ideas it covers (by position in deep.js). Same stage as the patterns.
 import { far } from "/farport.js";
+import { waitActive } from "/wire.js";
 import { swRouter } from "/patterns/router.js";
 import { built2 } from "/patterns/built2.js";
 import { further } from "/patterns/further.js";
@@ -35,9 +36,8 @@ const serveFrom = async (stage, prefix, ui) => {
     worker.postMessage({ serve: true, prefix }, [channel.port2]);
   };
   const registration = await navigator.serviceWorker.register("/patterns/tabserver-sw.js", { scope: "/patterns/served/" });
-  const worker = registration.active || registration.waiting || registration.installing;
-  if (worker.state !== "activated") await new Promise((resolve) => worker.addEventListener("statechange", () => worker.state === "activated" && resolve()));
-  offer(registration.active);
+  const active = await waitActive(registration);
+  offer(active);
   // A Service Worker that was stopped has forgotten the port, and asks for another.
   const onSwMessage = (event) => { if (event.data === "need-port" && registration.active && sw.node.isConnected) offer(registration.active); };
   navigator.serviceWorker.addEventListener("message", onSwMessage);
@@ -1895,7 +1895,7 @@ serviceWorker.postMessage({ serve: true, prefix: "/app/calendar/" }, [port2]);`,
       });
       await stage.frame("Calendar", { title: "Calendar plug-in, origin one", color: "teal", script: plugin });
       const me = logBox(stage, "page", "This tab is the host app's server");
-      const server = await serveFrom(stage, "/patterns/served/app/");
+      const server = await serveFrom(stage, "/patterns/served/app/", ui);
       await stage.frame("Invoices", { title: "Invoices plug-in, origin two", color: "red", script: plugin });
       const view = stage.box("served", { kind: "iframe", html: `<div class="here"><div class="box-title">The host app</div><p class="small muted">Not open yet.</p></div>` });
       if (!server) return;
@@ -1970,8 +1970,7 @@ port.onmessage = ({ data, ports: [reply] }) => {
         btn.disabled = true;
         try {
           registration = await navigator.serviceWorker.register("/patterns/tabserver-sw.js", { scope: "/patterns/served/" });
-          const worker = registration.active || registration.waiting || registration.installing;
-          if (worker.state !== "activated") await new Promise((resolve) => worker.addEventListener("statechange", () => worker.state === "activated" && resolve()));
+          await waitActive(registration);
         } catch (err) { return sw.say("could not start: " + err.message); }
         mounted = true; mount();
         stage.cable("mount", "provider", "sw", "yellow");
@@ -2096,7 +2095,7 @@ port.onmessage = ({ data }) => {
         if (!audio) return;
         try {
           await audio.resume();
-          if (audio.state === "running") { btn.hidden = true; me.say("audio resumed"); }
+          if (audio.state === "running") { btn.hidden = true; freeze.disabled = false; me.say("audio resumed"); }
         } catch (err) { me.say("could not resume audio: " + err.message); }
       }, false);
       resumeBtn.hidden = true;
@@ -2116,13 +2115,14 @@ port.onmessage = ({ data }) => {
           await Promise.race([resuming, new Promise((r) => setTimeout(r, 250))]);
         } catch (err) { btn.disabled = false; return me.say("could not start: " + err.message); }
         stage.cable("pcm", "decoder", "audio", "teal");
+        quiet.disabled = false;
         if (audio.state === "running") {
+          freeze.disabled = false;
           me.say("introduced the decoder to the audio thread, and kept no port");
         } else {
           resumeBtn.hidden = false;
           me.say("the browser paused audio until a real tap — press Tap to resume audio");
         }
-        freeze.disabled = quiet.disabled = false;
       }, false, true);
     },
   },
@@ -2198,7 +2198,7 @@ process([input]) {
         if (!audio) return;
         try {
           await audio.resume();
-          if (audio.state === "running") { btn.hidden = true; me.say("audio resumed"); }
+          if (audio.state === "running") { btn.hidden = true; freeze.disabled = false; me.say("audio resumed"); }
         } catch (err) { me.say("could not resume audio: " + err.message); }
       }, false);
       resumeBtn.hidden = true;
@@ -2222,13 +2222,14 @@ process([input]) {
           await Promise.race([resuming, new Promise((r) => setTimeout(r, 250))]);
         } catch (err) { btn.disabled = false; return me.say("could not start: " + err.message); }
         stage.cable("levels", "audio", "meter", "teal");
+        quiet.disabled = false;
         if (audio.state === "running") {
+          freeze.disabled = false;
           me.say("introduced the audio thread to the meter's worker, and kept no port");
         } else {
           resumeBtn.hidden = false;
           me.say("the browser paused audio until a real tap — press Tap to resume audio");
         }
-        freeze.disabled = quiet.disabled = false;
       }, false, true);
     },
   },

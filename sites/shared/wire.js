@@ -116,6 +116,32 @@ function frameDoc(title, color, script, csp) {
   </style></head><body><h1>${esc(title)}</h1><ul id="log" role="log" aria-live="polite"></ul><script>(${runtime})();(${script})();<\/script></body></html>`;
 }
 
+// Wait until a newly registered service worker is active. Handles the cases
+// where a worker is already active, replaced mid-install, or turns redundant.
+export async function waitActive(registration, ms = 10000) {
+  if (registration.active?.state === "activated") return registration.active;
+  return new Promise((resolve, reject) => {
+    const done = () => {
+      if (registration.active?.state === "activated") { clearTimeout(timer); resolve(registration.active); return true; }
+      return false;
+    };
+    const watch = (w) => {
+      if (!w) return;
+      w.addEventListener("statechange", () => {
+        if (done()) return;
+        if (w.state === "redundant") {
+          const next = registration.active || registration.waiting || registration.installing;
+          if (next && next !== w) watch(next);
+          else { clearTimeout(timer); reject(new Error("service worker became redundant before activating")); }
+        }
+      });
+    };
+    const timer = setTimeout(() => { if (!done()) reject(new Error("service worker did not activate in time")); }, ms);
+    registration.addEventListener("updatefound", () => watch(registration.installing));
+    if (!done()) watch(registration.waiting || registration.installing || registration.active);
+  });
+}
+
 export class Stage {
   constructor(el) {
     this.el = el;
@@ -191,7 +217,7 @@ export class Stage {
   // `as: "window"` is for a frame that stands for a site's own window: it is
   // drawn as a window with the frame's address in its bar, and the key says
   // that it is a frame in this page.
-  box(name, { html = "", src = null, title = null, kind = null, url = null, scope = null, wide = false, as = null } = {}) {
+  box(name, { html = "", src = null, title = null, kind = null, url = null, scope = null, wide = false, as = null, before = null } = {}) {
     const wrap = document.createElement("div");
     wrap.className = "ctx" + (wide ? " wide" : "");
     wrap.innerHTML = `<div class="ctx-shape"><div class="ctx-in"><div class="ctx-bar"></div><div class="box"></div><div class="ctx-foot"></div></div></div>`;
@@ -205,7 +231,8 @@ export class Stage {
     } else if (html) {
       node.innerHTML = html;
     }
-    this.el.append(wrap);
+    if (before && before.parentNode === this.el) this.el.insertBefore(wrap, before);
+    else this.el.append(wrap);
     let ready;
     const box = { name, node, wrap, as, kind: kind || (src ? "iframe" : guess(name, html)), url, scope, frame: node.querySelector("iframe"), whenReady: new Promise((r) => (ready = r)), ready };
     this.boxes.set(name, box);

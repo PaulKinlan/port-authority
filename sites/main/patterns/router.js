@@ -1,6 +1,7 @@
 // Routing between windows that do not know each other, through a worker.
 // Two versions of one demo: a SharedWorker with ports, and a Service Worker
 // with the Clients API.
+import { waitActive } from "/wire.js";
 
 const NAMES = ["orders", "kitchen", "driver"];
 const LABELS = { orders: "Orders window", kitchen: "Kitchen window", driver: "Driver window" };
@@ -131,10 +132,9 @@ onmessage = async (event) => {
     navigator.serviceWorker.addEventListener("message", onMessage);
     stage.cleanup(() => navigator.serviceWorker.removeEventListener("message", onMessage));
     const registration = await navigator.serviceWorker.register("/patterns/route-sw.js", { scope: "/patterns/routed/" });
-    const worker = registration.active || registration.waiting || registration.installing;
-    if (worker.state !== "activated") await new Promise((resolve) => worker.addEventListener("statechange", () => worker.state === "activated" && resolve()));
-    registration.active.postMessage({ forget: true });   // start from an empty table each time
-    registration.active.postMessage({ watch: true });
+    const active = await waitActive(registration);
+    active.postMessage({ forget: true });   // start from an empty table each time
+    active.postMessage({ watch: true });
     const forgetBtn = ui.button("Make the Service Worker forget", () => registration.active.postMessage({ forget: true }), true);
     await windows(stage, ui, boxes, [forgetBtn], "post");
     ui.link("Open a fourth window for real", "/patterns/route.html?name=florist&via=sw");

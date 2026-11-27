@@ -30,7 +30,7 @@
     const { port } = new SharedWorker("/pair-shared.js", { name: "pair" });
     let trunk = null, trunkTo = null;
     port.onmessage = ({ data, ports }) => {
-      if (data.state) tell("shared", { state: data.state, note: data.note });
+      if (data.state) { tell("shared", { state: data.state, note: data.note }); return; }
       if (data.note) { log(`${data.from} of the ${data.site} says: ${data.note}`); tell("heard", { via: data.via }); }
       if (data.carry && trunk) { trunk.postMessage({ carry: true }, [ports[0]]); log(`my shared worker gave me a port. Sent it over my line to the ${trunkTo}'s tab`); tell("pulse", { cable: "trunk" }); }
     };

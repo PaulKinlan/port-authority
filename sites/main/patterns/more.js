@@ -1,5 +1,6 @@
 // Further out: experiments about what a port can carry and where it can go.
 // Same stage as demos.js. Every frame is a sandboxed context on its own origin.
+import { waitActive } from "/wire.js";
 
 const pageBox = (stage, title = "This page", extra = "") => {
   const box = stage.box("page", { html: `<div class="here"><div class="box-title">${title}</div>${extra}<ul class="log" role="log" aria-live="polite"></ul></div>` });
@@ -325,9 +326,8 @@ onfetch = (event) => event.respondWith(new Promise((resolve) => {
         btn.disabled = true;
         try {
           registration = await navigator.serviceWorker.register("/patterns/tabserver-sw.js", { scope: "/patterns/served/" });
-          const worker = registration.active || registration.waiting || registration.installing;
-          if (worker.state !== "activated") await new Promise((resolve) => worker.addEventListener("statechange", () => worker.state === "activated" && resolve()));
-          offer(registration.active);
+          const active = await waitActive(registration);
+          offer(active);
           onSwMessage = (event) => { if (event.data === "need-port" && registration.active && swBox.node.isConnected) offer(registration.active); };
           navigator.serviceWorker.addEventListener("message", onSwMessage);
           swLog("holding a port to this tab");
